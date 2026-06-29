@@ -1,0 +1,20 @@
+{
+  "source": "google_trends_fr",
+  "run_date": "2026-05-04T14:35:44.051916",
+  "errors": [
+    "Batch ['santé naturelle', 'médecine douce', 'microbiote intestinal', 'jeûne intermittent', 'sommeil'] / 30j : The request failed: Google returned a response with code 429",
+    "Batch ['santé naturelle', 'médecine douce', 'microbiote intestinal', 'jeûne intermittent', 'sommeil'] / 12mois : The request failed: Google returned a response with code 429",
+    "Batch ['stress burnout', 'méditation pleine conscience', 'nutrition', 'compléments alimentaires', 'pharmacologie'] / 30j : The request failed: Google returned a response with code 429",
+    "Batch ['stress burnout', 'méditation pleine conscience', 'nutrition', 'compléments alimentaires', 'pharmacologie'] / 12mois : The request failed: Google returned a response with code 429",
+    "Batch ['développement personnel', 'productivité', 'intelligence émotionnelle', 'stoïcisme', 'habits'] / 30j : The request failed: Google returned a response with code 429",
+    "Batch ['développement personnel', 'productivité', 'intelligence émotionnelle', 'stoïcisme', 'habits'] / 12mois : The request failed: Google returned a response with code 429",
+    "Batch ['discipline', 'histoire france', 'seconde guerre mondiale', 'philosophie', 'psychologie'] / 30j : The request failed: Google returned a response with code 429",
+    "Batch ['discipline', 'histoire france', 'seconde guerre mondiale', 'philosophie', 'psychologie'] / 12mois : The request failed: Google returned a response with code 429",
+    "Batch ['biographie', 'neurosciences', 'cryptomonnaie', 'intelligence artificielle', 'décroissance'] / 30j : The request failed: Google returned a response with code 429",
+    "Batch ['biographie', 'neurosciences', 'cryptomonnaie', 'intelligence artificielle', 'décroissance'] / 12mois : The request failed: Google returned a response with code 429",
+    "Batch ['minimalisme', 'finance personnelle', 'investissement immobilier'] / 30j : The request failed: Google returned a response with code 429",
+    "Batch ['minimalisme', 'finance personnelle', 'investissement immobilier'] / 12mois : The request failed: Google returned a response with code 429"
+  ],
+  "keywords_count": 0,
+  "data": {}
+}

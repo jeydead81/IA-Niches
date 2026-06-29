@@ -1,0 +1,8 @@
+# Normalise les fins de ligne (évite le bruit CRLF/LF entre Windows et Linux)
+* text=auto eol=lf
+
+# Fichiers binaires : pas de conversion
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.pdf binary

@@ -1,0 +1,150 @@
+{
+  "source": "google_trends_fr",
+  "run_date": "2026-05-03T11:46:00.303494",
+  "errors": [
+    "Batch ['minimalisme', 'finance personnelle', 'investissement immobilier'] / 12mois : The request failed: Google returned a response with code 429"
+  ],
+  "keywords_count": 28,
+  "data": {
+    "santé naturelle": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "médecine douce": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "microbiote intestinal": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "jeûne intermittent": {
+      "score_30j": 0,
+      "score_12m": 1,
+      "tendance": "déclinante"
+    },
+    "sommeil": {
+      "score_30j": 83,
+      "score_12m": 65,
+      "tendance": "stable"
+    },
+    "stress burnout": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "méditation pleine conscience": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "nutrition": {
+      "score_30j": 74,
+      "score_12m": 54,
+      "tendance": "montante"
+    },
+    "compléments alimentaires": {
+      "score_30j": 2,
+      "score_12m": 2,
+      "tendance": "stable"
+    },
+    "pharmacologie": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "développement personnel": {
+      "score_30j": 5,
+      "score_12m": 9,
+      "tendance": "déclinante"
+    },
+    "productivité": {
+      "score_30j": 4,
+      "score_12m": 8,
+      "tendance": "déclinante"
+    },
+    "intelligence émotionnelle": {
+      "score_30j": 2,
+      "score_12m": 4,
+      "tendance": "déclinante"
+    },
+    "stoïcisme": {
+      "score_30j": 1,
+      "score_12m": 3,
+      "tendance": "déclinante"
+    },
+    "habits": {
+      "score_30j": 68,
+      "score_12m": 66,
+      "tendance": "stable"
+    },
+    "discipline": {
+      "score_30j": 12,
+      "score_12m": 15,
+      "tendance": "stable"
+    },
+    "histoire france": {
+      "score_30j": 22,
+      "score_12m": 27,
+      "tendance": "stable"
+    },
+    "seconde guerre mondiale": {
+      "score_30j": 21,
+      "score_12m": 22,
+      "tendance": "stable"
+    },
+    "philosophie": {
+      "score_30j": 29,
+      "score_12m": 36,
+      "tendance": "stable"
+    },
+    "psychologie": {
+      "score_30j": 41,
+      "score_12m": 47,
+      "tendance": "stable"
+    },
+    "biographie": {
+      "score_30j": 34,
+      "score_12m": 77,
+      "tendance": "déclinante"
+    },
+    "neurosciences": {
+      "score_30j": 2,
+      "score_12m": 5,
+      "tendance": "déclinante"
+    },
+    "cryptomonnaie": {
+      "score_30j": 6,
+      "score_12m": 11,
+      "tendance": "déclinante"
+    },
+    "intelligence artificielle": {
+      "score_30j": 30,
+      "score_12m": 39,
+      "tendance": "stable"
+    },
+    "décroissance": {
+      "score_30j": 0,
+      "score_12m": 1,
+      "tendance": "déclinante"
+    },
+    "minimalisme": {
+      "score_30j": 4,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "finance personnelle": {
+      "score_30j": 0,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    },
+    "investissement immobilier": {
+      "score_30j": 44,
+      "score_12m": 0,
+      "tendance": "inconnu"
+    }
+  }
+}

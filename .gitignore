@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────────
+# Sécurité — NE JAMAIS versionner
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# ─────────────────────────────────────────────────────────────
+# Artefacts de synchro / fichiers en double (à supprimer)
+# ─────────────────────────────────────────────────────────────
+01-scripts/amazon_autocomplete 2.py
+99-logs/debug_autocomplete_response.txt
+
+# ─────────────────────────────────────────────────────────────
+# Données de runs (décommenter pour garder un dépôt "propre" avant
+# une mise en vente / passage en public — elles révèlent ta stratégie)
+# ─────────────────────────────────────────────────────────────
+# 99-logs/credits-log.csv
+# 02-veille-hebdo/raw-data/
+# 02-veille-hebdo/rapports/
+
+# ─────────────────────────────────────────────────────────────
+# OS / éditeurs
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,391 @@
+timestamp,endpoint,keyword,credits,success,run_total,account_estimate_remaining
+2026-05-03 11:39:00,RESET,mauvais-endpoint-HTTP400-non-facture,0,reset,0,1000
+2026-05-03 11:47:21,search,france,1,failure,1,1000
+2026-05-03 11:47:29,search,français,1,failure,2,999
+2026-05-03 11:47:36,search,livre,1,failure,3,998
+2026-05-03 11:47:43,search,gaza,1,failure,4,997
+2026-05-03 11:47:50,search,jours,1,failure,5,996
+2026-05-03 11:47:57,search,adolescent,1,failure,6,995
+2026-05-03 11:48:04,search,française,1,failure,7,994
+2026-05-03 11:48:11,search,philosophie,1,failure,8,993
+2026-05-03 11:48:19,search,francophone,1,failure,9,992
+2026-05-03 11:48:26,search,forme,1,failure,10,991
+2026-05-03 11:48:33,search,histoire,1,failure,11,990
+2026-05-03 11:48:40,search,enfant,1,failure,12,989
+2026-05-03 11:48:48,search,avis,1,failure,13,988
+2026-05-03 11:48:55,search,francophonie,1,failure,14,987
+2026-05-03 11:49:02,search,belgique,1,failure,15,986
+2026-05-03 11:49:09,search,votre,1,failure,16,985
+2026-05-03 11:49:16,search,cours,1,failure,17,984
+2026-05-03 11:49:24,search,sales,1,failure,18,983
+2026-05-03 11:49:31,search,commune,1,failure,19,982
+2026-05-03 11:49:38,search,prison,1,failure,20,981
+2026-05-04 11:59:40,autocomplete_proxy,jeûne intermittent,1,success,1,980
+2026-05-04 11:59:41,autocomplete_proxy,livre jeûne intermittent,1,success,2,979
+2026-05-04 11:59:43,autocomplete_proxy,santé mentale,1,success,3,978
+2026-05-04 11:59:45,autocomplete_proxy,livre santé mentale,1,success,4,977
+2026-05-04 11:59:46,autocomplete_proxy,stoïcisme,1,success,5,976
+2026-05-04 11:59:48,autocomplete_proxy,livre stoïcisme,1,success,6,975
+2026-05-04 12:05:51,autocomplete_proxy,jeûne intermittent,1,success,1,974
+2026-05-04 12:05:52,autocomplete_proxy,livre jeûne intermittent,1,success,2,973
+2026-05-04 12:05:55,autocomplete_proxy,jeûne intermittent femme,1,success,3,972
+2026-05-04 12:05:57,autocomplete_proxy,jeûne intermittent 16/8,1,success,4,971
+2026-05-04 12:05:58,autocomplete_proxy,livre jeûne intermittent,1,success,5,970
+2026-05-04 12:06:00,autocomplete_proxy,jeûne intermittent et mitophagie,1,success,6,969
+2026-05-04 12:06:09,autocomplete_proxy,santé mentale,1,success,7,968
+2026-05-04 12:06:11,autocomplete_proxy,livre santé mentale,1,success,8,967
+2026-05-04 12:06:13,autocomplete_proxy,santé mentale et émotionnelle,1,success,9,966
+2026-05-04 12:06:15,autocomplete_proxy,santé mentale tous concernés,1,success,10,965
+2026-05-04 12:06:17,autocomplete_proxy,livre santé mentale,1,success,11,964
+2026-05-04 12:06:19,autocomplete_proxy,santé mentale pour les nuls,1,success,12,963
+2026-05-04 12:06:21,autocomplete_proxy,stoïcisme,1,success,13,962
+2026-05-04 12:06:23,autocomplete_proxy,livre stoïcisme,1,success,14,961
+2026-05-04 12:06:24,autocomplete_proxy,stoïcisme pour les enfants,1,success,15,960
+2026-05-04 12:06:26,autocomplete_proxy,stoïcisme tee shirt,1,success,16,959
+2026-05-04 12:06:28,autocomplete_proxy,livre stoïcisme,1,success,17,958
+2026-05-04 12:06:30,autocomplete_proxy,stoïcisme marc aurele,1,success,18,957
+2026-05-04 12:19:57,autocomplete_proxy,philosophie,1,success,1,956
+2026-05-04 12:19:58,autocomplete_proxy,livre philosophie,1,success,2,955
+2026-05-04 12:20:00,autocomplete_proxy,livre philosophie pour enfant,1,success,3,954
+2026-05-04 12:20:02,autocomplete_proxy,livre philosophie grece antique,1,success,4,953
+2026-05-04 12:20:04,autocomplete_proxy,philosophie japonaise,1,success,5,952
+2026-05-04 12:20:06,autocomplete_proxy,philosophie grecque,1,success,6,951
+2026-05-04 12:20:16,autocomplete_proxy,présidentielle,1,success,7,950
+2026-05-04 12:20:17,autocomplete_proxy,livre présidentielle,1,success,8,949
+2026-05-04 12:20:19,autocomplete_proxy,livre présidentielle 2027,1,success,9,948
+2026-05-04 12:20:22,autocomplete_proxy,communauté,1,success,10,947
+2026-05-04 12:20:23,autocomplete_proxy,livre communauté,1,success,11,946
+2026-05-04 12:20:25,autocomplete_proxy,communauté de l'anneau jeu de plis,1,success,12,945
+2026-05-04 12:20:27,autocomplete_proxy,communautés spirituelles et pensées collectives,1,success,13,944
+2026-05-04 12:20:28,autocomplete_proxy,communauté de l'anneau plus,1,success,14,943
+2026-05-04 12:20:38,autocomplete_proxy,le destin de la communauté jeu,1,success,15,942
+2026-05-04 12:20:47,autocomplete_proxy,vidéos,1,success,16,941
+2026-05-04 12:20:49,autocomplete_proxy,livre vidéos,1,success,17,940
+2026-05-04 12:20:50,autocomplete_proxy,vidéosurveillance extérieur 5g,1,success,18,939
+2026-05-04 12:20:52,autocomplete_proxy,jeux vidéos,1,success,19,938
+2026-05-04 12:20:54,autocomplete_proxy,vidéosurveillance panneau,1,success,20,937
+2026-05-04 12:20:56,autocomplete_proxy,vidéosurveillance extérieur,1,success,21,936
+2026-05-04 12:20:58,autocomplete_proxy,réflexion,1,success,22,935
+2026-05-04 12:21:00,autocomplete_proxy,livre réflexion,1,success,23,934
+2026-05-04 12:21:05,autocomplete_proxy,livre réflexion sur la violence,1,success,25,933
+2026-05-04 12:21:06,autocomplete_proxy,réflexion quotidienne,1,success,26,932
+2026-05-04 12:21:07,autocomplete_proxy,livre réflexion adulte,1,success,27,931
+2026-05-04 12:21:09,autocomplete_proxy,licence,1,success,28,930
+2026-05-04 12:21:11,autocomplete_proxy,livre licence,1,success,29,929
+2026-05-04 12:21:13,autocomplete_proxy,office 2024 licence a vie,1,success,30,928
+2026-05-04 12:21:14,autocomplete_proxy,livre licence svt,1,success,31,927
+2026-05-04 12:21:16,autocomplete_proxy,licence windows 11,1,success,32,926
+2026-05-04 12:21:18,autocomplete_proxy,microsoft office 2024 licence a vie,1,success,33,925
+2026-05-04 12:21:20,autocomplete_proxy,relations,1,success,34,924
+2026-05-04 12:21:22,autocomplete_proxy,livre relations,1,success,35,923
+2026-05-04 12:21:23,autocomplete_proxy,relations internationales emmanuel tawil,1,success,36,922
+2026-05-04 12:21:25,autocomplete_proxy,relations textuelles,1,success,37,921
+2026-05-04 12:21:27,autocomplete_proxy,livre relations internationales,1,success,38,920
+2026-05-04 12:21:29,autocomplete_proxy,livre relations toxique,1,success,39,919
+2026-05-04 12:21:31,autocomplete_proxy,sexualité,1,success,40,918
+2026-05-04 12:21:33,autocomplete_proxy,livre sexualité,1,success,41,917
+2026-05-04 12:21:34,autocomplete_proxy,livre sexualité couple,1,success,42,916
+2026-05-04 12:21:36,autocomplete_proxy,livre sexualité homme,1,success,43,915
+2026-05-04 12:21:38,autocomplete_proxy,sexualité couple,1,success,44,914
+2026-05-04 12:21:39,autocomplete_proxy,livre sexualité enfant 6 ans,1,success,45,913
+2026-05-04 12:21:41,autocomplete_proxy,plainte,1,success,46,912
+2026-05-04 12:21:43,autocomplete_proxy,livre plainte,1,success,47,911
+2026-05-04 12:21:45,autocomplete_proxy,plinthe cuisine,1,success,48,910
+2026-05-04 12:21:46,autocomplete_proxy,plainte adhesive souple,1,success,49,909
+2026-05-04 12:21:48,autocomplete_proxy,livre plantes comestibles,1,success,50,908
+2026-05-04 12:21:50,autocomplete_proxy,livre plantes d'intérieur,1,success,51,907
+2026-05-04 12:21:51,autocomplete_proxy,illégale,1,success,52,906
+2026-05-04 12:21:53,autocomplete_proxy,livre illégale,1,success,53,905
+2026-05-04 12:21:55,autocomplete_proxy,intérêts,1,success,54,904
+2026-05-04 12:21:57,autocomplete_proxy,livre intérêts,1,success,55,903
+2026-05-04 12:21:59,autocomplete_proxy,déposée,1,success,56,902
+2026-05-04 12:22:02,autocomplete_proxy,livre déposée,1,success,57,901
+2026-05-04 12:22:04,autocomplete_proxy,charles,1,success,58,900
+2026-05-04 12:22:06,autocomplete_proxy,livre charles,1,success,59,899
+2026-05-04 12:22:08,autocomplete_proxy,robe charleston,1,success,60,898
+2026-05-04 12:22:10,autocomplete_proxy,robe charleston femme,1,success,61,897
+2026-05-04 12:22:11,autocomplete_proxy,charles dickens,1,success,62,896
+2026-05-04 12:22:13,autocomplete_proxy,livre charles robin,1,success,63,895
+2026-05-04 12:22:14,autocomplete_proxy,santé,1,success,64,894
+2026-05-04 12:22:15,autocomplete_proxy,livre santé,1,success,65,893
+2026-05-04 12:22:17,autocomplete_proxy,santé verte,1,success,66,892
+2026-05-04 12:22:19,autocomplete_proxy,livre santé mentale,1,success,67,891
+2026-05-04 12:22:20,autocomplete_proxy,santé & bien-être,1,success,68,890
+2026-05-04 12:22:22,autocomplete_proxy,santé mentale tous concernés,1,success,69,889
+2026-05-04 12:22:23,autocomplete_proxy,alloncle,1,success,70,888
+2026-05-04 12:22:25,autocomplete_proxy,livre alloncle,1,success,71,887
+2026-05-04 12:22:26,autocomplete_proxy,rapporteur,1,success,72,886
+2026-05-04 12:22:28,autocomplete_proxy,livre rapporteur,1,success,73,885
+2026-05-04 12:22:29,autocomplete_proxy,rapporteur trigonométrique,1,success,74,884
+2026-05-04 12:22:31,autocomplete_proxy,rapporteur college,1,success,75,883
+2026-05-04 12:22:34,autocomplete_proxy,rapporteur d'angle numerique,1,success,76,882
+2026-05-04 12:22:36,autocomplete_proxy,tri rapporteur militaire,1,success,77,881
+2026-05-04 12:22:37,autocomplete_proxy,commission,1,success,78,880
+2026-05-04 12:22:39,autocomplete_proxy,livre commission,1,success,79,879
+2026-05-04 12:22:41,autocomplete_proxy,commissionnaire de transport,1,success,80,878
+2026-05-04 12:22:42,autocomplete_proxy,livre commission pontifical biblique,1,success,81,877
+2026-05-04 12:22:44,autocomplete_proxy,commission biblique pontificale,1,success,82,876
+2026-05-04 12:22:46,autocomplete_proxy,commission theologique internationale,1,success,83,875
+2026-05-04 12:22:47,autocomplete_proxy,audiovisuel,1,success,84,874
+2026-05-04 12:22:49,autocomplete_proxy,livre audiovisuel,1,success,85,873
+2026-05-04 12:22:51,autocomplete_proxy,livre audiovisuel,1,success,86,872
+2026-05-04 12:22:53,autocomplete_proxy,audiovisuel accessoires,1,success,87,871
+2026-05-04 12:22:55,autocomplete_proxy,livre audiovisuel production,1,success,88,870
+2026-05-04 12:22:56,autocomplete_proxy,audiovisuel materiel,1,success,89,869
+2026-05-04 12:22:59,autocomplete_proxy,public,1,success,90,868
+2026-05-04 12:23:00,autocomplete_proxy,livre public,1,success,91,867
+2026-05-04 12:23:02,autocomplete_proxy,livre publicité,1,success,92,866
+2026-05-04 12:23:05,autocomplete_proxy,public enemy cd,1,success,93,865
+2026-05-04 12:23:07,autocomplete_proxy,livre public,1,success,94,864
+2026-05-04 12:23:10,autocomplete_proxy,pas de publicité boite aux lettres,1,success,95,863
+2026-05-04 12:23:13,autocomplete_proxy,histoire,1,success,96,862
+2026-05-04 12:23:14,autocomplete_proxy,livre histoire,1,success,97,861
+2026-05-04 12:23:16,autocomplete_proxy,histoire d'ours,1,success,98,860
+2026-05-04 12:23:17,autocomplete_proxy,livre histoire vraie et vecue,1,success,99,859
+2026-05-04 12:23:20,autocomplete_proxy,livre histoire de france,1,success,100,858
+2026-05-04 12:23:22,autocomplete_proxy,boite a histoire pour enfant,1,success,101,857
+2026-05-04 12:23:24,autocomplete_proxy,propos,1,success,102,856
+2026-05-04 12:23:26,autocomplete_proxy,livre propos,1,success,103,855
+2026-05-04 12:23:29,autocomplete_proxy,a propos d'amour bell hooks,1,success,104,854
+2026-05-04 12:23:30,autocomplete_proxy,propos sur le bonheur,1,success,105,853
+2026-05-04 12:23:32,autocomplete_proxy,propos sur le bonheur alain,1,success,106,852
+2026-05-04 12:23:34,autocomplete_proxy,propos nature,1,success,107,851
+2026-05-04 12:23:40,autocomplete_proxy,gestes,1,success,110,850
+2026-05-04 12:23:41,autocomplete_proxy,livre gestes,1,success,111,849
+2026-05-04 12:23:43,autocomplete_proxy,gestes professionnels classe,1,success,112,848
+2026-05-04 12:23:45,autocomplete_proxy,gestes d'éternité,1,success,113,847
+2026-05-04 12:23:47,autocomplete_proxy,gestes qui sauvent,1,success,114,846
+2026-05-04 12:23:48,autocomplete_proxy,gestes de la main voiture,1,success,115,845
+2026-05-04 12:23:50,autocomplete_proxy,apparentant,1,success,116,844
+2026-05-04 12:23:52,autocomplete_proxy,livre apparentant,1,success,117,843
+2026-05-04 12:23:53,autocomplete_proxy,tendances,1,success,118,842
+2026-05-04 12:23:55,autocomplete_proxy,livre tendances,1,success,119,841
+2026-05-04 12:23:57,autocomplete_proxy,tendances bijoux,1,success,120,840
+2026-05-04 12:24:07,autocomplete_proxy,tendances du moment,1,success,121,839
+2026-05-04 12:24:08,autocomplete_proxy,tendances a2,1,success,122,838
+2026-05-04 12:24:10,autocomplete_proxy,chaussures femmes tendances été,1,success,123,837
+2026-05-04 12:24:13,autocomplete_proxy,saluts,1,success,124,836
+2026-05-04 12:24:15,autocomplete_proxy,livre saluts,1,success,125,835
+2026-05-04 12:24:17,autocomplete_proxy,epsom salts,1,success,126,834
+2026-05-04 12:24:21,autocomplete_proxy,saltstick electrolyte caps,1,success,129,833
+2026-05-04 12:24:23,autocomplete_proxy,découvertes,1,success,130,832
+2026-05-04 12:24:24,autocomplete_proxy,livre découvertes,1,success,131,831
+2026-05-04 12:24:26,autocomplete_proxy,découvertes scientifiques,1,success,132,830
+2026-05-04 12:24:27,autocomplete_proxy,découvertes scientifiques glénat,1,success,133,829
+2026-05-04 12:24:30,autocomplete_proxy,découvertes gallimard,1,success,134,828
+2026-05-04 12:24:32,autocomplete_proxy,développement,1,success,135,827
+2026-05-04 12:24:33,autocomplete_proxy,livre développement,1,success,136,826
+2026-05-04 12:24:35,autocomplete_proxy,développement de l'enfant,1,success,137,825
+2026-05-04 12:24:37,autocomplete_proxy,développement personnel femme,1,success,138,824
+2026-05-04 12:24:39,autocomplete_proxy,développement argentique,1,success,139,823
+2026-05-04 12:24:40,autocomplete_proxy,développement spirituel,1,success,140,822
+2026-05-04 12:24:43,autocomplete_proxy,personnel,1,success,141,821
+2026-05-04 12:24:45,autocomplete_proxy,livre personnel,1,success,142,820
+2026-05-04 12:24:46,autocomplete_proxy,personnel et confidentiel dvd,1,success,143,819
+2026-05-04 12:24:49,autocomplete_proxy,alarme personnelle anti agression,1,success,144,818
+2026-05-04 12:24:51,autocomplete_proxy,livre personnel,1,success,145,817
+2026-05-04 12:24:53,autocomplete_proxy,developpement personnel,1,success,146,816
+2026-05-04 12:24:54,autocomplete_proxy,médecine douce,1,success,147,815
+2026-05-04 12:24:56,autocomplete_proxy,livre médecine douce,1,success,148,814
+2026-05-04 12:24:58,autocomplete_proxy,médecine douce pour arbres fruitiers,1,success,149,813
+2026-05-04 12:24:59,autocomplete_proxy,médecine douce pour animaux,1,success,150,812
+2026-05-04 12:25:00,autocomplete_proxy,microbiote intestinal,1,success,151,811
+2026-05-04 12:25:03,autocomplete_proxy,livre microbiote intestinal,1,success,152,810
+2026-05-04 12:25:06,autocomplete_proxy,microbiote intestinal livre,1,success,153,809
+2026-05-04 12:25:08,autocomplete_proxy,microbiote intestinal vegetal,1,success,154,808
+2026-05-04 12:25:09,autocomplete_proxy,microbiote intestinal et santé humaine,1,success,155,807
+2026-05-04 12:25:11,autocomplete_proxy,microbiote intestinal chien,1,success,156,806
+2026-05-04 12:25:12,autocomplete_proxy,jeûne intermittent,1,success,157,805
+2026-05-04 12:25:14,autocomplete_proxy,livre jeûne intermittent,1,success,158,804
+2026-05-04 12:25:16,autocomplete_proxy,jeûne intermittent et mitophagie,1,success,159,803
+2026-05-04 12:25:18,autocomplete_proxy,livre jeûne intermittent,1,success,160,802
+2026-05-04 12:25:20,autocomplete_proxy,jeûne intermittent femme,1,success,161,801
+2026-05-04 12:25:22,autocomplete_proxy,jeûne intermittent 16/8,1,success,162,800
+2026-05-04 12:25:23,autocomplete_proxy,constatés,1,success,163,799
+2026-05-04 12:25:25,autocomplete_proxy,livre constatés,1,success,164,798
+2026-05-04 12:25:26,autocomplete_proxy,intelligence,1,success,165,797
+2026-05-04 12:25:29,autocomplete_proxy,livre intelligence,1,success,166,796
+2026-05-04 12:25:31,autocomplete_proxy,livre intelligence artificielle et l homme,1,success,167,795
+2026-05-04 12:25:32,autocomplete_proxy,livre intelligence financière,1,success,168,794
+2026-05-04 12:25:34,autocomplete_proxy,intelligence naturelle,1,success,169,793
+2026-05-04 12:25:35,autocomplete_proxy,jeux intelligence chien,1,success,170,792
+2026-05-04 12:25:37,autocomplete_proxy,artificielle,1,success,171,791
+2026-05-04 12:25:38,autocomplete_proxy,livre artificielle,1,success,172,790
+2026-05-04 12:25:40,autocomplete_proxy,plante artificielle,1,success,173,789
+2026-05-04 12:25:41,autocomplete_proxy,artificielle exterieur pour balcon,1,success,174,788
+2026-05-04 12:25:43,autocomplete_proxy,plantes artificielles interieur,1,success,175,787
+2026-05-04 12:25:44,autocomplete_proxy,fleur artificielle,1,success,176,786
+2026-05-04 12:25:46,autocomplete_proxy,guérir naturellement,1,success,177,785
+2026-05-04 12:25:48,autocomplete_proxy,livre guérir naturellement,1,success,178,784
+2026-05-04 12:25:50,autocomplete_proxy,médecine naturelle,1,success,179,783
+2026-05-04 12:25:51,autocomplete_proxy,livre médecine naturelle,1,success,180,782
+2026-05-04 12:25:53,autocomplete_proxy,livre médecine naturelle,1,success,181,781
+2026-05-04 12:25:54,autocomplete_proxy,médecine naturelle pour chat coryza chronique,1,success,182,780
+2026-05-04 12:25:56,autocomplete_proxy,plantes médicinales,1,success,183,779
+2026-05-04 12:25:58,autocomplete_proxy,livre plantes médicinales,1,success,184,778
+2026-05-04 12:26:00,autocomplete_proxy,plantes médicinales chinoises,1,success,185,777
+2026-05-04 12:26:01,autocomplete_proxy,plantes médicinales graines,1,success,186,776
+2026-05-04 12:26:03,autocomplete_proxy,plantes médicinales france,1,success,187,775
+2026-05-04 12:26:06,autocomplete_proxy,livre plantes médicinales guadeloupe,1,success,188,774
+2026-05-04 12:26:07,autocomplete_proxy,santé intestinale,1,success,189,773
+2026-05-04 12:26:10,autocomplete_proxy,livre santé intestinale,1,success,190,772
+2026-05-04 12:26:12,autocomplete_proxy,jeûne thérapeutique,1,success,191,771
+2026-05-04 12:26:15,autocomplete_proxy,livre jeûne thérapeutique,1,success,192,770
+2026-05-04 12:26:17,autocomplete_proxy,alimentation anti-inflammatoire,1,success,193,769
+2026-05-04 12:26:19,autocomplete_proxy,livre alimentation anti-inflammatoire,1,success,194,768
+2026-05-04 12:26:20,autocomplete_proxy,alimentation anti-inflammatoire à la ménopause,1,success,195,767
+2026-05-04 12:26:22,autocomplete_proxy,régime cétogène,1,success,196,766
+2026-05-04 12:26:23,autocomplete_proxy,livre régime cétogène,1,success,197,765
+2026-05-04 12:26:25,autocomplete_proxy,livre régime cétogène,1,success,198,764
+2026-05-04 12:26:27,autocomplete_proxy,régime cétogène ebook,1,success,199,763
+2026-05-04 12:26:28,autocomplete_proxy,régime cétogène pour débutants,1,success,200,762
+2026-05-04 13:33:05,autocomplete_proxy,intelligence artificielle comprendre,1,success,1,761
+2026-05-04 13:33:08,autocomplete_proxy,livre intelligence artificielle comprendre,1,success,2,760
+2026-05-04 13:33:10,autocomplete_proxy,santé intestinale,1,success,3,759
+2026-05-04 13:33:11,autocomplete_proxy,livre santé intestinale,1,success,4,758
+2026-05-04 13:33:13,autocomplete_proxy,relations toxiques,1,success,5,757
+2026-05-04 13:33:15,autocomplete_proxy,livre relations toxiques,1,success,6,756
+2026-05-04 13:33:17,autocomplete_proxy,relations toxiques savoir s éloigner,1,success,7,755
+2026-05-04 13:33:18,autocomplete_proxy,philosophie stoïcienne,1,success,8,754
+2026-05-04 13:33:20,autocomplete_proxy,livre philosophie stoïcienne,1,success,9,753
+2026-05-04 13:33:22,autocomplete_proxy,histoire france méconnue,1,success,10,752
+2026-05-04 13:33:23,autocomplete_proxy,livre histoire france méconnue,1,success,11,751
+2026-05-04 13:33:25,autocomplete_proxy,sexualité épanouissement,1,success,12,750
+2026-05-04 13:33:28,autocomplete_proxy,livre sexualité épanouissement,1,success,13,749
+2026-05-04 13:33:30,autocomplete_proxy,intelligence émotionnelle,1,success,14,748
+2026-05-04 13:33:32,autocomplete_proxy,livre intelligence émotionnelle,1,success,15,747
+2026-05-04 13:33:34,autocomplete_proxy,intelligence émotionnelle 2.0,1,success,16,746
+2026-05-04 13:33:35,autocomplete_proxy,intelligence émotionnelle enfant,1,success,17,745
+2026-05-04 13:33:37,autocomplete_proxy,intelligence émotionnelle goleman,1,success,18,744
+2026-05-04 13:33:40,autocomplete_proxy,livre intelligence émotionnelle enfant,1,success,19,743
+2026-05-04 13:33:41,autocomplete_proxy,neurosciences vulgarisées,1,success,20,742
+2026-05-04 13:33:43,autocomplete_proxy,livre neurosciences vulgarisées,1,success,21,741
+2026-05-04 13:33:44,autocomplete_proxy,discipline personnelle,1,success,22,740
+2026-05-04 13:33:46,autocomplete_proxy,livre discipline personnelle,1,success,23,739
+2026-05-04 13:33:48,autocomplete_proxy,pleine conscience,1,success,24,738
+2026-05-04 13:33:51,autocomplete_proxy,livre pleine conscience,1,success,25,737
+2026-05-04 13:33:53,autocomplete_proxy,livre pleine conscience,1,success,26,736
+2026-05-04 13:33:54,autocomplete_proxy,pleine conscience et acceptation,1,success,27,735
+2026-05-04 13:33:56,autocomplete_proxy,pleine conscience et tdah,1,success,28,734
+2026-05-04 13:33:58,autocomplete_proxy,pleine conscience livre,1,success,29,733
+2026-05-04 13:33:59,autocomplete_proxy,immobilier investissement,1,success,30,732
+2026-05-04 13:34:01,autocomplete_proxy,livre immobilier investissement,1,success,31,731
+2026-05-04 13:34:02,autocomplete_proxy,livre immobilier investissement,1,success,32,730
+2026-05-04 13:34:04,autocomplete_proxy,alimentation anti-inflammatoire,1,success,33,729
+2026-05-04 13:34:07,autocomplete_proxy,livre alimentation anti-inflammatoire,1,success,34,728
+2026-05-04 13:34:09,autocomplete_proxy,alimentation anti-inflammatoire à la ménopause,1,success,35,727
+2026-05-04 13:34:11,autocomplete_proxy,alimentation saine,1,success,36,726
+2026-05-04 13:34:20,autocomplete_proxy,livre alimentation saine,1,success,37,725
+2026-05-04 13:34:22,autocomplete_proxy,alimentation saine et équilibrée,1,success,38,724
+2026-05-04 13:34:23,autocomplete_proxy,alimentation saine facile,1,success,39,723
+2026-05-04 13:34:25,autocomplete_proxy,livre alimentation saine,1,success,40,722
+2026-05-04 13:34:27,autocomplete_proxy,alimentation saine livre,1,success,41,721
+2026-05-04 13:34:28,autocomplete_proxy,maigrir durablement,1,success,42,720
+2026-05-04 13:34:30,autocomplete_proxy,livre maigrir durablement,1,success,43,719
+2026-05-04 13:34:32,autocomplete_proxy,médecine douce,1,success,44,718
+2026-05-04 13:34:34,autocomplete_proxy,livre médecine douce,1,success,45,717
+2026-05-04 13:34:35,autocomplete_proxy,médecine douce pour animaux,1,success,46,716
+2026-05-04 13:34:37,autocomplete_proxy,médecine douce pour arbres fruitiers,1,success,47,715
+2026-05-04 13:34:38,autocomplete_proxy,microbiote intestinal,1,success,48,714
+2026-05-04 13:34:40,autocomplete_proxy,livre microbiote intestinal,1,success,49,713
+2026-05-04 13:34:42,autocomplete_proxy,microbiote intestinal bio,1,success,50,712
+2026-05-04 13:34:51,autocomplete_proxy,microbiote intestinal livre,1,success,51,711
+2026-05-04 13:34:54,autocomplete_proxy,microbiote intestinal et santé humaine,1,success,52,710
+2026-05-04 13:34:55,autocomplete_proxy,microbiote intestinal vegetal,1,success,53,709
+2026-05-04 13:34:57,autocomplete_proxy,jeûne intermittent,1,success,54,708
+2026-05-04 13:34:59,autocomplete_proxy,livre jeûne intermittent,1,success,55,707
+2026-05-04 13:35:02,autocomplete_proxy,jeûne intermittent et mitophagie,1,success,56,706
+2026-05-04 13:35:03,autocomplete_proxy,jeûne intermittent 16/8,1,success,57,705
+2026-05-04 13:35:06,autocomplete_proxy,livre jeûne intermittent,1,success,58,704
+2026-05-04 13:35:08,autocomplete_proxy,jeûne intermittent femme,1,success,59,703
+2026-05-04 13:35:09,autocomplete_proxy,sommeil profond,1,success,60,702
+2026-05-04 13:35:10,autocomplete_proxy,livre sommeil profond,1,success,61,701
+2026-05-04 13:35:12,autocomplete_proxy,sommeil profond adulte 1.9,1,success,62,700
+2026-05-04 13:35:14,autocomplete_proxy,tisane sommeil profond,1,success,63,699
+2026-05-04 13:35:16,autocomplete_proxy,sommeil profond adulte sans mélatonine,1,success,64,698
+2026-05-04 13:35:18,autocomplete_proxy,sommeil profond adulte,1,success,65,697
+2026-05-04 13:35:19,autocomplete_proxy,minimalisme vie,1,success,66,696
+2026-05-04 13:35:21,autocomplete_proxy,livre minimalisme vie,1,success,67,695
+2026-05-04 13:35:22,autocomplete_proxy,guérir naturellement,1,success,68,694
+2026-05-04 13:35:24,autocomplete_proxy,livre guérir naturellement,1,success,69,693
+2026-05-04 13:35:26,autocomplete_proxy,médecine naturelle,1,success,70,692
+2026-05-04 13:35:27,autocomplete_proxy,livre médecine naturelle,1,success,71,691
+2026-05-04 13:35:29,autocomplete_proxy,livre médecine naturelle,1,success,72,690
+2026-05-04 13:35:30,autocomplete_proxy,médecine naturelle pour chat coryza chronique,1,success,73,689
+2026-05-04 13:35:32,autocomplete_proxy,plantes médicinales,1,success,74,688
+2026-05-04 13:35:34,autocomplete_proxy,livre plantes médicinales,1,success,75,687
+2026-05-04 13:35:35,autocomplete_proxy,plantes médicinales de madagascar,1,success,76,686
+2026-05-04 13:35:37,autocomplete_proxy,plantes médicinales d'haïti,1,success,77,685
+2026-05-04 13:35:39,autocomplete_proxy,plantes médicinales en vrac,1,success,78,684
+2026-05-04 13:35:40,autocomplete_proxy,livre plantes médicinales,1,success,79,683
+2026-05-04 13:35:42,autocomplete_proxy,jeûne thérapeutique,1,success,80,682
+2026-05-04 13:35:44,autocomplete_proxy,livre jeûne thérapeutique,1,success,81,681
+2026-05-04 13:35:45,autocomplete_proxy,régime cétogène,1,success,82,680
+2026-05-04 13:35:47,autocomplete_proxy,livre régime cétogène,1,success,83,679
+2026-05-04 13:35:50,autocomplete_proxy,régime cétogène pour débutants,1,success,84,678
+2026-05-04 13:35:51,autocomplete_proxy,régime cétogène ebook,1,success,85,677
+2026-05-04 13:35:53,autocomplete_proxy,livre régime cétogène,1,success,86,676
+2026-05-04 13:35:54,autocomplete_proxy,régime cétogène et jeune intermittent,1,success,87,675
+2026-05-04 13:35:56,autocomplete_proxy,compléments alimentaires,1,success,88,674
+2026-05-04 13:35:59,autocomplete_proxy,livre compléments alimentaires,1,success,89,673
+2026-05-04 13:36:01,autocomplete_proxy,complément alimentaire sommeil,1,success,90,672
+2026-05-04 13:36:02,autocomplete_proxy,compléments alimentaires minceur,1,success,91,671
+2026-05-04 13:36:04,autocomplete_proxy,compléments alimentaires protéinés,1,success,92,670
+2026-05-04 13:36:05,autocomplete_proxy,compléments alimentaires et santé mentale,1,success,93,669
+2026-05-04 13:36:07,autocomplete_proxy,vitamines et minéraux,1,success,94,668
+2026-05-04 13:36:10,autocomplete_proxy,livre vitamines et minéraux,1,success,95,667
+2026-05-04 13:36:11,autocomplete_proxy,vitamines et minéraux theonia,1,success,96,666
+2026-05-04 13:36:13,autocomplete_proxy,vitamines et minéraux adulte gummies,1,success,97,665
+2026-05-04 13:36:14,autocomplete_proxy,vitamines et minéraux pour oiseaux,1,success,98,664
+2026-05-04 13:36:17,autocomplete_proxy,vitamines et minéraux liquide,1,success,99,663
+2026-05-04 13:36:20,autocomplete_proxy,système immunitaire,1,success,100,662
+2026-05-04 13:36:29,autocomplete_proxy,livre système immunitaire,1,success,101,661
+2026-05-04 13:36:31,autocomplete_proxy,système immunitaire livre,1,success,102,660
+2026-05-04 13:36:32,autocomplete_proxy,système immunitaire chien,1,success,103,659
+2026-05-04 13:36:34,autocomplete_proxy,système immunitaire pranarom,1,success,104,658
+2026-05-04 13:36:37,autocomplete_proxy,système immunitaire enfant,1,success,105,657
+2026-05-04 13:36:39,autocomplete_proxy,anxiété naturellement,1,success,106,656
+2026-05-04 13:36:41,autocomplete_proxy,livre anxiété naturellement,1,success,107,655
+2026-05-04 13:36:42,autocomplete_proxy,dépression naturelle,1,success,108,654
+2026-05-04 13:48:42,autocomplete_proxy,intelligence artificielle comprendre,1,success,1,652
+2026-05-04 13:48:44,autocomplete_proxy,livre intelligence artificielle comprendre,1,success,2,651
+2026-05-04 13:48:47,autocomplete_proxy,neurosciences vulgarisées,1,success,3,650
+2026-05-04 13:48:48,autocomplete_proxy,livre neurosciences vulgarisées,1,success,4,649
+2026-05-04 13:48:50,autocomplete_proxy,histoire france méconnue,1,success,5,648
+2026-05-04 13:48:51,autocomplete_proxy,livre histoire france méconnue,1,success,6,647
+2026-05-04 13:48:53,autocomplete_proxy,relations toxiques,1,success,7,646
+2026-05-04 13:48:55,autocomplete_proxy,livre relations toxiques,1,success,8,645
+2026-05-04 13:48:56,autocomplete_proxy,relations toxiques savoir s éloigner,1,success,9,644
+2026-05-04 13:48:58,autocomplete_proxy,philosophie stoïcienne,1,success,10,643
+2026-05-04 13:49:01,autocomplete_proxy,livre philosophie stoïcienne,1,success,11,642
+2026-05-04 13:49:02,autocomplete_proxy,sexualité épanouissement,1,success,12,641
+2026-05-04 13:49:04,autocomplete_proxy,livre sexualité épanouissement,1,success,13,640
+2026-05-04 13:49:08,autocomplete_proxy,intelligence émotionnelle,1,success,14,639
+2026-05-04 13:49:10,autocomplete_proxy,livre intelligence émotionnelle,1,success,15,638
+2026-05-04 13:49:12,autocomplete_proxy,intelligence émotionnelle daniel goleman,1,success,16,637
+2026-05-04 13:49:13,autocomplete_proxy,intelligence émotionnelle enfant,1,success,17,636
+2026-05-04 13:49:15,autocomplete_proxy,intelligence émotionnelle pour les nuls,1,success,18,635
+2026-05-04 13:49:23,autocomplete_proxy,pleine conscience,1,success,22,631
+2026-05-04 13:49:25,autocomplete_proxy,livre pleine conscience,1,success,23,630
+2026-05-04 13:49:26,autocomplete_proxy,pleine conscience et compassion,1,success,24,629
+2026-05-04 13:49:27,autocomplete_proxy,livre pleine conscience,1,success,25,628
+2026-05-04 13:49:29,autocomplete_proxy,pleine conscience et acceptation,1,success,26,627
+2026-05-04 13:49:31,autocomplete_proxy,pleine conscience livre,1,success,27,626
+2026-05-04 13:49:32,autocomplete_proxy,immobilier investissement,1,success,28,625
+2026-05-04 13:49:35,autocomplete_proxy,livre immobilier investissement,1,success,29,624
+2026-05-04 13:49:42,autocomplete_proxy,livre immobilier investissement,1,success,30,623
+2026-05-04 13:49:43,autocomplete_proxy,alimentation saine,1,success,31,622
+2026-05-04 13:49:45,autocomplete_proxy,livre alimentation saine,1,success,32,621
+2026-05-04 13:49:47,autocomplete_proxy,alimentation saine enfant,1,success,33,620
+2026-05-04 13:49:50,autocomplete_proxy,alimentation saine livre,1,success,34,619
+2026-05-04 13:49:53,autocomplete_proxy,alimentation saine et équilibrée,1,success,35,618
+2026-05-04 13:49:55,autocomplete_proxy,alimentation saine facile,1,success,36,617
+2026-05-04 13:49:56,autocomplete_proxy,maigrir durablement,1,success,37,616
+2026-05-04 13:49:58,autocomplete_proxy,livre maigrir durablement,1,success,38,615
+2026-05-04 13:49:59,autocomplete_proxy,sommeil profond,1,success,39,614
+2026-05-04 13:50:01,autocomplete_proxy,livre sommeil profond,1,success,40,613
+2026-05-04 13:50:02,autocomplete_proxy,sommeil profond adulte 1.9,1,success,41,612
+2026-05-04 13:50:04,autocomplete_proxy,tisane sommeil profond,1,success,42,611
+2026-05-04 13:50:06,autocomplete_proxy,sommeil profond adulte gummies,1,success,43,610
+2026-05-04 13:50:07,autocomplete_proxy,sommeil profond adulte sans mélatonine,1,success,44,609
+2026-05-04 13:50:09,autocomplete_proxy,stoïcisme pratique,1,success,45,608
