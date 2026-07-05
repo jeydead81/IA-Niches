@@ -82,8 +82,11 @@ perfection d'un scraper unique.
 ### Nouveaux
 
 **`niche_ideator.py`** — le cerveau.
-- Dépend de `anthropic` (SDK officiel). Modèle `claude-opus-4-8`, `thinking={"type":"adaptive"}`,
-  sortie structurée via `client.messages.parse()` + schéma Pydantic (JSON garanti, pas de parsing).
+- Dépend de `anthropic` (SDK officiel). Modèle **configurable** (variable `.env`/config),
+  défaut `claude-opus-4-8` — **A/B tôt** avec `claude-sonnet-5` (voire `claude-fable-5`) sur
+  2-3 graines réelles : c'est la qualité des niches sorties qui tranche, pas le palier. Coût
+  non déterminant (1 appel/run). `thinking={"type":"adaptive"}`, sortie structurée via
+  `client.messages.parse()` + schéma Pydantic (JSON garanti, pas de parsing).
 - Interface : `generate_niches(seed: str | None, signals: dict, n: int = 25) -> list[NicheCandidate]`.
 - `NicheCandidate` = `{niche, satellite_keywords[], rationale, categorie, pharma_flag, risk_flags[]}`.
 - System prompt « directeur éditorial / auteur KDP à succès » : expansion latérale
