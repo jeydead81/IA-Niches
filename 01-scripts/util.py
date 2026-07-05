@@ -25,7 +25,7 @@ def http_get(url, headers=None, timeout=20, retries=1, delay=5, getter=None):
     for attempt in range(retries + 1):
         try:
             return getter(url, headers=h, timeout=timeout)
-        except Exception as e:  # réseau/timeout
+        except requests.RequestException as e:  # réseau/timeout uniquement
             last_exc = e
             if attempt < retries:
                 time.sleep(delay)

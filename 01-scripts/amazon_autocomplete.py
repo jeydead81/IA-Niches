@@ -2,6 +2,7 @@
 Endpoint public completion.amazon.fr. Sert à valider qu'une niche est réellement
 cherchée, découvrir des satellites, et fournir un proxy de volume (nb de suggestions).
 I/O réseau injectable pour les tests."""
+import json
 from urllib.parse import urlencode
 
 import util
@@ -29,13 +30,15 @@ def parse_suggestions(payload: dict) -> list[str]:
 
 
 def _default_fetch_json(prefix: str) -> dict:
-    import json
     r = util.http_get(_build_url(prefix), timeout=15)
-    if getattr(r, "status_code", None) != 200:
+    status = getattr(r, "status_code", None)
+    if status != 200:
+        print(f"[autocomplete] HTTP {status}")
         return {}
     try:
         return json.loads(r.text)
     except Exception:
+        print("[autocomplete] JSON invalide")
         return {}
 
 

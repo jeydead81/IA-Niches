@@ -40,3 +40,36 @@ def test_fetch_bsr_sets_asin_and_uses_injected_html():
     info = fetch_bsr("2266283340", fetch_html=lambda asin: FIXTURE)
     assert info.asin == "2266283340"
     assert info.rank_livres == 23372
+
+
+# Fragment réaliste avec un qualificatif parenthétique après le nom de la sous-catégorie
+FIXTURE_PARENTHETICAL = (
+    "<div id='detailBullets'>"
+    "<span>Classement des meilleures ventes d'Amazon :</span> "
+    "<span>23 372 en <a href='/gp/bestsellers/books'>Livres</a> "
+    "(<a href='/gp/bestsellers/books'>Voir les 100 premiers en Livres</a>)</span>"
+    "<ul><li><span>9 en <a href='/x'>Santé, Forme et Diététique</a> (Livres)</span></li></ul>"
+    "</div>"
+)
+
+
+def test_parse_bsr_subcategory_with_parenthetical_qualifier_not_dropped():
+    info = parse_bsr(FIXTURE_PARENTHETICAL)
+    assert info is not None
+    cats = {s["category"]: s["rank"] for s in info.subcategories}
+    assert cats.get("Santé, Forme et Diététique") == 9
+
+
+def test_parse_bsr_survives_bulky_dom_before_rank():
+    noise = "<span class='a-tracking-noise'>x</span>" * 80  # ~2500+ chars de bruit DOM
+    assert len(noise) > 2000
+    fixture_bulky = (
+        "<div id='detailBullets'>"
+        "<span>Classement des meilleures ventes d'Amazon :</span>"
+        f"{noise}"
+        "<span>23 372 en <a href='/gp/bestsellers/books'>Livres</a></span>"
+        "</div>"
+    )
+    info = parse_bsr(fixture_bulky)
+    assert info is not None
+    assert info.rank_livres == 23372
