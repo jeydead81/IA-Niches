@@ -58,20 +58,26 @@ def _do_niches() -> None:
     seed = input("  Graine (ex. ésotérisme, sommeil, stoïcisme) > ").strip()
     if not seed:
         return
-    print("  L'IA réfléchit (quelques secondes)…")
+    print("  L'IA propose des niches, puis on valide la demande sur Amazon (quelques secondes)…")
     try:
-        from niche_ideator import generate_niches  # import tardif (dépend d'anthropic)
+        from niche_ideator import generate_niches  # imports tardifs (dépendent d'anthropic)
+        from niche_validator import validate_niches
         niches = generate_niches(seed=seed, n=10)
+        results = validate_niches(niches, pause=0.5, max_queries=3)
     except Exception as e:
-        print(f"  Erreur ideator : {type(e).__name__}: {e}")
+        print(f"  Erreur : {type(e).__name__}: {e}")
         print("  (clé ANTHROPIC_API_KEY dans .env ? SDK anthropic installé ?)")
         return
-    print(f"\n  {len(niches)} niches livre proposées pour « {seed} » :")
-    for n in niches:
-        flag = " [PHARMA]" if n.pharma else ""
-        print(f"    - {n.niche}{flag}  ({n.categorie})")
-        if n.satellite_keywords:
-            print(f"        ↳ {', '.join(n.satellite_keywords)}")
+    n_ok = sum(v.validated for v in results)
+    print(f"\n  {len(results)} niches — {n_ok} validées par l'autocomplete Amazon "
+          f"(demande = nb de complétions) :")
+    for v in results:
+        mark = "OK" if v.validated else "--"
+        print(f"    [{mark} | demande {v.demand_score:2}] {v.niche}  ({v.categorie})")
+        if v.validated:
+            print(f"          « {v.requete_amazon} » → {', '.join(v.amazon_suggestions[:4])}")
+        else:
+            print(f"          « {v.requete_amazon} » → (Amazon ne complète pas)")
 
 
 def main() -> None:

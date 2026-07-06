@@ -44,15 +44,22 @@ CONTRAINTES NON-NÉGOCIABLES :
   conditions KDP d'Amazon ; niches d'experts ultra-techniques où un spécialiste repérerait les \
   erreurs et coulerait les notes.
 
-AVANTAGE PHARMACIEN : l'auteur est pharmacien français. Sur les niches santé / médical / \
-nutrition / bien-être / pharmacologie, mets pharma=true (crédibilité et angle d'autorité uniques). \
-Privilégie ces niches quand une vraie opportunité existe, mais reste dans le grand public \
-vulgarisé (pas de traité médical pointu).
+IMPARTIALITÉ : ne privilégie aucun domaine a priori — santé, développement personnel, histoire, \
+ésotérisme, finance, sciences, spiritualité, etc. sont à égalité. Ne suppose rien sur le profil ni \
+l'expertise de l'auteur. C'est la demande réelle du marché qui doit trancher, jamais une préférence \
+de domaine. Reste dans le grand public vulgarisé, quel que soit le sujet.
 
-Pour chaque niche : un libellé clair (la requête centrale), 2-5 satellite_keywords réels, une \
-rationale TRANCHÉE en une phrase (pourquoi ça marche), la catégorie, le flag pharma, et les \
-risques éventuels (TOS, expert pointu, saisonnalité suspectée). Ne remplis 'risques' que si \
-pertinent. Qualité > quantité : pas de remplissage générique.
+REQUÊTES AMAZON (crucial) : la validation se fera via l'autocomplete Amazon.fr, qui fonctionne par \
+PRÉFIXE (il complète le début tapé). Donne pour chaque niche 'requete_amazon' = la requête COURTE et \
+RÉELLE telle qu'un acheteur la tape dans Amazon (2 à 4 mots — ex. « rêve lucide », « sophrologie », \
+« tarot de marseille »), JAMAIS un titre descriptif long. Les satellite_keywords sont d'AUTRES \
+requêtes courtes réelles du même genre. Test simple : si tu ne taperais pas l'expression telle \
+quelle dans Amazon, elle est mauvaise.
+
+Pour chaque niche : le libellé 'niche', la 'requete_amazon' courte, 2-5 satellite_keywords réels, une \
+rationale TRANCHÉE en une phrase (pourquoi ça marche), la catégorie, et les risques éventuels \
+(TOS, expert pointu, saisonnalité suspectée). Ne remplis 'risques' que si pertinent. \
+Qualité > quantité : pas de remplissage générique.
 """
 
 # Schéma d'outil (JSON Schema "à plat", compatible tous SDK/versions Anthropic).
@@ -64,17 +71,20 @@ NICHE_INPUT_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "niche": {"type": "string", "description": "Libellé / requête centrale de la niche"},
+                    "niche": {"type": "string", "description": "Libellé lisible de l'angle / de la niche"},
+                    "requete_amazon": {
+                        "type": "string",
+                        "description": "Requête COURTE (2-4 mots) telle que tapée sur Amazon, ex. 'rêve lucide'",
+                    },
                     "satellite_keywords": {
                         "type": "array", "items": {"type": "string"},
-                        "description": "2 à 5 requêtes réelles proches",
+                        "description": "2 à 5 AUTRES requêtes courtes réelles (comme tapées sur Amazon)",
                     },
                     "rationale": {"type": "string", "description": "Pourquoi c'est une bonne niche livre (1 phrase)"},
                     "categorie": {"type": "string"},
-                    "pharma": {"type": "boolean", "description": "Relève de l'avantage pharmacien"},
                     "risques": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["niche", "satellite_keywords", "rationale", "categorie", "pharma", "risques"],
+                "required": ["niche", "requete_amazon", "satellite_keywords", "rationale", "categorie", "risques"],
             },
         }
     },

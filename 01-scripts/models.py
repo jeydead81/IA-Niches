@@ -14,14 +14,26 @@ class BsrInfo(BaseModel):
 
 class NicheCandidate(BaseModel):
     """Une niche livre candidate proposée par l'ideator LLM (avant validation Amazon)."""
-    niche: str                              # libellé de la niche / requête centrale
-    satellite_keywords: list[str] = Field(default_factory=list)  # requêtes réelles proches
+    niche: str                              # libellé lisible de l'angle / de la niche
+    requete_amazon: str = ""                # requête COURTE telle que tapée sur Amazon (2-4 mots)
+    satellite_keywords: list[str] = Field(default_factory=list)  # autres requêtes courtes réelles
     rationale: str                          # pourquoi c'est une bonne niche livre (1 phrase)
     categorie: str                          # ex. "santé", "développement personnel", "histoire"
-    pharma: bool = False                    # relève de l'avantage pharmacien (santé/nutrition/bien-être)
     risques: list[str] = Field(default_factory=list)  # flags (TOS, expert pointu, saisonnier suspecté…)
 
 
 class NicheList(BaseModel):
     """Enveloppe de la sortie structurée de l'ideator."""
     niches: list[NicheCandidate] = Field(default_factory=list)
+
+
+class NicheValidation(BaseModel):
+    """Une niche confrontée à l'autocomplete Amazon.fr (preuve de demande réelle)."""
+    niche: str
+    requete_amazon: str = ""
+    categorie: str
+    satellite_keywords: list[str] = Field(default_factory=list)
+    amazon_suggestions: list[str] = Field(default_factory=list)  # complétions réelles renvoyées par Amazon
+    demand_score: int = 0                   # nb de suggestions Amazon distinctes surfacées
+    queries_hit: int = 0                    # nb de requêtes (niche+satellites) qu'Amazon auto-complète
+    validated: bool = False                 # True si Amazon auto-complète au moins une requête

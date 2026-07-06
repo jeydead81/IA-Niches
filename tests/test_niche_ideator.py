@@ -32,12 +32,14 @@ class FakeClient:
 
 
 _PAYLOAD = {"niches": [
-    {"niche": "tarot", "satellite_keywords": ["tarot débutant", "tarot de marseille"],
+    {"niche": "tarot", "requete_amazon": "tarot",
+     "satellite_keywords": ["tarot débutant", "tarot de marseille"],
      "rationale": "Univers ésotérique très cherché, evergreen.", "categorie": "ésotérisme",
-     "pharma": False, "risques": []},
-    {"niche": "jeûne intermittent", "satellite_keywords": ["jeûne 16/8"],
-     "rationale": "Santé grand public, angle pharmacien.", "categorie": "santé",
-     "pharma": True, "risques": []},
+     "risques": []},
+    {"niche": "jeûne intermittent", "requete_amazon": "jeûne intermittent",
+     "satellite_keywords": ["jeûne 16/8"],
+     "rationale": "Santé grand public, evergreen.", "categorie": "santé",
+     "risques": []},
 ]}
 
 
@@ -57,7 +59,8 @@ def test_system_prompt_encodes_key_constraints():
     low = SYSTEM_PROMPT.lower()
     assert "evergreen" in low or "saisonnier" in low
     assert "livre" in low
-    assert "pharmac" in low                 # avantage pharmacien
+    assert "impartial" in low or "aucun domaine" in low  # aucun biais de domaine
+    assert "pharmac" not in low             # l'angle pharmacien a été retiré
     assert "musulmane" in low or "exclusions" in low  # exclusions §4.4
 
 
@@ -67,7 +70,7 @@ def test_generate_niches_returns_validated_candidates():
     assert len(out) == 2
     assert all(isinstance(x, NicheCandidate) for x in out)
     assert out[0].niche == "tarot"
-    assert out[1].pharma is True
+    assert out[1].niche == "jeûne intermittent"
 
 
 def test_generate_niches_wires_prompt_and_tool_choice():
