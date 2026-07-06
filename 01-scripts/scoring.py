@@ -87,7 +87,7 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
 
     return ScoredNiche(
         niche=validation.niche, requete_amazon=validation.requete_amazon,
-        categorie=validation.categorie,
+        categorie=validation.categorie, satellite_keywords=validation.satellite_keywords,
         global_score=glob, demande=round(demande, 2), penetration=round(penetration, 2),
         compatibilite=compatibilite, verdict=verdict,
         demand_autocomplete=validation.demand_score,

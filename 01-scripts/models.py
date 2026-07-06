@@ -55,6 +55,7 @@ class ScoredNiche(BaseModel):
     niche: str
     requete_amazon: str = ""
     categorie: str = ""
+    satellite_keywords: list[str] = Field(default_factory=list)
     # scores (0-10)
     global_score: float = 0.0
     demande: float = 0.0

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ia-niches-web",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["web/server.py"],
+      "port": 8000
+    }
+  ]
+}

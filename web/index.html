@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IA-Niches — Explorateur de niches KDP</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --primary:#1E40AF; --primary-600:#1D4ED8; --secondary:#3B82F6; --accent:#D97706;
+    --bg:#F1F5F9; --surface:#FFFFFF; --muted:#E9EEF6; --border:#E2E8F0;
+    --text:#0F172A; --text-muted:#64748B; --heading:#1E3A8A;
+    --green:#16A34A; --green-bg:#DCFCE7; --amber:#D97706; --amber-bg:#FEF3C7;
+    --red:#DC2626; --red-bg:#FEE2E2;
+    --mono:'Fira Code',ui-monospace,monospace; --sans:'Fira Sans',system-ui,sans-serif;
+    --radius:12px; --shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);color:var(--text);background:var(--bg);
+       font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 64px}
+
+  /* Header */
+  header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+  .logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--secondary));
+        display:grid;place-items:center;box-shadow:var(--shadow);flex:none}
+  .logo svg{width:24px;height:24px;color:#fff}
+  header h1{margin:0;font-size:22px;font-weight:700;color:var(--heading);letter-spacing:-.2px}
+  header p{margin:2px 0 0;color:var(--text-muted);font-size:13.5px}
+
+  /* Control card */
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+         box-shadow:var(--shadow)}
+  .controls{padding:18px 20px}
+  .controls form{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field.grow{flex:1;min-width:240px}
+  label{font-size:12.5px;font-weight:600;color:var(--heading)}
+  input[type=text],input[type=number]{font-family:var(--sans);font-size:15px;color:var(--text);
+    background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:11px 12px;outline:none;
+    transition:border-color .15s,box-shadow .15s}
+  input[type=number]{width:96px;font-family:var(--mono)}
+  input:focus{border-color:var(--secondary);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
+  .hint{margin:10px 2px 0;color:var(--text-muted);font-size:12.5px}
+
+  button.run{font-family:var(--sans);font-weight:600;font-size:15px;color:#fff;cursor:pointer;
+    background:var(--primary);border:none;border-radius:10px;padding:11px 20px;display:inline-flex;
+    align-items:center;gap:9px;transition:background .15s,transform .05s;height:44px}
+  button.run:hover{background:var(--primary-600)}
+  button.run:active{transform:translateY(1px)}
+  button.run:disabled{background:#94A3B8;cursor:not-allowed}
+  button.run svg{width:17px;height:17px}
+  .spin{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.45);border-top-color:#fff;
+        border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Progress */
+  .progress{margin-top:18px;padding:16px 20px;display:none}
+  .progress.on{display:block}
+  .bar{height:4px;background:var(--muted);border-radius:99px;overflow:hidden;margin-bottom:14px}
+  .bar span{display:block;height:100%;width:30%;background:linear-gradient(90deg,var(--secondary),var(--accent));
+    border-radius:99px;animation:slide 1.4s ease-in-out infinite}
+  @keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+  .steps{list-style:none;margin:0;padding:0;font-size:13.5px;max-height:230px;overflow:auto}
+  .steps li{display:flex;gap:9px;align-items:flex-start;padding:4px 0;color:var(--text-muted)}
+  .steps li.cur{color:var(--text);font-weight:500}
+  .steps li .dot{width:15px;height:15px;flex:none;margin-top:2px;color:var(--green)}
+  .steps li.cur .dot{color:var(--secondary)}
+
+  /* Results */
+  .results{margin-top:22px;display:none}
+  .results.on{display:block}
+  .rsum{display:flex;align-items:baseline;gap:10px;margin:0 4px 12px}
+  .rsum h2{margin:0;font-size:16px;color:var(--heading)}
+  .rsum span{color:var(--text-muted);font-size:13px}
+  .tablewrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;min-width:760px}
+  thead th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);
+    text-align:left;font-weight:600;padding:12px 14px;background:#F8FAFC;border-bottom:1px solid var(--border);white-space:nowrap}
+  thead th.num,tbody td.num{text-align:right;font-family:var(--mono)}
+  tbody td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tbody tr.row{cursor:pointer;transition:background .12s}
+  tbody tr.row:hover{background:#F8FAFC}
+  tbody tr:last-child td{border-bottom:none}
+  .niche-name{font-weight:600;color:var(--heading)}
+  .cat{color:var(--text-muted);font-size:12.5px}
+
+  .score{display:inline-flex;align-items:center;gap:8px}
+  .pill{font-family:var(--mono);font-weight:600;font-size:13px;padding:4px 9px;border-radius:8px;min-width:52px;text-align:center}
+  .pill.g{background:var(--green-bg);color:#166534}
+  .pill.a{background:var(--amber-bg);color:#92400E}
+  .pill.r{background:var(--red-bg);color:#991B1B}
+  .verdict{font-size:12.5px;font-weight:600}
+  .verdict.g{color:var(--green)} .verdict.a{color:var(--amber)} .verdict.r{color:var(--red)}
+
+  .badge41{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;
+    padding:2px 7px;border-radius:6px;background:var(--green-bg);color:#166534;margin-left:6px}
+  .badge41 svg{width:11px;height:11px}
+  .mut{color:var(--text-muted)}
+  .chev{width:16px;height:16px;color:var(--text-muted);transition:transform .18s}
+  tr.row.open .chev{transform:rotate(90deg)}
+
+  tr.detail td{background:#F8FAFC;padding:0;border-bottom:1px solid var(--border)}
+  tr.detail .inner{padding:14px 16px 16px;display:none}
+  tr.detail.open .inner{display:block}
+  .dl{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin:0 0 7px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+  .chip{font-size:12.5px;background:#fff;border:1px solid var(--border);border-radius:99px;padding:4px 11px;color:var(--heading)}
+  .asins{display:flex;flex-wrap:wrap;gap:6px}
+  .asin{font-family:var(--mono);font-size:12px;background:var(--muted);border-radius:6px;padding:3px 8px;color:#334155;
+        text-decoration:none}
+  .asin:hover{background:#DBEAFE}
+
+  .empty,.errbox{padding:44px 20px;text-align:center;color:var(--text-muted)}
+  .empty svg{width:40px;height:40px;color:#CBD5E1;margin-bottom:10px}
+  .errbox{color:#991B1B;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--radius);margin-top:18px;display:none}
+  .errbox.on{display:block}
+  footer{margin-top:34px;text-align:center;color:#94A3B8;font-size:12px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>
+    </div>
+    <div>
+      <h1>IA-Niches</h1>
+      <p>Explorateur de niches KDP — l'IA propose, Amazon valide (demande, concurrence, BSR réel)</p>
+    </div>
+  </header>
+
+  <div class="panel controls">
+    <form id="form">
+      <div class="field grow">
+        <label for="seed">Graine</label>
+        <input type="text" id="seed" placeholder="ex. ésotérisme, sommeil, stoïcisme…  (vide = à partir de rien)" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label for="ideas">Idées IA</label>
+        <input type="number" id="ideas" value="10" min="4" max="30" />
+      </div>
+      <div class="field">
+        <label for="search">À analyser</label>
+        <input type="number" id="search" value="4" min="1" max="12" />
+      </div>
+      <button class="run" id="run" type="submit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
+        <span id="run-label">Lancer le scout</span>
+      </button>
+    </form>
+    <p class="hint">« À analyser » = nb de niches passées à l'étape concurrence (payante DataForSEO, ~0,003 $/niche). Le reste est gratuit. Un run prend ~2-3 min.</p>
+  </div>
+
+  <div class="panel progress" id="progress">
+    <div class="bar"><span></span></div>
+    <ul class="steps" id="steps"></ul>
+  </div>
+
+  <div class="errbox" id="errbox"></div>
+
+  <section class="results panel" id="results" style="border:none;background:none;box-shadow:none">
+    <div class="rsum"><h2>Niches classées</h2><span id="rcount"></span></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Score</th><th>Niche</th><th class="num">Demande</th><th class="num">Pénétration</th>
+          <th>BSR (meilleur / moy. 5)</th><th class="num">Concurrents</th><th class="num">Sponso écartés</th><th></th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="panel empty" id="empty">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
+    <div>Entre une graine et lance le scout pour voir les niches classées.</div>
+  </div>
+
+  <footer>IA-Niches · moteur local · données Amazon.fr</footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const form=$('#form'), runBtn=$('#run'), runLabel=$('#run-label');
+const progress=$('#progress'), steps=$('#steps'), results=$('#results'),
+      tbody=$('#tbody'), rcount=$('#rcount'), empty=$('#empty'), errbox=$('#errbox');
+let es=null;
+
+const ICON_CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_DOT='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/></svg>';
+const ICON_CHEV='<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+
+const esc = t => String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const grade = s => s>=7.5?'g':s>=6?'a':'r';
+const verdict = s => s>=7.5?'Prioritaire':s>=6?'Intéressant':'Faible';
+const fmt = n => n==null?'—':Number(n).toLocaleString('fr-FR');
+
+function addStep(msg){
+  document.querySelectorAll('.steps li.cur').forEach(li=>{li.classList.remove('cur');li.querySelector('.dot').innerHTML=ICON_CHECK;});
+  const li=document.createElement('li'); li.className='cur';
+  li.innerHTML=`<span class="dot">${ICON_DOT}</span><span>${esc(msg)}</span>`;
+  steps.appendChild(li); steps.scrollTop=steps.scrollHeight;
+}
+
+function render(rows){
+  tbody.innerHTML='';
+  rcount.textContent = rows.length ? `${rows.length} niche(s) analysée(s) en profondeur` : 'aucune niche validée';
+  rows.forEach((r,i)=>{
+    const g=grade(r.global_score);
+    const gap = r.criteres_bsr_ok ? `<span class="badge41">${ICON_CHECK}§4.1</span>` : '';
+    const tr=document.createElement('tr'); tr.className='row';
+    tr.innerHTML=`
+      <td><span class="score"><span class="pill ${g}">${r.global_score.toFixed(1)}</span><span class="verdict ${g}">${verdict(r.global_score)}</span></span></td>
+      <td><div class="niche-name">${esc(r.niche)}</div><div class="cat">${esc(r.categorie)}</div></td>
+      <td class="num">${r.demande.toFixed(1)}</td>
+      <td class="num">${r.penetration.toFixed(1)}</td>
+      <td><span style="font-family:var(--mono)">${fmt(r.bsr_best)}</span> <span class="mut">/ ${fmt(r.bsr_top5_avg)}</span>${gap}</td>
+      <td class="num">${fmt(r.n_concurrents_cibles)}</td>
+      <td class="num mut">${fmt(r.n_sponsored)}</td>
+      <td>${ICON_CHEV}</td>`;
+    const det=document.createElement('tr'); det.className='detail';
+    const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
+    const asins=(r.top_asins||[]).map(a=>`<a class="asin" href="https://www.amazon.fr/dp/${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>`).join('')||'<span class="mut">—</span>';
+    det.innerHTML=`<td colspan="8"><div class="inner">
+        <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
+        <p class="dl">Top livres concurrents (ASIN → fiche)</p><div class="asins">${asins}</div>
+      </div></td>`;
+    tr.addEventListener('click',()=>{tr.classList.toggle('open');det.classList.toggle('open');});
+    tbody.appendChild(tr); tbody.appendChild(det);
+  });
+  empty.style.display='none'; results.classList.add('on');
+}
+
+form.addEventListener('submit',e=>{
+  e.preventDefault();
+  if(es) es.close();
+  steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
+  errbox.classList.remove('on'); errbox.textContent='';
+  empty.style.display='none'; progress.classList.add('on');
+  runBtn.disabled=true; runLabel.textContent='Scout en cours…';
+  runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
+
+  const q=new URLSearchParams({seed:$('#seed').value.trim(),ideas:$('#ideas').value,search:$('#search').value});
+  es=new EventSource('/api/scout?'+q.toString());
+  es.addEventListener('progress',ev=>addStep(JSON.parse(ev.data)));
+  es.addEventListener('result',ev=>render(JSON.parse(ev.data)));
+  es.addEventListener('error',ev=>{ if(ev.data){errbox.textContent='Erreur : '+JSON.parse(ev.data);errbox.classList.add('on');} });
+  es.addEventListener('done',()=>{
+    es.close(); progress.classList.remove('on');
+    runBtn.disabled=false; runLabel.textContent='Lancer le scout';
+    runBtn.querySelector('.spin').outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
+    if(!tbody.children.length && !errbox.classList.contains('on')){ empty.style.display='block'; }
+  });
+});
+</script>
+</body>
+</html>
