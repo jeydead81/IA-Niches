@@ -21,8 +21,9 @@ BANNER = """
 
 
 def _menu() -> str:
-    print("\n  1) Suggestions Amazon pour un mot-clé")
-    print("  2) Classement des ventes (BSR) d'un ASIN")
+    print("\n  1) Suggestions Amazon pour un mot-clé   (gratuit)")
+    print("  2) Classement des ventes (BSR) d'un ASIN  (gratuit)")
+    print("  3) Idées de niches par l'IA               (clé Anthropic, ~0,02€)")
     print("  q) Quitter")
     return input("\n  Choix > ").strip().lower()
 
@@ -53,6 +54,26 @@ def _do_bsr() -> None:
         print("  Classement introuvable (fiche bloquée ou sans BSR — réessaie).")
 
 
+def _do_niches() -> None:
+    seed = input("  Graine (ex. ésotérisme, sommeil, stoïcisme) > ").strip()
+    if not seed:
+        return
+    print("  L'IA réfléchit (quelques secondes)…")
+    try:
+        from niche_ideator import generate_niches  # import tardif (dépend d'anthropic)
+        niches = generate_niches(seed=seed, n=10)
+    except Exception as e:
+        print(f"  Erreur ideator : {type(e).__name__}: {e}")
+        print("  (clé ANTHROPIC_API_KEY dans .env ? SDK anthropic installé ?)")
+        return
+    print(f"\n  {len(niches)} niches livre proposées pour « {seed} » :")
+    for n in niches:
+        flag = " [PHARMA]" if n.pharma else ""
+        print(f"    - {n.niche}{flag}  ({n.categorie})")
+        if n.satellite_keywords:
+            print(f"        ↳ {', '.join(n.satellite_keywords)}")
+
+
 def main() -> None:
     print(BANNER)
     while True:
@@ -64,6 +85,8 @@ def main() -> None:
             _do_suggest()
         elif choice == "2":
             _do_bsr()
+        elif choice == "3":
+            _do_niches()
         elif choice:
             print("  Choix non reconnu.")
 
