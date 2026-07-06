@@ -11,3 +11,4 @@ lxml
 # v2
 pydantic>=2,<3
 pytest>=8
+anthropic>=0.100  # ideator LLM
