@@ -27,6 +27,29 @@ class NicheList(BaseModel):
     niches: list[NicheCandidate] = Field(default_factory=list)
 
 
+class SearchItem(BaseModel):
+    """Un résultat de recherche Amazon.fr (livre) normalisé (issu du provider search)."""
+    rank: int | None = None
+    asin: str | None = None
+    title: str = ""
+    url: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    rating: float | None = None            # note moyenne /5
+    reviews_count: int | None = None       # nombre d'avis
+    is_best_seller: bool = False
+    is_amazon_choice: bool = False
+    sponsored: bool = False                # True = "Sponsorisé" (à exclure des calculs §4.2)
+
+
+class SearchResult(BaseModel):
+    """Résultats d'une requête Amazon.fr, organiques et sponsorisés séparés."""
+    keyword: str
+    organic: list[SearchItem] = Field(default_factory=list)
+    sponsored: list[SearchItem] = Field(default_factory=list)
+    total_items: int = 0
+
+
 class NicheValidation(BaseModel):
     """Une niche confrontée à l'autocomplete Amazon.fr (preuve de demande réelle)."""
     niche: str
