@@ -50,6 +50,32 @@ class SearchResult(BaseModel):
     total_items: int = 0
 
 
+class ScoredNiche(BaseModel):
+    """Une niche entièrement évaluée (demande + concurrence + BSR réel) et scorée."""
+    niche: str
+    requete_amazon: str = ""
+    categorie: str = ""
+    # scores (0-10)
+    global_score: float = 0.0
+    demande: float = 0.0
+    penetration: float = 0.0
+    compatibilite: float = 0.0
+    verdict: str = ""
+    # signaux
+    demand_autocomplete: int = 0           # nb de complétions Amazon (canal gratuit)
+    n_organic: int = 0
+    n_sponsored: int = 0
+    n_concurrents_cibles: int = 0          # livres organiques ciblant vraiment la requête
+    avg_rating: float | None = None
+    total_reviews: int | None = None
+    # BSR réel (§4.1) sur le top organique
+    bsr_best: int | None = None
+    bsr_top5_avg: int | None = None
+    bsr_worst_top10: int | None = None
+    criteres_bsr_ok: bool = False
+    top_asins: list[str] = Field(default_factory=list)
+
+
 class NicheValidation(BaseModel):
     """Une niche confrontée à l'autocomplete Amazon.fr (preuve de demande réelle)."""
     niche: str
