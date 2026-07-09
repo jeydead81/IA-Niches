@@ -89,3 +89,31 @@ def test_generate_niches_empty_when_no_tool_use():
     # remplace la réponse par un contenu sans tool_use
     fake.messages.create = lambda **kw: _FakeResp([])
     assert generate_niches(seed="x", client=fake) == []
+
+
+def test_generate_niches_reports_usage():
+    class _Usage:
+        input_tokens = 1200
+        output_tokens = 1500
+
+    class _Block:
+        type = "tool_use"
+        input = {"niches": [{"niche": "tarot", "requete_amazon": "tarot",
+                             "satellite_keywords": [], "rationale": "r",
+                             "categorie": "éso", "risques": []}]}
+
+    class _Resp:
+        content = [_Block()]
+        usage = _Usage()
+
+    class _Client:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                return _Resp()
+
+    seen = {}
+    from niche_ideator import generate_niches
+    generate_niches(seed="ésotérisme", client=_Client(), model="claude-sonnet-5",
+                    on_usage=lambda i, o, m: seen.update(i=i, o=o, m=m))
+    assert seen == {"i": 1200, "o": 1500, "m": "claude-sonnet-5"}

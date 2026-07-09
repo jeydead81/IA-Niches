@@ -120,8 +120,10 @@ def _default_client():
 
 
 def generate_niches(seed: str | None = None, signals: dict | None = None,
-                    n: int = 20, model: str | None = None, client=None) -> list[NicheCandidate]:
-    """Génère des niches livre candidates. `client` (Anthropic) injectable pour les tests."""
+                    n: int = 20, model: str | None = None, client=None,
+                    on_usage=None) -> list[NicheCandidate]:
+    """Génère des niches livre candidates. `client` (Anthropic) injectable pour les tests.
+    `on_usage(input_tokens, output_tokens, model)` optionnel : coût LLM réel."""
     client = client or _default_client()
     model = model or DEFAULT_MODEL
     user = build_user_prompt(seed, signals, n)
@@ -137,6 +139,9 @@ def generate_niches(seed: str | None = None, signals: dict | None = None,
         tool_choice={"type": "tool", "name": "proposer_niches"},
         messages=[{"role": "user", "content": user}],
     )
+    if on_usage is not None and getattr(resp, "usage", None) is not None:
+        on_usage(getattr(resp.usage, "input_tokens", 0),
+                 getattr(resp.usage, "output_tokens", 0), model)
     for block in resp.content:
         if getattr(block, "type", None) == "tool_use":
             return NicheList.model_validate(block.input).niches
