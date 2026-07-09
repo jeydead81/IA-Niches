@@ -23,6 +23,7 @@ env/
 # ─────────────────────────────────────────────────────────────
 01-scripts/amazon_autocomplete 2.py
 99-logs/debug_autocomplete_response.txt
+tests/fixtures/*_raw.json
 
 # ─────────────────────────────────────────────────────────────
 # Données de runs (décommenter pour garder un dépôt "propre" avant
