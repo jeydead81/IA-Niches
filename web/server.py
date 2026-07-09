@@ -19,6 +19,7 @@ sys.path.insert(0, str(_ROOT / "01-scripts"))
 from dotenv import load_dotenv  # noqa: E402
 load_dotenv(_ROOT / ".env")
 from scout_master import run_scout  # noqa: E402
+from cost_tracker import CostTracker  # noqa: E402
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
@@ -42,10 +43,12 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
         q.put(("progress", msg))
 
     def worker() -> None:
+        cost = CostTracker()
         try:
             results = run_scout(seed=(seed or None), n_ideas=ideas, n_search=search,
-                                progress=progress)
+                                progress=progress, cost=cost)
             q.put(("result", [r.model_dump() for r in results]))
+            q.put(("cost", cost.breakdown()))
         except Exception as e:  # noqa: BLE001
             q.put(("error", f"{type(e).__name__}: {e}"))
         finally:

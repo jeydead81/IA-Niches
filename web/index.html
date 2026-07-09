@@ -116,6 +116,7 @@
   .empty svg{width:40px;height:40px;color:#CBD5E1;margin-bottom:10px}
   .errbox{color:#991B1B;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--radius);margin-top:18px;display:none}
   .errbox.on{display:block}
+  .cost{margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--text-muted);text-align:right}
   footer{margin-top:34px;text-align:center;color:#94A3B8;font-size:12px}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -173,6 +174,7 @@
         <tbody id="tbody"></tbody>
       </table>
     </div>
+    <div id="cost" class="cost" hidden></div>
   </section>
 
   <div class="panel empty" id="empty">
@@ -240,6 +242,7 @@ form.addEventListener('submit',e=>{
   if(es) es.close();
   steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
   errbox.classList.remove('on'); errbox.textContent='';
+  $('#cost').hidden=true; $('#cost').textContent='';
   empty.style.display='none'; progress.classList.add('on');
   runBtn.disabled=true; runLabel.textContent='Scout en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
@@ -248,6 +251,14 @@ form.addEventListener('submit',e=>{
   es=new EventSource('/api/scout?'+q.toString());
   es.addEventListener('progress',ev=>addStep(JSON.parse(ev.data)));
   es.addEventListener('result',ev=>render(JSON.parse(ev.data)));
+  es.addEventListener('cost',ev=>{
+    const c=JSON.parse(ev.data);
+    const el=$('#cost');
+    el.hidden=false;
+    el.textContent=`Coût de ce run : ~$${c.usd.toFixed(4)} `
+      +`(DataForSEO $${c.dataforseo_usd.toFixed(4)} · LLM $${c.llm_usd.toFixed(4)} · `
+      +`${c.dataforseo_calls} appels)`;
+  });
   es.addEventListener('error',ev=>{ if(ev.data){errbox.textContent='Erreur : '+JSON.parse(ev.data);errbox.classList.add('on');} });
   es.addEventListener('done',()=>{
     es.close(); progress.classList.remove('on');
