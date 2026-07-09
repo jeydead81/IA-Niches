@@ -28,7 +28,10 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
         if fetch_bsr_fn is not None or source == "scrape":
             fn = fetch_bsr_fn or _scrape_bsr
             for a in misses:
-                out[a] = fn(a)
+                try:
+                    out[a] = fn(a)
+                except Exception:  # noqa: BLE001 — un échec réseau/scrape sur 1 ASIN ne coule pas le run
+                    out[a] = None
                 if bsr_pause and fetch_bsr_fn is None:
                     time.sleep(bsr_pause)
         elif source == "dataforseo":

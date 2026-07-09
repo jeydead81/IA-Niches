@@ -31,6 +31,17 @@ def test_resolve_dataforseo_batch_counts_cost():
     assert cost.breakdown()["dataforseo_calls"] == 2   # 2 lookups payés
 
 
+def test_resolve_scrape_error_does_not_crash():
+    def flaky(asin):
+        if asin == "A2":
+            raise RuntimeError("réseau indisponible")   # util.http_get relève après retries
+        return BsrInfo(rank_livres=3000, asin=asin)
+
+    out = resolve_bsrs(["A1", "A2"], fetch_bsr_fn=flaky, bsr_pause=0)
+    assert out["A1"].rank_livres == 3000
+    assert out["A2"] is None          # l'échec sur A2 -> None, le run continue (§11.11)
+
+
 def test_resolve_cache_hit_no_network(tmp_path):
     c = Cache(tmp_path / "c.db")
     c.set_bsr("A1", 2250, BsrInfo(rank_livres=5, asin="A1"), ttl_s=100)
