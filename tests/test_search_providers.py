@@ -90,3 +90,32 @@ def test_get_provider_default_is_dataforseo():
     prov = get_provider(login="l", password="p")
     assert prov.name == "dataforseo"
     assert prov.cost_per_call == 0.003
+
+
+def test_provider_search_scopes_to_books_by_default():
+    captured = {}
+
+    def fake_post(url, body):
+        captured["body"] = body
+        return {"tasks": [{"status_code": 20100, "id": "T"}]}
+
+    def fake_get(url):
+        return {"tasks": [{"status_code": 20000, "result": [_RESULT]}]}
+
+    prov = DataForSEOProvider(login="l", password="p")
+    prov.search("tarot", post_json=fake_post, get_json=fake_get, poll_interval=0)
+    assert captured["body"][0]["search_param"] == "i=stripbooks"
+
+
+def test_provider_search_books_only_false_omits_param():
+    captured = {}
+
+    def fake_post(url, body):
+        captured["body"] = body
+        return {"tasks": [{"status_code": 20100, "id": "T"}]}
+
+    prov = DataForSEOProvider(login="l", password="p")
+    prov.search("tarot", books_only=False, post_json=fake_post,
+                get_json=lambda u: {"tasks": [{"status_code": 20000, "result": [_RESULT]}]},
+                poll_interval=0)
+    assert "search_param" not in captured["body"][0]

@@ -90,18 +90,23 @@ class DataForSEOProvider:
     def cost_per_call(self) -> float:
         return COST_PER_CALL_USD.get(self.priority, 0.003)
 
-    def search(self, keyword: str, depth: int = 100, post_json=None, get_json=None,
-               poll_interval: float = 8, max_polls: int = 16) -> SearchResult:
-        """Poste une tâche puis attend le résultat (poll). HTTP injectable pour les tests."""
+    def search(self, keyword: str, depth: int = 100, books_only: bool = True,
+               post_json=None, get_json=None, poll_interval: float = 8,
+               max_polls: int = 16) -> SearchResult:
+        """Poste une tâche puis attend le résultat (poll). HTTP injectable pour les tests.
+        books_only=True restreint au rayon Livres (search_param=i=stripbooks)."""
         post_json = post_json or self._post
         get_json = get_json or self._get
-        body = [{
+        item = {
             "keyword": keyword,
             "location_code": self.location_code,
             "language_code": self.language_code,
             "depth": depth,
             "priority": self.priority,
-        }]
+        }
+        if books_only:
+            item["search_param"] = "i=stripbooks"
+        body = [item]
         d = post_json(_BASE + "/task_post", body)
         task = (d.get("tasks") or [{}])[0]
         if task.get("status_code") not in (20000, 20100):
