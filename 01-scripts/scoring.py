@@ -11,7 +11,10 @@ from models import NicheValidation, SearchResult, ScoredNiche
 
 def bsr_stats(bsrs: list[int]) -> dict:
     """Statistiques BSR + critères §4.1 sur les BSR du top organique.
-    §4.1 : (1) ≥1 BSR < 10 000, (2) moyenne top-5 < 50 000, (3) ≥1 BSR > 50 000."""
+    §4.1 : (1) ≥1 BSR < 10 000, (2) moyenne du top < 50 000, (3) ≥1 BSR > 50 000.
+    NB : le scout ne récupère que le top-3 (n_bsr_per_niche=3) pour maîtriser le coût ;
+    'top5_avg' est donc la moyenne des ≤3 BSR disponibles et 'worst_top10' leur max.
+    Les 3 critères restent discriminants sur 3 points."""
     vals = sorted(b for b in bsrs if isinstance(b, int) and b > 0)
     if not vals:
         return {"best": None, "top5_avg": None, "worst_top10": None,

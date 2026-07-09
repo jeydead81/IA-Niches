@@ -45,3 +45,14 @@ def test_score_niche_without_search_data_stays_in_range():
     sc = score_niche(val, None, bsrs=[])
     assert sc.n_organic == 0 and sc.criteres_bsr_ok is False
     assert 1.0 <= sc.global_score <= 10.0
+
+
+def test_bsr_stats_top3_place_a_prendre():
+    # n_bsr=3 : ≥1 <10k, moyenne <50k, ≥1 >50k  -> §4.1 rempli sur 3 points
+    s = bsr_stats([2279, 8000, 60000])
+    assert s["best"] == 2279 and s["crit1"] and s["crit2"] and s["crit3"] and s["ok"]
+
+
+def test_bsr_stats_top3_no_place():
+    s = bsr_stats([2279, 4000, 9000])          # aucun >50k
+    assert s["crit1"] and s["crit2"] and not s["crit3"] and not s["ok"]
