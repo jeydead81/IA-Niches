@@ -119,6 +119,34 @@ class DataForSEOProvider:
                 return map_dataforseo_result(t["result"][0])
         raise TimeoutError(f"résultat DataForSEO non prêt (id={tid})")
 
+    def product_info_batch(self, asins, post_json=None, get_json=None,
+                           poll_interval: float = 8, max_polls: int = 40) -> dict:
+        """BSR de plusieurs ASIN en un seul task_post (jusqu'à 100), collecte par poll.
+        Retour : {asin: BsrInfo|None}. HTTP injectable."""
+        asins = [a for a in asins if a]
+        if not asins:
+            return {}
+        post_json = post_json or self._post
+        get_json = get_json or self._get
+        body = [{"asin": a, "location_code": self.location_code,
+                 "language_code": self.language_code, "priority": self.priority} for a in asins]
+        d = post_json(_ASIN_BASE + "/task_post", body)
+        tasks = d.get("tasks") or []
+        pending: dict[str, str] = {}          # task_id -> asin (ordre de requête)
+        for t, a in zip(tasks, asins):
+            if t.get("status_code") in (20000, 20100) and t.get("id"):
+                pending[t["id"]] = a
+        out: dict = {a: None for a in asins}
+        for _ in range(max_polls):
+            if not pending:
+                break
+            time.sleep(poll_interval)
+            for tid in list(pending):
+                r = (get_json(f"{_ASIN_BASE}/task_get/advanced/{tid}").get("tasks") or [{}])[0]
+                if r.get("status_code") == 20000 and r.get("result"):
+                    out[pending.pop(tid)] = parse_asin_bsr(r["result"][0])
+        return out
+
 
 _BSR_KEY_HINTS = ("meilleures ventes", "best sellers rank")
 _MAIN_RANK = re.compile(r"([\d][\d\s .]{0,12})\s*en\s+Livres\b", re.I)
