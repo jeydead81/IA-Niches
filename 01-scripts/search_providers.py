@@ -8,14 +8,16 @@ Le mapping (DataForSEO -> modèles normalisés) est PUR et testé contre la vrai
 réponse observée en live. Les appels HTTP sont injectables (aucun réseau en unit-test).
 """
 import os
+import re
 import time
 
 import requests
 from dotenv import load_dotenv
 
-from models import SearchItem, SearchResult
+from models import BsrInfo, SearchItem, SearchResult
 
 _BASE = "https://api.dataforseo.com/v3/merchant/amazon/products"
+_ASIN_BASE = "https://api.dataforseo.com/v3/merchant/amazon/asin"
 DEFAULT_LOCATION = 2250       # France (location_code)
 DEFAULT_LANGUAGE = "fr_FR"    # "French (France)" — code validé en live (pas "fr")
 COST_PER_CALL_USD = {1: 0.0015, 2: 0.003}  # standard (~45 min) / priority (~1 min)
@@ -111,6 +113,48 @@ class DataForSEOProvider:
             if t.get("status_code") == 20000 and t.get("result"):
                 return map_dataforseo_result(t["result"][0])
         raise TimeoutError(f"résultat DataForSEO non prêt (id={tid})")
+
+
+_BSR_KEY_HINTS = ("meilleures ventes", "best sellers rank")
+_MAIN_RANK = re.compile(r"([\d][\d\s .]{0,12})\s*en\s+Livres\b", re.I)
+_SUB_RANK = re.compile(r"([\d][\d\s .]*?)\s*en\s+([A-Za-zÀ-ÿ][^\n(]{1,60})", re.I)
+
+
+def _bsr_to_int(s: str) -> int | None:
+    digits = re.sub(r"[^\d]", "", s or "")
+    return int(digits) if digits else None
+
+
+def parse_asin_bsr(result: dict) -> BsrInfo | None:
+    """Extrait le rang Livres d'une réponse DataForSEO ASIN (advanced). None si pas de rang Livres."""
+    items = (result or {}).get("items") or []
+    item = next((it for it in items if it.get("type") == "amazon_product_info"),
+                items[0] if items else None)
+    if not item:
+        return None
+    body: dict = {}
+    for sec in (item.get("product_information") or []):
+        b = sec.get("body")
+        if isinstance(b, dict):
+            body.update(b)
+    bsr_val = next((v for k, v in body.items()
+                    if isinstance(v, str) and any(h in k.lower() for h in _BSR_KEY_HINTS)), None)
+    if not bsr_val:
+        return None
+    m = _MAIN_RANK.search(bsr_val)
+    rank = _bsr_to_int(m.group(1)) if m else None
+    if rank is None:
+        return None
+    subs: list[dict] = []
+    for sm in _SUB_RANK.finditer(bsr_val):
+        cat = sm.group(2).strip(" .,;:()")
+        if cat.lower().startswith("livres") or "voir les" in cat.lower():
+            continue
+        r = _bsr_to_int(sm.group(1))
+        if r and cat:
+            subs.append({"category": cat[:60], "rank": r})
+    return BsrInfo(rank_livres=rank, asin=(result.get("asin") or item.get("data_asin")),
+                   subcategories=subs[:5], raw=bsr_val[:300])
 
 
 _PROVIDERS = {"dataforseo": DataForSEOProvider}

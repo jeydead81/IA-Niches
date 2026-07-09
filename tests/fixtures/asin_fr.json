@@ -1,0 +1,24 @@
+{
+  "asin": "2080700162",
+  "type": "amazon_product_info",
+  "items": [
+    {
+      "type": "amazon_product_info",
+      "data_asin": "2080700162",
+      "title": "Pensées pour moi-même, Suivi de Manuel d'Epictète",
+      "categories": [{"category": "Livres"}, {"category": "Études supérieures"}],
+      "rating": {"value": 4.6, "votes_count": 3028},
+      "product_information": [
+        {
+          "type": "product_information_details_item",
+          "section_name": "Détails sur le produit",
+          "body": {
+            "Éditeur": "FLAMMARION",
+            "ISBN-13": "978-2080700162",
+            "Classement des meilleures ventes d'Amazon": "194 en Livres ( Voir les 100 premiers en Livres )  1 en Philosophie et épistémologie pour l'université\n 1 en Ouvrages de référence de la philosophie\n 4 en Biographies historiques (Livres)"
+          }
+        }
+      ]
+    }
+  ]
+}
