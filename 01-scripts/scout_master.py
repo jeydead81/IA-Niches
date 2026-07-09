@@ -6,11 +6,12 @@ ideator (niches IA) → validation demande (autocomplete, gratuit) → search (D
 (affichage CLI ou stream UI). Toutes les dépendances lourdes sont injectables (tests hors-ligne).
 """
 import argparse
-import time
 
 from dotenv import load_dotenv
 
-from amazon_product import fetch_bsr as _fetch_bsr
+from bsr_source import resolve_bsrs
+from cache import Cache
+from cost_tracker import CostTracker
 from models import ScoredNiche
 from niche_ideator import generate_niches as _generate_niches
 from niche_validator import validate_niches as _validate_niches
@@ -22,57 +23,90 @@ def _noop(_msg: str) -> None:
     pass
 
 
-def run_scout(seed: str | None = None, signals: dict | None = None,
-              n_ideas: int = 12, n_search: int = 6, n_bsr_per_niche: int = 5,
-              model: str | None = None, provider=None, progress=None,
-              bsr_pause: float = 0.5,
-              ideate=None, validate=None, fetch_bsr_fn=None) -> list[ScoredNiche]:
-    """Lance le scout complet et renvoie les niches scorées (triées par score global).
+_SEARCH_TTL_S = 10 * 24 * 3600     # 10 jours
 
-    Coût : ~n_search appels DataForSEO (~0,003 $ chacun) ; ideator ~0,02 € ; le reste gratuit.
-    """
+
+def run_scout(seed: str | None = None, signals: dict | None = None,
+              n_ideas: int = 12, n_search: int = 6, n_bsr_per_niche: int = 3,
+              model: str | None = None, provider=None, progress=None,
+              bsr_pause: float = 0.4, books_only: bool = True,
+              use_cache: bool = True, cache_path: str | None = None,
+              bsr_source: str | None = None, bsr_priority: int = 2, cost=None,
+              ideate=None, validate=None, fetch_bsr_fn=None) -> list[ScoredNiche]:
+    """Scout complet, 3 phases : ideator → validation demande → [search par niche] →
+    [BSR batché global : dédup + cache] → scoring §4.1. Renvoie les niches triées.
+
+    Coût mesurable via `cost` (CostTracker fourni par l'appelant). BSR gratuit en local
+    (BSR_SOURCE=scrape), payant/fiable en serveur (BSR_SOURCE=dataforseo)."""
     progress = progress or _noop
     ideate = ideate or _generate_niches
     validate = validate or _validate_niches
-    fetch_bsr_fn = fetch_bsr_fn or _fetch_bsr
+    cost = cost if cost is not None else CostTracker()
     load_dotenv()
 
-    # 1) Ideator
+    from pathlib import Path
+    _root = Path(__file__).resolve().parent.parent
+    cache = None
+    if use_cache:
+        cache = Cache(cache_path or (_root / "99-logs" / "df-cache.db"))
+
+    # 1) Ideator (coût LLM réel via on_usage)
     progress(f"Génération de niches par l'IA (graine : {seed or 'aucune'})…")
-    candidates = ideate(seed=seed, signals=signals, n=n_ideas, model=model)
+    candidates = ideate(seed=seed, signals=signals, n=n_ideas, model=model,
+                        on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     progress(f"{len(candidates)} niches proposées par l'IA.")
 
-    # 2) Validation de la demande (gratuit, autocomplete)
+    # 2) Validation demande (gratuit, autocomplete)
     progress("Validation de la demande sur Amazon (autocomplete, gratuit)…")
     validations = validate(candidates, pause=0.4, max_queries=3)
     validated = [v for v in validations if v.validated]
     progress(f"{len(validated)}/{len(validations)} niches avec demande confirmée.")
 
-    # 3) Search payant, GATÉ au top-demande ; 4) BSR gratuit ; 5) Scoring
     shortlist = validated[:n_search]
-    if shortlist:
-        provider = provider or get_provider("dataforseo")
-    scored: list[ScoredNiche] = []
+    if not shortlist:
+        progress("Scout terminé.")
+        return []
+    provider = provider or get_provider("dataforseo")
+    loc = getattr(provider, "location_code", 2250)
+    lang = getattr(provider, "language_code", "fr_FR")
+
+    # Phase A — concurrence Amazon par niche (search, caché par mot-clé)
+    per_niche = []          # (validation, SearchResult|None, [asins top-n])
+    all_asins: list[str] = []
     for i, v in enumerate(shortlist, 1):
         q = v.requete_amazon or v.niche
         progress(f"[{i}/{len(shortlist)}] Concurrence Amazon « {q} »…")
-        try:
-            sr = provider.search(q)
-        except Exception as e:  # noqa: BLE001 — on n'interrompt jamais le run
-            progress(f"  ⚠ search échec ({e}) — niche scorée sans concurrence.")
-            sr = None
-        bsrs: list[int] = []
+        sr = cache.get_search(q, loc, lang) if cache else None
+        if sr is None:
+            try:
+                sr = provider.search(q, books_only=books_only)
+                cost.add_dataforseo(1, getattr(provider, "priority", 2))
+                if cache:
+                    cache.set_search(q, loc, lang, sr, _SEARCH_TTL_S)
+            except Exception as e:  # noqa: BLE001 — on n'interrompt jamais le run
+                progress(f"  ⚠ search échec ({e}) — niche scorée sans concurrence.")
+                sr = None
         asins = [o.asin for o in (sr.organic if sr else []) if o.asin][:n_bsr_per_niche]
-        for asin in asins:
-            info = fetch_bsr_fn(asin)
-            if info and info.rank_livres:
-                bsrs.append(info.rank_livres)
-            if bsr_pause:
-                time.sleep(bsr_pause)
+        per_niche.append((v, sr, asins))
+        all_asins.extend(asins)
+
+    # Phase B — BSR global (batché, dédup + cache)
+    progress(f"Récupération des BSR ({len(set(all_asins))} livres uniques)…")
+    bsr_map = resolve_bsrs(all_asins, source=bsr_source, provider=provider,
+                           fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
+                           bsr_priority=bsr_priority, cost=cost, bsr_pause=bsr_pause)
+
+    # Phase C — scoring
+    scored: list[ScoredNiche] = []
+    for v, sr, asins in per_niche:
+        bsrs = [bsr_map[a].rank_livres for a in asins
+                if bsr_map.get(a) and bsr_map[a].rank_livres]
         scored.append(score_niche(v, sr, bsrs))
 
     scored.sort(key=lambda s: s.global_score, reverse=True)
-    progress("Scout terminé.")
+    b = cost.breakdown()
+    progress(f"Scout terminé. Coût ~{b['usd']:.4f} $ "
+             f"({b['dataforseo_calls']} appels DataForSEO + LLM).")
     return scored
 
 
@@ -90,10 +124,15 @@ def main() -> None:
     p.add_argument("--ideas", type=int, default=12, help="nb de niches générées par l'IA")
     p.add_argument("--search", type=int, default=6, help="nb de niches passées au search payant")
     args = p.parse_args()
-    results = run_scout(seed=args.seed, n_ideas=args.ideas, n_search=args.search, progress=print)
+    cost = CostTracker()
+    results = run_scout(seed=args.seed, n_ideas=args.ideas, n_search=args.search,
+                        progress=print, cost=cost)
     print("\n=== NICHES CLASSÉES ===")
     for s in results:
         _print_row(s)
+    b = cost.breakdown()
+    print(f"\nCoût du run : ~{b['usd']:.4f} $  "
+          f"(DataForSEO {b['dataforseo_usd']:.4f} $ / LLM {b['llm_usd']:.4f} $)")
 
 
 if __name__ == "__main__":
