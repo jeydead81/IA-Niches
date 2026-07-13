@@ -7,11 +7,12 @@ Lancer :  uvicorn server:app --reload   (depuis le dossier web/)
 import json
 import queue
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 # rend le moteur (01-scripts) importable + charge les secrets quel que soit le cwd
 _ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +21,8 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(_ROOT / ".env")
 from scout_master import run_scout  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
+from models import ScoredNiche  # noqa: E402
+from positioning_pdf import build_positioning_pdf  # noqa: E402
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
@@ -67,6 +70,20 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/pdf")
+async def api_pdf(request: Request):
+    """Rend le one-pager PDF d'une niche à la volée (stateless : la niche est fournie
+    en entier dans le body, aucune persistance côté serveur)."""
+    data = await request.json()
+    scored = ScoredNiche.model_validate(data)
+    with tempfile.TemporaryDirectory() as d:
+        p = build_positioning_pdf(scored, f"{d}/positioning.pdf")
+        pdf_bytes = p.read_bytes()
+    name = "".join(c for c in (scored.niche or "niche") if c.isalnum() or c in " -_")[:40].strip()
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name or "niche"}.pdf"'})
 
 
 if __name__ == "__main__":

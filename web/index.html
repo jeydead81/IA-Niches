@@ -112,6 +112,21 @@
         text-decoration:none}
   .asin:hover{background:#DBEAFE}
 
+  .vbox{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px}
+  .vhead{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .vbadge{font-family:var(--mono);font-weight:700;font-size:12.5px;padding:3px 10px;border-radius:8px}
+  .vbadge.g{background:var(--green-bg);color:#166534}
+  .vbadge.a{background:var(--amber-bg);color:#92400E}
+  .vbadge.r{background:var(--red-bg);color:#991B1B}
+  .vconf{font-family:var(--mono);color:var(--text-muted);font-size:12.5px}
+  .vfacteur{font-size:13px;margin:0 0 8px}
+  .vangle{font-size:13.5px;color:var(--heading);margin:2px 0}
+  .vangle .sous{color:var(--text-muted);font-weight:400}
+  .vrow{font-size:12.5px;color:var(--text-muted);margin:3px 0}
+  .btn-pdf{font-family:var(--sans);font-weight:600;font-size:12.5px;color:#fff;cursor:pointer;
+    background:var(--primary);border:none;border-radius:8px;padding:7px 14px;margin-top:8px}
+  .btn-pdf:hover{background:var(--primary-600)}
+
   .empty,.errbox{padding:44px 20px;text-align:center;color:var(--text-muted)}
   .empty svg{width:40px;height:40px;color:#CBD5E1;margin-bottom:10px}
   .errbox{color:#991B1B;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--radius);margin-top:18px;display:none}
@@ -208,6 +223,47 @@ function addStep(msg){
   steps.appendChild(li); steps.scrollTop=steps.scrollHeight;
 }
 
+function verdictGrade(v){
+  const s=(v||'').toLowerCase();
+  return s==='go' ? 'g' : s==='no-go' ? 'r' : 'a';
+}
+
+function verdictBlock(r){
+  const v=r.verdict;
+  if(!v) return '';
+  const g=verdictGrade(v.verdict);
+  const a=(v.angles||[])[0];
+  let angleHtml='';
+  if(a){
+    const reqs=[a.requete_principale,...(a.requetes_secondaires||[])].filter(Boolean).map(esc).join(', ')||'—';
+    angleHtml=`
+      <p class="vangle"><strong>${esc(a.titre)}</strong> — <span class="sous">${esc(a.sous_titre)}</span></p>
+      <p class="vrow"><strong>Pourquoi :</strong> ${esc(a.pourquoi)}</p>
+      <p class="vrow"><strong>Requêtes :</strong> ${reqs}</p>`;
+  }
+  return `<div class="vbox">
+      <div class="vhead">
+        <span class="vbadge ${g}">${esc(v.verdict)}</span>
+        <span class="vconf">${esc(v.confiance)}/10</span>
+      </div>
+      <p class="vfacteur"><strong>Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
+      ${angleHtml}
+      <button type="button" class="btn-pdf">Télécharger le PDF</button>
+    </div>`;
+}
+
+async function downloadPdf(niche) {
+  const r = await fetch('/api/pdf', {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(niche)});
+  if (!r.ok) { alert('Erreur génération PDF'); return; }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = (niche.niche || 'niche') + '.pdf';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function render(rows){
   tbody.innerHTML='';
   rcount.textContent = rows.length ? `${rows.length} niche(s) analysée(s) en profondeur` : 'aucune niche validée';
@@ -228,10 +284,13 @@ function render(rows){
     const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
     const asins=(r.top_asins||[]).map(a=>`<a class="asin" href="https://www.amazon.fr/dp/${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>`).join('')||'<span class="mut">—</span>';
     det.innerHTML=`<td colspan="8"><div class="inner">
+        ${verdictBlock(r)}
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
         <p class="dl">Top livres concurrents (ASIN → fiche)</p><div class="asins">${asins}</div>
       </div></td>`;
     tr.addEventListener('click',()=>{tr.classList.toggle('open');det.classList.toggle('open');});
+    const pdfBtn=det.querySelector('.btn-pdf');
+    if(pdfBtn) pdfBtn.addEventListener('click',ev=>{ev.stopPropagation();downloadPdf(r);});
     tbody.appendChild(tr); tbody.appendChild(det);
   });
   empty.style.display='none'; results.classList.add('on');
