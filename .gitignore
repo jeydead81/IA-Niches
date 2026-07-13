@@ -42,3 +42,6 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+
+# Cache SQLite DataForSEO (local)
+99-logs/df-cache.db
