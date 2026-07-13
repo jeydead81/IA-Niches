@@ -125,11 +125,6 @@ def build_positioning_pdf(scored: ScoredNiche, out_path) -> Path:
             pdf.set_font("Helvetica", "B", 10)
             pdf.multi_cell(0, 5.5, _safe(f"« {a.titre} » — {a.sous_titre}"),
                            new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.set_text_color(*_MUTED)
-            pdf.multi_cell(0, 5, _safe(f"{a.angle} (risque : {a.risque})"),
-                           new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-            pdf.set_text_color(*_DARK)
         pdf.ln(1)
 
     # -- Critique strategique --
@@ -138,8 +133,8 @@ def build_positioning_pdf(scored: ScoredNiche, out_path) -> Path:
     kv("Faux concurrent", v.faux_concurrent)
     kv("Differenciation", v.differenciation)
 
-    # -- Pied de page --
-    pdf.set_y(-14)
+    # -- Pied de page (en ligne, pour éviter une page orpheline sur contenu long) --
+    pdf.ln(3)
     pdf.set_font("Helvetica", "I", 7)
     pdf.set_text_color(*_MUTED)
     pdf.cell(0, 5, _safe("IA-Niches — analyse indicative, à valider par tes propres "
