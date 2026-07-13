@@ -14,3 +14,4 @@ pytest>=8
 anthropic>=0.100  # ideator LLM
 fastapi>=0.110    # UI web (backend)
 uvicorn>=0.29     # serveur ASGI
+fpdf2
