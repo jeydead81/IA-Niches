@@ -10,8 +10,9 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 # rend le moteur (01-scripts) importable + charge les secrets quel que soit le cwd
@@ -72,18 +73,30 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def _content_disposition(name: str) -> str:
+    """En-tête Content-Disposition sûr : nom ASCII (fallback) + filename* RFC 5987 (UTF-8).
+    Garantit un en-tête encodable en latin-1 (exigence Starlette) même avec « œ », accents, etc."""
+    base = (name or "niche").strip()
+    ascii_name = "".join(c for c in base if c.isascii() and (c.isalnum() or c in " -_")).strip()
+    ascii_name = ascii_name[:40] or "niche"
+    utf8 = quote((base[:60] or "niche") + ".pdf")
+    return f"attachment; filename=\"{ascii_name}.pdf\"; filename*=UTF-8''{utf8}"
+
+
 @app.post("/api/pdf")
 async def api_pdf(request: Request):
     """Rend le one-pager PDF d'une niche à la volée (stateless : la niche est fournie
     en entier dans le body, aucune persistance côté serveur)."""
-    data = await request.json()
-    scored = ScoredNiche.model_validate(data)
+    try:
+        data = await request.json()
+        scored = ScoredNiche.model_validate(data)
+    except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
+        raise HTTPException(status_code=400, detail="niche invalide")
     with tempfile.TemporaryDirectory() as d:
         p = build_positioning_pdf(scored, f"{d}/positioning.pdf")
         pdf_bytes = p.read_bytes()
-    name = "".join(c for c in (scored.niche or "niche") if c.isalnum() or c in " -_")[:40].strip()
     return Response(content=pdf_bytes, media_type="application/pdf",
-                    headers={"Content-Disposition": f'attachment; filename="{name or "niche"}.pdf"'})
+                    headers={"Content-Disposition": _content_disposition(scored.niche)})
 
 
 if __name__ == "__main__":
