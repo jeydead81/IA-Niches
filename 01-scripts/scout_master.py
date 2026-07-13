@@ -112,7 +112,7 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
 
 def _print_row(s: ScoredNiche) -> None:
     crit = "✓§4.1" if s.criteres_bsr_ok else "  -  "
-    print(f"  {s.global_score:>4}/10  {s.verdict}  {s.niche}  [{s.categorie}]")
+    print(f"  {s.global_score:>4}/10  {s.priorite}  {s.niche}  [{s.categorie}]")
     print(f"        demande {s.demande} · pénétration {s.penetration} · {crit} · "
           f"BSR top {s.bsr_best} (moy5 {s.bsr_top5_avg}) · concurrents {s.n_concurrents_cibles} · "
           f"sponso écartés {s.n_sponsored}")

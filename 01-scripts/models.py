@@ -50,6 +50,30 @@ class SearchResult(BaseModel):
     total_items: int = 0
 
 
+class AngleAttaque(BaseModel):
+    """Un angle d'attaque proposé par le verdict directeur éditorial."""
+    angle: str
+    pourquoi: str
+    risque: str
+    titre: str
+    sous_titre: str
+    direction_couverture: str = ""
+    prix_suggere: str = ""                 # fourchette lisible, ex. "14,90-19,90 €"
+    requete_principale: str = ""
+    requetes_secondaires: list[str] = Field(default_factory=list)
+
+
+class NicheVerdict(BaseModel):
+    """Verdict éditorial d'une niche (directeur éditorial §7-8, sur données du scout)."""
+    verdict: str                           # "Go" | "Go prudent" | "No-Go"
+    confiance: int = 0                     # 1-10
+    facteur_decisif: str = ""
+    angles: list[AngleAttaque] = Field(default_factory=list)  # 1-3
+    saturation: str = ""                   # critique stratégique Q1
+    faux_concurrent: str = ""              # Q2 ("aucun" si pas de faux concurrent)
+    differenciation: str = ""             # Q3 (exécution / angle / autorité)
+
+
 class ScoredNiche(BaseModel):
     """Une niche entièrement évaluée (demande + concurrence + BSR réel) et scorée."""
     niche: str
@@ -61,7 +85,7 @@ class ScoredNiche(BaseModel):
     demande: float = 0.0
     penetration: float = 0.0
     compatibilite: float = 0.0
-    verdict: str = ""
+    priorite: str = ""                     # badge scout ("🟢 À analyser en priorité"/…), §6.3 col. "Verdict"
     # signaux
     demand_autocomplete: int = 0           # nb de complétions Amazon (canal gratuit)
     n_organic: int = 0
@@ -75,6 +99,7 @@ class ScoredNiche(BaseModel):
     bsr_worst_top10: int | None = None
     criteres_bsr_ok: bool = False
     top_asins: list[str] = Field(default_factory=list)
+    verdict: NicheVerdict | None = None    # rempli pour le top-N (gate coût)
 
 
 class NicheValidation(BaseModel):
