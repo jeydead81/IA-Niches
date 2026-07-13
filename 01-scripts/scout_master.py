@@ -15,6 +15,7 @@ from cost_tracker import CostTracker
 from models import ScoredNiche
 from niche_ideator import generate_niches as _generate_niches
 from niche_validator import validate_niches as _validate_niches
+from niche_verdict import generate_verdict as _generate_verdict
 from scoring import score_niche
 from search_providers import get_provider
 
@@ -31,8 +32,9 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
               model: str | None = None, provider=None, progress=None,
               bsr_pause: float = 0.4, books_only: bool = True,
               use_cache: bool = True, cache_path: str | None = None,
-              bsr_source: str | None = None, bsr_priority: int = 2, cost=None,
-              ideate=None, validate=None, fetch_bsr_fn=None) -> list[ScoredNiche]:
+              bsr_source: str | None = None, bsr_priority: int = 2,
+              n_verdict: int = 3, verdict_model: str | None = None, verdict_fn=None,
+              cost=None, ideate=None, validate=None, fetch_bsr_fn=None) -> list[ScoredNiche]:
     """Scout complet, 3 phases : ideator → validation demande → [search par niche] →
     [BSR batché global : dédup + cache] → scoring §4.1. Renvoie les niches triées.
 
@@ -41,6 +43,7 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
     progress = progress or _noop
     ideate = ideate or _generate_niches
     validate = validate or _validate_niches
+    verdict_fn = verdict_fn or _generate_verdict
     cost = cost if cost is not None else CostTracker()
     load_dotenv()
 
@@ -97,13 +100,24 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
                            bsr_priority=bsr_priority, cost=cost, bsr_pause=bsr_pause)
 
     # Phase C — scoring
-    scored: list[ScoredNiche] = []
+    pairs = []          # (ScoredNiche, SearchResult|None)
     for v, sr, asins in per_niche:
         bsrs = [bsr_map[a].rank_livres for a in asins
                 if bsr_map.get(a) and bsr_map[a].rank_livres]
-        scored.append(score_niche(v, sr, bsrs))
+        pairs.append((score_niche(v, sr, bsrs), sr))
+    pairs.sort(key=lambda p: p[0].global_score, reverse=True)
 
-    scored.sort(key=lambda s: s.global_score, reverse=True)
+    # Verdict IA (directeur éditorial), gaté au top-N pour maîtriser le coût
+    if n_verdict:
+        for sc, sr in pairs[:n_verdict]:
+            progress(f"Verdict éditorial : {sc.niche}…")
+            try:
+                sc.verdict = verdict_fn(sc, sr, model=verdict_model,
+                                        on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+            except Exception as e:  # noqa: BLE001 — un échec de verdict ne coule pas le run (§11.11)
+                progress(f"  ⚠ verdict indisponible ({e})")
+
+    scored = [sc for sc, _ in pairs]
     b = cost.breakdown()
     progress(f"Scout terminé. Coût ~{b['usd']:.4f} $ "
              f"({b['dataforseo_calls']} appels DataForSEO + LLM).")
@@ -133,6 +147,13 @@ def main() -> None:
     b = cost.breakdown()
     print(f"\nCoût du run : ~{b['usd']:.4f} $  "
           f"(DataForSEO {b['dataforseo_usd']:.4f} $ / LLM {b['llm_usd']:.4f} $)")
+
+    for s in results[:3]:
+        if s.verdict:
+            print(f"\n▸ {s.niche} — Verdict : {s.verdict.verdict} ({s.verdict.confiance}/10)")
+            print(f"  Facteur décisif : {s.verdict.facteur_decisif}")
+            for a in s.verdict.angles[:2]:
+                print(f"  • « {a.titre} » — {a.sous_titre}")
 
 
 if __name__ == "__main__":
