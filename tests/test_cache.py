@@ -37,3 +37,13 @@ def test_search_helpers(tmp_path):
     c.set_search("Tarot ", 2250, "fr_FR", sr, ttl_s=100)   # clé normalisée (lower+strip)
     got = c.get_search("tarot", 2250, "fr_FR")
     assert got.keyword == "tarot" and got.organic[0].asin == "A1"
+
+
+def test_book_helpers(tmp_path):
+    from models import EnrichedBook
+    c = Cache(tmp_path / "c.db")
+    b = EnrichedBook(asin="A1", title="T", bsr=20, bsr_rayon="Boutique Kindle", serp_position=3)
+    c.set_book("A1", 2250, b, ttl_s=100)
+    got = c.get_book("A1", 2250)
+    assert got.asin == "A1" and got.bsr == 20 and got.bsr_rayon == "Boutique Kindle"
+    assert c.get_book("A2", 2250) is None

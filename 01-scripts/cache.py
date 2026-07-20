@@ -6,7 +6,9 @@ import sqlite3
 import time
 from pathlib import Path
 
-from models import BsrInfo, SearchResult
+from models import BsrInfo, EnrichedBook, SearchResult
+
+BOOK_TTL_S = 7 * 24 * 3600     # 7 jours : rayon fiction, moins volatil que le BSR seul
 
 
 class Cache:
@@ -44,6 +46,10 @@ class Cache:
     def _search_key(keyword: str, location: int, language: str) -> str:
         return f"search:{location}:{language}:{(keyword or '').lower().strip()}"
 
+    @staticmethod
+    def _book_key(asin: str, location: int) -> str:
+        return f"book:{location}:{asin}"
+
     def get_bsr(self, asin: str, location: int) -> BsrInfo | None:
         d = self.get(self._bsr_key(asin, location))
         return BsrInfo.model_validate(d) if d else None
@@ -58,3 +64,10 @@ class Cache:
     def set_search(self, keyword: str, location: int, language: str,
                    result: SearchResult, ttl_s: float) -> None:
         self.set(self._search_key(keyword, location, language), result.model_dump(), ttl_s)
+
+    def get_book(self, asin: str, location: int) -> EnrichedBook | None:
+        d = self.get(self._book_key(asin, location))
+        return EnrichedBook.model_validate(d) if d else None
+
+    def set_book(self, asin: str, location: int, book: EnrichedBook, ttl_s: float) -> None:
+        self.set(self._book_key(asin, location), book.model_dump(), ttl_s)
