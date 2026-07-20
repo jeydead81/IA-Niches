@@ -202,7 +202,7 @@ def parse_bsr_rank(raw) -> tuple[int | None, str | None, bool]:
     Le rang PRINCIPAL est dans la tête de chaîne (avant la 1re parenthèse) ; les
     sous-catégories suivent et ne doivent jamais être prises pour le rayon.
     « titres gratuits » = classement des gratuits, PAS un rang de ventes payantes."""
-    head = (raw or "").split("(")[0].strip()
+    head = (raw if isinstance(raw, str) else "").split("(")[0].strip()
     if not head:
         return None, None, False
     gratuit = "gratuit" in head.lower()

@@ -107,7 +107,7 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
         if getattr(block, "type", None) != "tool_use":
             continue
         for t in ((block.input or {}).get("trios") or []):
-            tr = list(t.get("tropes") or [])
+            tr = list(dict.fromkeys(t.get("tropes") or []))   # dédup, ordre préservé
             dec = t.get("decor") or None
             if not tr or not set(tr) <= set(tropes_ok):
                 continue                       # trope hors taxonomie -> écarté
@@ -116,4 +116,4 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
             out.append(FictionNiche(sous_genre=sous_genre_cle, tropes=tr[:3], decor=dec,
                                     marketplace="fr", rayon=rayon,
                                     query=t.get("query") or ""))
-    return out
+    return out[:n] if n else out          # `n` est un plafond, pas seulement une suggestion

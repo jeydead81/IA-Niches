@@ -1,18 +1,19 @@
 {
+  "n": 8,
   "couverture": {
     "date_publication": 7,
     "editeur": 6,
     "langue": 7,
-    "serie": 0,
     "bsr": 7,
     "prix": 8,
     "note": 7,
     "avis": 7,
-    "ku_badge": 3,
-    "bought_past_month": 1,
-    "description": 8
+    "description": 8,
+    "serie_structuree": 4,
+    "ku_badge": 0,
+    "bought_past_month": 0
   },
-  "n": 8,
+  "methode": "Comptage STRICT : présence exacte de la clé/du champ. Les compteurs initiaux de ce fichier venaient d une recherche par sous-chaîne approximative et surestimaient ku_badge et bought_past_month — corrigés ici. ku_badge = occurrence de \"kindle unlimited\" ; bought_past_month = champ bought_past_month ou mention \"achetés au cours\". Les deux valent 0 : ces données n existent pas sur amazon.fr (cf. docs/spike_fiction_M0.md).",
   "cles_details": [
     "ASIN",
     "Accessibilité",
@@ -35,37 +36,5 @@
     "Taille du fichier",
     "Word Wise",
     "Éditeur"
-  ],
-  "cles_item": [
-    "applicable_vouchers",
-    "author",
-    "categories",
-    "currency",
-    "data_asin",
-    "description",
-    "details",
-    "image_url",
-    "is_amazon_choice",
-    "is_available",
-    "is_newer_model_available",
-    "is_prime_video",
-    "newer_model",
-    "parent_asin",
-    "percentage_discount",
-    "position",
-    "price_from",
-    "price_to",
-    "product_asins",
-    "product_images_list",
-    "product_information",
-    "product_videos_list",
-    "rank_absolute",
-    "rank_group",
-    "rating",
-    "title",
-    "top_global_reviews",
-    "top_local_reviews",
-    "type",
-    "xpath"
   ]
 }
