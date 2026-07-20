@@ -126,6 +126,11 @@ def export_validation(livres: list[EnrichedBook], classifications: list[TropeCla
             cell.alignment = Alignment(wrap_text=True, vertical="top")
 
     ws2 = wb.create_sheet("Clés autorisées")
+    # La version est aussi stampée dans une cellule VISIBLE (B1) : wb.properties.keywords
+    # devient vide si Excel efface les propriétés du classeur à l'enregistrement
+    # (« enregistrer sous »), et mesurer contre une taxonomie inconnue n'a pas de sens.
+    ws2.append(["taxonomy_version", version])
+    ws2.append([])
     tropes, decors = valid_keys(sous_genre_cle, version)
     ws2.append(["tropes"])
     for t in tropes:
@@ -142,13 +147,27 @@ def _rempli(v) -> bool:
     return v is not None and str(v).strip() != ""
 
 
+def _lire_taxonomy_version(wb) -> str:
+    """Lit la version depuis la cellule VISIBLE (B1 de « Clés autorisées ») en priorité —
+    elle survit à un « enregistrer sous » qui efface les propriétés du classeur, contrairement
+    à `wb.properties.keywords` qui reste un filet de secours pour les fichiers plus anciens."""
+    if "Clés autorisées" in wb.sheetnames:
+        v = wb["Clés autorisées"]["B1"].value
+        if _rempli(v):
+            return str(v).strip()
+    return (wb.properties.keywords or "").strip()
+
+
 def load_corrections(path) -> list[TropeClassification]:
     """Ne rend QUE les lignes effectivement corrigées par Baptiste (au moins une colonne
     *_ok remplie). Une ligne laissée vide n'est pas un avis « d'accord » : la compter
     gonflerait artificiellement le taux d'accord mesuré."""
     wb = load_workbook(str(path))
     ws = wb["Validation"] if "Validation" in wb.sheetnames else wb.active
-    version = wb.properties.keywords or ""
+    version = _lire_taxonomy_version(wb)
+    if not version:
+        raise ValueError("taxonomy_version introuvable (ni cellule visible, ni propriétés du "
+                         "classeur) — mesurer contre une taxonomie inconnue n'a pas de sens.")
     idx = {h: i for i, h in enumerate(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))}
 
     out: list[TropeClassification] = []

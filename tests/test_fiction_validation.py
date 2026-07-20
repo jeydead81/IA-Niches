@@ -91,6 +91,54 @@ def test_livre_classe_a_un_statut_classe(tmp_path):
     assert row[_idx(ws)["statut_ia"] - 1] == "classé"
 
 
+def test_taxonomy_version_ecrite_dans_une_cellule_visible(tmp_path):
+    """`wb.properties.keywords` devient vide si Excel efface les propriétés du classeur à
+    l'enregistrement (« enregistrer sous ») : la version doit aussi vivre dans une cellule
+    visible pour rester lisible dans ce cas."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    ws2 = load_workbook(str(p))["Clés autorisées"]
+    assert ws2["B1"].value == "fr_v1"
+
+
+def test_taxonomy_version_relue_depuis_la_cellule_meme_si_les_proprietes_sont_effacees(tmp_path):
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    wb.properties.keywords = ""                 # simule Excel qui efface les propriétés
+    wb.save(str(p))
+    # une ligne corrigée doit reconstruire taxonomy_version="fr_v1" via la cellule visible,
+    # pas via les propriétés (vides)
+    ws = wb["Validation"]
+    ws.cell(row=2, column=[c.value for c in ws[1]].index("tropes_ok") + 1).value = "metier_gourmand"
+    wb.save(str(p))
+    corrections = load_corrections(p)
+    assert corrections[0].taxonomy_version == "fr_v1"
+
+
+def test_taxonomy_version_introuvable_leve(tmp_path):
+    """Mesurer contre une taxonomie inconnue n'a pas de sens : si ni la cellule visible ni
+    les propriétés du classeur ne portent la version, il faut lever plutôt que de mesurer
+    silencieusement contre une chaîne vide."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    wb.properties.keywords = ""
+    wb["Clés autorisées"]["B1"].value = None
+    ws = wb["Validation"]
+    ws.cell(row=2, column=[c.value for c in ws[1]].index("tropes_ok") + 1).value = "metier_gourmand"
+    wb.save(str(p))
+    import pytest
+    with pytest.raises(ValueError):
+        load_corrections(p)
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]
