@@ -6,8 +6,6 @@ la définition est ici, assumée explicitement (cf. plan M4, tâche M4-3) :
 - un livre est en accord si jaccard(tropes) >= 0.5 ET décor identique ET est_roman identique.
 Sous la porte des 80 %, ce n'est pas le classifieur qu'on corrige mais la TAXONOMIE
 (clés ambiguës) — d'où `cles_litigieuses`, qui dit QUELLES clés divergent."""
-from pathlib import Path
-
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment
 from pydantic import BaseModel, Field
