@@ -147,6 +147,13 @@ def _rempli(v) -> bool:
     return v is not None and str(v).strip() != ""
 
 
+def _normalise_cle(s: str) -> str:
+    """Trim + casse + séparateurs : " Metier_Gourmand " et "metier-gourmand" doivent matcher
+    la même clé de taxonomie "metier_gourmand" — sinon une simple différence de saisie se
+    lit comme un désaccord (et accuse à tort la taxonomie via cles_litigieuses, cf. A6)."""
+    return "_".join(s.strip().casefold().replace("-", " ").split())
+
+
 def _lire_taxonomy_version(wb) -> str:
     """Lit la version depuis la cellule VISIBLE (B1 de « Clés autorisées ») en priorité —
     elle survit à un « enregistrer sous » qui efface les propriétés du classeur, contrairement
@@ -170,6 +177,16 @@ def load_corrections(path) -> list[TropeClassification]:
                          "classeur) — mesurer contre une taxonomie inconnue n'a pas de sens.")
     idx = {h: i for i, h in enumerate(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))}
 
+    # Clés valides du sous-genre (feuille "subject" écrite par export_validation) : sans elle
+    # (fichier ancien), on ne peut pas distinguer faute de saisie et clé litigieuse -> on ne
+    # filtre rien plutôt que de deviner.
+    sous_genre_cle = (wb.properties.subject or "").strip()
+    tropes_valides = decors_valides = None
+    if sous_genre_cle:
+        tv, dv = valid_keys(sous_genre_cle, version)
+        tropes_valides = {_normalise_cle(t) for t in tv}
+        decors_valides = {_normalise_cle(d) for d in dv}
+
     out: list[TropeClassification] = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row is None or not any(row):
@@ -180,7 +197,27 @@ def load_corrections(path) -> list[TropeClassification]:
         notes = row[idx["notes"]]
         if not (_rempli(tropes_ok) or _rempli(decor_ok) or _rempli(est_roman_ok) or _rempli(notes)):
             continue                    # rien de corrigé -> pas un avis, on ignore la ligne
-        tropes = [t.strip() for t in str(tropes_ok).split(",") if t.strip()] if _rempli(tropes_ok) else []
+
+        tropes: list[str] = []
+        fautes: list[str] = []
+        if _rempli(tropes_ok):
+            for brut in str(tropes_ok).split(","):
+                cle = _normalise_cle(brut)
+                if not cle:
+                    continue
+                if tropes_valides is not None and cle not in tropes_valides:
+                    fautes.append(cle)          # faute de saisie, pas un trope hors taxo
+                else:
+                    tropes.append(cle)
+
+        decor = None
+        if _rempli(decor_ok):
+            cle = _normalise_cle(str(decor_ok))
+            if decors_valides is not None and cle not in decors_valides:
+                fautes.append(cle)
+            else:
+                decor = cle
+
         est_roman = True
         if _rempli(est_roman_ok):
             est_roman = str(est_roman_ok).strip().lower() not in ("false", "faux", "0", "non")
@@ -188,7 +225,8 @@ def load_corrections(path) -> list[TropeClassification]:
             asin=row[idx["asin"]],
             taxonomy_version=version,
             tropes=tropes,
-            decor=str(decor_ok).strip() if _rempli(decor_ok) else None,
+            decor=decor,
+            fautes_saisie=fautes,
             est_roman=est_roman,
         ))
     return out

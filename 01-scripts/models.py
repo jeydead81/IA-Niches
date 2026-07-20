@@ -244,6 +244,10 @@ class TropeClassification(BaseModel):
     confidence: float = 0.0
     est_roman: bool = True          # False = jeu, coloriage, cahier… -> hors scoring
     hors_sujet: str = ""            # pourquoi, quand est_roman est False
+    # Saisie humaine (xlsx de validation) qui ne matche AUCUNE clé de la taxonomie même
+    # après normalisation : une FAUTE DE SAISIE à corriger, distincte de `other` (qui, lui,
+    # signale une vraie observation hors taxo côté IA et fait évoluer la taxonomie).
+    fautes_saisie: list[str] = Field(default_factory=list)
 
 
 class FictionNicheReport(BaseModel):

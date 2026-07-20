@@ -139,6 +139,42 @@ def test_taxonomy_version_introuvable_leve(tmp_path):
         load_corrections(p)
 
 
+def _col(ws, header: str) -> int:
+    return [c.value for c in ws[1]].index(header) + 1
+
+
+def test_cles_humaines_normalisees_avant_comparaison(tmp_path):
+    """" Metier_Gourmand " ne doit pas compter comme un désaccord contre metier_gourmand :
+    seule la casse/les espaces diffèrent, pas le sens — sans normalisation ça accuse à tort
+    la taxonomie d'une clé « litigieuse » qui n'existe même pas."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "tropes_ok")).value = " Metier_Gourmand "
+    wb.save(str(p))
+    out = load_corrections(p)
+    assert out[0].tropes == ["metier_gourmand"]
+
+
+def test_cle_hors_taxonomie_saisie_est_une_faute_de_saisie_pas_un_trope(tmp_path):
+    """Une clé saisie par Baptiste qui n'existe pas dans la taxonomie du sous-genre est une
+    FAUTE DE SAISIE (à corriger côté Excel), pas une observation qui accuse la taxonomie."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "tropes_ok")).value = "cle_totalement_inventee"
+    wb.save(str(p))
+    out = load_corrections(p)
+    assert out[0].tropes == []
+    assert "cle_totalement_inventee" in out[0].fautes_saisie
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]
