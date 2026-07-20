@@ -1,0 +1,62 @@
+=== 0) nodes extraits de la fixture M0 (gratuit) ===
+  Boutique Kindle                               node=672108031
+  Crime et enquête                              node=9691488031
+  Ebooks Kindle                                 node=695398031
+  Enquêtes et humour                            node=9691472031
+  Fiction criminelle                            node=205566718031
+  Jeux                                          node=302054
+  Livres                                        node=301061
+  Loisirs créatifs, décoration et maison        node=355635011
+  Mystère et suspense                           node=301134
+  Policier, mystère et suspense                 node=895004031
+  Romans policiers                              node=9691469031
+  Thrillers                                     node=302068
+
+=== 1) 5 recherches batchées ===
+  5 tâches créées
+  5 SERP récupérées
+  dark_romance              48 organiques · top: ['B0FRDTRWXG', 'B0C32ZBWM9']
+      B0FRDTRWXG | L'impératrice - Les Yakuzas T1: Par l'autrice phénomène
+      B0C32ZBWM9 | Dark Romance: La série phénomène de dark romance en poc
+      B0FY6H3692 | Toxic - Tome 01: La dark romance événement
+  romantasy                 48 organiques · top: ['2017093483', 'B0GZ4K2SMK']
+      2017093483 | Coloriages mystères - Romantasy: Colorie les chiffres e
+      B0GZ4K2SMK | Dire Bound: The Wolves of ruin, Tome 1
+      B0GDG5RTBD | Anathema: The Eating Woods, tome 1
+  thriller_polar            53 organiques · top: ['B0FVDTFM22', '2253910112']
+      B0FVDTFM22 | La Nounou - Un thriller psychologique absolument captiv
+      2253910112 | La Famille d'en face
+      2266352571 | Comme si de rien n'était de Barbara Abel nouveauté poch
+  feel_good                 48 organiques · top: ['2266344684', 'B09PKZ89LZ']
+      2266344684 | Heureux les fêlés car ils laissent passer la lumière
+      B09PKZ89LZ | Si la vie te donne des citrons, fais-en une tarte merin
+      2266348469 | L'Écriture est une île : le nouveau roman feel-good et 
+  romance_contemporaine     48 organiques · top: ['B0H9GK1GZ3', 'B0H99TD19Y']
+      B0H9GK1GZ3 | Les Jumeaux Secrets du Mafieux Italien: Une Romance de 
+      B0H99TD19Y | Encore un mètre: Une romance MM contemporaine slow burn
+      B0DJCSLYF4 | The Boyfriend Plan
+
+=== 2) 10 ASIN batchés (fils d'Ariane) ===
+  10 fils d'Ariane récupérés
+
+=== 3) NODES PAR SOUS-GENRE ===
+
+  ▸ dark_romance  (requête « dark romance »)
+     B0FRDTRWXG : Livres(301061) > Mystère et suspense(301134) > Romans policiers(9691469031) > Crimes et enquêtes à l'international(302078) > Japon(404850)
+     B0C32ZBWM9 : Livres(301061) > Érotisme(573312) > Littérature(588052) > Romans érotiques(588062)
+
+  ▸ romantasy  (requête « romantasy »)
+     2017093483 : Livres(301061) > Loisirs créatifs, décoration et maison(355635011) > Art et création(4222780031) > Arts textile et de l'aiguille(16124767031)
+     B0GZ4K2SMK : Livres et œuvres originales Audible(17941536031) > Science-Fiction et fantasy(21228885031) > Fantasy(21229021031) > Urbain et paranormal(21229711031) > Urbain(21230569031)
+
+  ▸ thriller_polar  (requête « thriller psychologique »)
+     B0FVDTFM22 : Livres(301061) > Mystère et suspense(301134) > Thrillers(302068)
+     2253910112 : Livres(301061) > Mystère et suspense(301134) > Thrillers(302068)
+
+  ▸ feel_good  (requête « roman feel good »)
+     2266344684 : Livres(301061) > Romans et littérature(301132) > Française(302038) > Francophonie(464030)
+     B09PKZ89LZ : Livres(301061) > Romans et littérature(301132) > Française(302038)
+
+  ▸ romance_contemporaine  (requête « romance contemporaine »)
+     B0H9GK1GZ3 : Livres(301061) > Mystère et suspense(301134) > Romans policiers(9691469031) > Crimes et enquêtes à l'international(302078) > Italie(404858)
+     B0H99TD19Y : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Romance et littérature sentimentale(894269031) > Médical(92063151031)

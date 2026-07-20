@@ -1,0 +1,253 @@
+{
+  "connus_fixture_M0": {
+    "Boutique Kindle": "672108031",
+    "Ebooks Kindle": "695398031",
+    "Policier, mystère et suspense": "895004031",
+    "Fiction criminelle": "205566718031",
+    "Livres": "301061",
+    "Mystère et suspense": "301134",
+    "Romans policiers": "9691469031",
+    "Enquêtes et humour": "9691472031",
+    "Thrillers": "302068",
+    "Crime et enquête": "9691488031",
+    "Loisirs créatifs, décoration et maison": "355635011",
+    "Jeux": "302054"
+  },
+  "par_sous_genre": {
+    "dark_romance": {
+      "query": "dark romance",
+      "asins": [
+        {
+          "asin": "B0FRDTRWXG",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Mystère et suspense",
+              "node": "301134"
+            },
+            {
+              "category": "Romans policiers",
+              "node": "9691469031"
+            },
+            {
+              "category": "Crimes et enquêtes à l'international",
+              "node": "302078"
+            },
+            {
+              "category": "Japon",
+              "node": "404850"
+            }
+          ]
+        },
+        {
+          "asin": "B0C32ZBWM9",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Érotisme",
+              "node": "573312"
+            },
+            {
+              "category": "Littérature",
+              "node": "588052"
+            },
+            {
+              "category": "Romans érotiques",
+              "node": "588062"
+            }
+          ]
+        }
+      ]
+    },
+    "romantasy": {
+      "query": "romantasy",
+      "asins": [
+        {
+          "asin": "2017093483",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Loisirs créatifs, décoration et maison",
+              "node": "355635011"
+            },
+            {
+              "category": "Art et création",
+              "node": "4222780031"
+            },
+            {
+              "category": "Arts textile et de l'aiguille",
+              "node": "16124767031"
+            }
+          ]
+        },
+        {
+          "asin": "B0GZ4K2SMK",
+          "chain": [
+            {
+              "category": "Livres et œuvres originales Audible",
+              "node": "17941536031"
+            },
+            {
+              "category": "Science-Fiction et fantasy",
+              "node": "21228885031"
+            },
+            {
+              "category": "Fantasy",
+              "node": "21229021031"
+            },
+            {
+              "category": "Urbain et paranormal",
+              "node": "21229711031"
+            },
+            {
+              "category": "Urbain",
+              "node": "21230569031"
+            }
+          ]
+        }
+      ]
+    },
+    "thriller_polar": {
+      "query": "thriller psychologique",
+      "asins": [
+        {
+          "asin": "B0FVDTFM22",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Mystère et suspense",
+              "node": "301134"
+            },
+            {
+              "category": "Thrillers",
+              "node": "302068"
+            }
+          ]
+        },
+        {
+          "asin": "2253910112",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Mystère et suspense",
+              "node": "301134"
+            },
+            {
+              "category": "Thrillers",
+              "node": "302068"
+            }
+          ]
+        }
+      ]
+    },
+    "feel_good": {
+      "query": "roman feel good",
+      "asins": [
+        {
+          "asin": "2266344684",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Romans et littérature",
+              "node": "301132"
+            },
+            {
+              "category": "Française",
+              "node": "302038"
+            },
+            {
+              "category": "Francophonie",
+              "node": "464030"
+            }
+          ]
+        },
+        {
+          "asin": "B09PKZ89LZ",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Romans et littérature",
+              "node": "301132"
+            },
+            {
+              "category": "Française",
+              "node": "302038"
+            }
+          ]
+        }
+      ]
+    },
+    "romance_contemporaine": {
+      "query": "romance contemporaine",
+      "asins": [
+        {
+          "asin": "B0H9GK1GZ3",
+          "chain": [
+            {
+              "category": "Livres",
+              "node": "301061"
+            },
+            {
+              "category": "Mystère et suspense",
+              "node": "301134"
+            },
+            {
+              "category": "Romans policiers",
+              "node": "9691469031"
+            },
+            {
+              "category": "Crimes et enquêtes à l'international",
+              "node": "302078"
+            },
+            {
+              "category": "Italie",
+              "node": "404858"
+            }
+          ]
+        },
+        {
+          "asin": "B0H99TD19Y",
+          "chain": [
+            {
+              "category": "Boutique Kindle",
+              "node": "672108031"
+            },
+            {
+              "category": "Ebooks Kindle",
+              "node": "695398031"
+            },
+            {
+              "category": "Romance et littérature sentimentale",
+              "node": "894269031"
+            },
+            {
+              "category": "Médical",
+              "node": "92063151031"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

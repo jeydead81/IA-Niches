@@ -10,7 +10,7 @@ from models import BsrInfo
 # balises, pour ne pas gaspiller le budget de caractères sur du bruit DOM/tracking)
 _BLOCK = re.compile(r"Classement des meilleures ventes.{0,4000}", re.I | re.S)
 # rang principal : "N en Livres" (catégorie racine)
-_MAIN = re.compile(r"([\d][\d\s. \xa0]{0,14}?)\s*en\s+Livres\b", re.I)
+_MAIN = re.compile(r"([\d][\d\s. \xa0]{0,14}?)\s*en\s+Livres(?!\s+\w)", re.I)  # lookahead : « Livres » = le RAYON, pas « Livres electroniques de ... » (ebooks)
 # sous-catégories : "N en <NomCatégorie>" — s'arrête avant une parenthèse pour ne
 # pas avaler un qualificatif du type "(Livres)" tout en gardant le nom de la catégorie
 _SUB = re.compile(

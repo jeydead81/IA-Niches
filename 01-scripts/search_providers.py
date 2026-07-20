@@ -149,7 +149,10 @@ class DataForSEOProvider:
 
 
 _BSR_KEY_HINTS = ("meilleures ventes", "best sellers rank")
-_MAIN_RANK = re.compile(r"([\d][\d\s .]{0,12})\s*en\s+Livres\b", re.I)
+# « en Livres » DOIT être le rayon principal, pas le début d'une sous-catégorie :
+# un ebook affiche « n°478 des titres gratuits dans la Boutique Kindle … 5 en Livres
+# électroniques de fiction criminelle » -> sans le lookahead on renvoyait 5 (faux rang).
+_MAIN_RANK = re.compile(r"([\d][\d\s .]{0,12})\s*en\s+Livres(?!\s+\w)", re.I)
 _SUB_RANK = re.compile(r"([\d][\d\s .]*?)\s*en\s+([A-Za-zÀ-ÿ][^\n(]{1,60})", re.I)
 
 
