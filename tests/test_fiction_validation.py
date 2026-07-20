@@ -175,6 +175,25 @@ def test_cle_hors_taxonomie_saisie_est_une_faute_de_saisie_pas_un_trope(tmp_path
     assert "cle_totalement_inventee" in out[0].fautes_saisie
 
 
+def test_colonne_ok_vide_sur_ligne_corrigee_retombe_sur_l_ia(tmp_path):
+    """Le mode d'emploi dit « corrige uniquement ce qui te semble faux » : sur une ligne
+    corrigée, une colonne *_ok laissée vide doit reprendre l'étiquette IA de la même ligne,
+    jamais retomber sur le vide — sinon contester le seul décor efface aussi les tropes et
+    fait chuter le taux à 0."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1",
+                              tropes=["metier_gourmand"], decor="village_breton")]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "decor_ok")).value = "provence"   # ne conteste QUE le décor
+    wb.save(str(p))
+    out = load_corrections(p)
+    assert out[0].decor == "provence"
+    assert out[0].tropes == ["metier_gourmand"]      # pas effacé par la correction du décor
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]

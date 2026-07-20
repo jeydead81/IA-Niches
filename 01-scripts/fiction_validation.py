@@ -198,6 +198,14 @@ def load_corrections(path) -> list[TropeClassification]:
         if not (_rempli(tropes_ok) or _rempli(decor_ok) or _rempli(est_roman_ok) or _rempli(notes)):
             continue                    # rien de corrigé -> pas un avis, on ignore la ligne
 
+        # Valeurs IA de la MÊME ligne : le mode d'emploi dit « corrige uniquement ce qui te
+        # semble faux » — une colonne *_ok laissée vide sur une ligne corrigée doit reprendre
+        # l'étiquette IA, jamais retomber sur le vide (sinon contester le seul décor efface
+        # aussi les tropes et fait chuter le taux artificiellement).
+        tropes_ia_brut = row[idx["tropes_ia"]] if "tropes_ia" in idx else None
+        decor_ia_brut = row[idx["decor_ia"]] if "decor_ia" in idx else None
+        est_roman_ia_brut = row[idx["est_roman_ia"]] if "est_roman_ia" in idx else None
+
         tropes: list[str] = []
         fautes: list[str] = []
         if _rempli(tropes_ok):
@@ -209,6 +217,8 @@ def load_corrections(path) -> list[TropeClassification]:
                     fautes.append(cle)          # faute de saisie, pas un trope hors taxo
                 else:
                     tropes.append(cle)
+        elif _rempli(tropes_ia_brut):
+            tropes = [t.strip() for t in str(tropes_ia_brut).split(",") if t.strip()]
 
         decor = None
         if _rempli(decor_ok):
@@ -217,10 +227,16 @@ def load_corrections(path) -> list[TropeClassification]:
                 fautes.append(cle)
             else:
                 decor = cle
+        elif _rempli(decor_ia_brut):
+            decor = str(decor_ia_brut).strip()
 
-        est_roman = True
         if _rempli(est_roman_ok):
             est_roman = str(est_roman_ok).strip().lower() not in ("false", "faux", "0", "non")
+        elif isinstance(est_roman_ia_brut, bool):
+            est_roman = est_roman_ia_brut
+        else:
+            est_roman = True            # pas de correction, pas d'IA exploitable -> défaut neutre
+
         out.append(TropeClassification(
             asin=row[idx["asin"]],
             taxonomy_version=version,
