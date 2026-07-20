@@ -119,3 +119,30 @@ def test_provider_search_books_only_false_omits_param():
                 get_json=lambda u: {"tasks": [{"status_code": 20000, "result": [_RESULT]}]},
                 poll_interval=0)
     assert "search_param" not in captured["body"][0]
+
+
+def test_search_param_explicite_prime_sur_books_only():
+    captured = {}
+
+    def fake_post(url, body):
+        captured["body"] = body
+        return {"tasks": [{"status_code": 20100, "id": "T"}]}
+
+    prov = DataForSEOProvider(login="l", password="p")
+    prov.search("cosy mystery", search_param="rh=n:205566725031",
+                post_json=fake_post,
+                get_json=lambda u: {"tasks": [{"status_code": 20000, "result": [_RESULT]}]},
+                poll_interval=0)
+    assert captured["body"][0]["search_param"] == "rh=n:205566725031"
+
+
+def test_product_raw_batch_rend_les_payloads_bruts():
+    def fake_post(url, body):
+        return {"tasks": [{"status_code": 20100, "id": "T1"}]}
+
+    def fake_get(url):
+        return {"tasks": [{"status_code": 20000, "result": [{"asin": "A1", "items": []}]}]}
+
+    prov = DataForSEOProvider(login="l", password="p")
+    out = prov.product_raw_batch(["A1"], post_json=fake_post, get_json=fake_get, poll_interval=0)
+    assert out["A1"]["asin"] == "A1"          # payload brut, pas un BsrInfo

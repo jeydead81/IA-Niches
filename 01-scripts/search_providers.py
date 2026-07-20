@@ -91,10 +91,12 @@ class DataForSEOProvider:
         return COST_PER_CALL_USD.get(self.priority, 0.003)
 
     def search(self, keyword: str, depth: int = 100, books_only: bool = True,
+               search_param: str | None = None,
                post_json=None, get_json=None, poll_interval: float = 8,
                max_polls: int = 16) -> SearchResult:
         """Poste une tâche puis attend le résultat (poll). HTTP injectable pour les tests.
-        books_only=True restreint au rayon Livres (search_param=i=stripbooks)."""
+        search_param explicite (ex. contrainte de browse node "rh=n:...") prime sur
+        books_only ; sans lui, books_only=True restreint au rayon Livres (i=stripbooks)."""
         post_json = post_json or self._post
         get_json = get_json or self._get
         item = {
@@ -104,7 +106,9 @@ class DataForSEOProvider:
             "depth": depth,
             "priority": self.priority,
         }
-        if books_only:
+        if search_param:
+            item["search_param"] = search_param
+        elif books_only:
             item["search_param"] = "i=stripbooks"
         body = [item]
         d = post_json(_BASE + "/task_post", body)
@@ -119,10 +123,11 @@ class DataForSEOProvider:
                 return map_dataforseo_result(t["result"][0])
         raise TimeoutError(f"résultat DataForSEO non prêt (id={tid})")
 
-    def product_info_batch(self, asins, post_json=None, get_json=None,
-                           poll_interval: float = 8, max_polls: int = 40) -> dict:
-        """BSR de plusieurs ASIN en un seul task_post (jusqu'à 100), collecte par poll.
-        Retour : {asin: BsrInfo|None}. HTTP injectable."""
+    def product_raw_batch(self, asins, post_json=None, get_json=None,
+                          poll_interval: float = 8, max_polls: int = 40) -> dict:
+        """Payloads ASIN bruts de plusieurs ASIN en un seul task_post (jusqu'à 100), collecte
+        par poll. Retour : {asin: payload dict|None}. HTTP injectable. Seule boucle de poll —
+        product_info_batch et le futur enrichissement fiction (M2) s'y branchent."""
         asins = [a for a in asins if a]
         if not asins:
             return {}
@@ -144,8 +149,15 @@ class DataForSEOProvider:
             for tid in list(pending):
                 r = (get_json(f"{_ASIN_BASE}/task_get/advanced/{tid}").get("tasks") or [{}])[0]
                 if r.get("status_code") == 20000 and r.get("result"):
-                    out[pending.pop(tid)] = parse_asin_bsr(r["result"][0])
+                    out[pending.pop(tid)] = r["result"][0]
         return out
+
+    def product_info_batch(self, asins, post_json=None, get_json=None,
+                           poll_interval: float = 8, max_polls: int = 40) -> dict:
+        """BSR de plusieurs ASIN (batché). Retour : {asin: BsrInfo|None}."""
+        raw = self.product_raw_batch(asins, post_json=post_json, get_json=get_json,
+                                     poll_interval=poll_interval, max_polls=max_polls)
+        return {a: (parse_asin_bsr(r) if r else None) for a, r in raw.items()}
 
 
 _BSR_KEY_HINTS = ("meilleures ventes", "best sellers rank")
