@@ -20,9 +20,12 @@ _SEUIL_ACCORD = 0.8            # la porte des 80 % (plan M4)
 _BLURB_TRONQUE = 2000
 
 # Colonnes de la feuille "Validation", dans l'ordre exact du plan M4 (les 4 dernières
-# vides = ce que Baptiste remplit).
-_HEADERS = ["asin", "titre", "auteur", "blurb", "tropes_ia", "decor_ia", "est_roman_ia",
-           "confiance", "tropes_ok", "decor_ok", "est_roman_ok", "notes"]
+# vides = ce que Baptiste remplit). `statut_ia` précède le bloc IA qu'elle qualifie :
+# un livre absent de la réponse du LLM (statut "NON CLASSÉ") a ses cellules d'étiquette
+# VIDES, jamais les défauts synthétiques (tropes vides/est_roman=True/confiance=0) —
+# sinon indiscernable d'une vraie lecture qui n'a rien trouvé.
+_HEADERS = ["asin", "titre", "auteur", "blurb", "statut_ia", "tropes_ia", "decor_ia",
+           "est_roman_ia", "confiance", "tropes_ok", "decor_ok", "est_roman_ok", "notes"]
 
 
 def _blurb_tronque(blurb: str | None) -> str:
@@ -102,16 +105,20 @@ def export_validation(livres: list[EnrichedBook], classifications: list[TropeCla
     ws.append(_HEADERS)
     for b in livres:
         c = by_asin.get(b.asin)
+        # Livre jamais classé par l'IA (absent de la réponse LLM) -> cellules VIDES, pas
+        # les défauts synthétiques du modèle : sinon indiscernable d'une vraie lecture
+        # qui n'a identifié aucun trope (tropes vides + est_roman=True + confiance=0).
         ws.append([
             b.asin, b.title, b.author or "",
             _blurb_tronque(b.blurb),
+            "classé" if c else "NON CLASSÉ",
             ", ".join(c.tropes) if c else "",
-            c.decor if c and c.decor else "",
-            (c.est_roman if c else True),
-            (c.confidence if c else 0.0),
+            (c.decor if c and c.decor else "") if c else "",
+            (c.est_roman if c else ""),
+            (c.confidence if c else ""),
             "", "", "", "",                      # tropes_ok / decor_ok / est_roman_ok / notes
         ])
-    widths = [14, 30, 20, 70, 30, 18, 12, 10, 30, 18, 12, 30]
+    widths = [14, 30, 20, 70, 12, 30, 18, 12, 10, 30, 18, 12, 30]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
     for row in ws.iter_rows(min_row=2, min_col=4, max_col=4):

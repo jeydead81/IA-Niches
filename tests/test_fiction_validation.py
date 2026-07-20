@@ -60,6 +60,37 @@ def test_blurb_court_non_tronque_sans_marque(tmp_path):
     assert cell == "un blurb court"
 
 
+def _idx(ws):
+    return {c.value: i for i, c in enumerate(ws[1], start=1)}
+
+
+def test_livre_non_classe_a_un_statut_explicite_et_cellules_vides(tmp_path):
+    """Un livre absent de la réponse du LLM ne doit pas ressembler à « rien trouvé » :
+    sans statut explicite, tropes vides + est_roman=True + confiance=0 est indiscernable
+    d'une vraie lecture qui n'a identifié aucun trope."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="un blurb")]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, [], "cosy_mystery", p)      # aucune classification IA fournie
+    ws = load_workbook(str(p))["Validation"]
+    idx = _idx(ws)
+    row = [c.value for c in ws[2]]
+    assert row[idx["statut_ia"] - 1] == "NON CLASSÉ"
+    assert row[idx["tropes_ia"] - 1] in (None, "")
+    assert row[idx["decor_ia"] - 1] in (None, "")
+    assert row[idx["est_roman_ia"] - 1] in (None, "")
+    assert row[idx["confiance"] - 1] in (None, "")
+
+
+def test_livre_classe_a_un_statut_classe(tmp_path):
+    livres = [EnrichedBook(asin="A1", title="T", blurb="un blurb")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    ws = load_workbook(str(p))["Validation"]
+    row = [c.value for c in ws[2]]
+    assert row[_idx(ws)["statut_ia"] - 1] == "classé"
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]
