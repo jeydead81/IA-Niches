@@ -3,8 +3,10 @@ Parsing PUR (aucun réseau), testé sur les fixtures live du spike M0/M1.
 Les chemins de champs viennent des payloads observés, pas d'une supposition."""
 import re
 
+from pydantic import ValidationError
+
 from models import EnrichedBook
-from search_providers import parse_bsr_rank
+from search_providers import _to_float, parse_bsr_rank
 
 _SERIE_KEY = re.compile(r"^livre\s+(\d+)\s+sur\s+(\d+)$", re.I)
 # amazon.fr écrit « t. 1 » (avec point) bien plus souvent que « t1 » ; et « vol » sans point
@@ -20,11 +22,25 @@ def _series_hint_from_title(title: str) -> bool:
 
 def _details(item: dict) -> dict:
     out: dict = {}
-    for sec in (item.get("product_information") or []):
+    pi = item.get("product_information")
+    if not isinstance(pi, list):
+        # forme atypique observée (dict isolé au lieu d'une liste de sections) : aucune
+        # section exploitable plutôt qu'un crash.
+        return out
+    for sec in pi:
+        if not isinstance(sec, dict):
+            continue
         b = sec.get("body")
         if isinstance(b, dict):
             out.update(b)
     return out
+
+
+def _text(v) -> str | None:
+    """Force str(...)/None sur un champ censé être du texte : Amazon peut rendre un type
+    inattendu (liste, dict) pour un détail nominalement textuel -> on caste plutôt que
+    de laisser pydantic lever."""
+    return None if v is None else str(v)
 
 
 def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | None:
@@ -61,21 +77,26 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
 
     rating = item.get("rating") if isinstance(item.get("rating"), dict) else {}
     title = item.get("title") or ""
-    return EnrichedBook(
-        asin=asin,
-        title=title,
-        author=item.get("author"),
-        price=item.get("price_from"),
-        reviews_count=rating.get("votes_count"),
-        rating=rating.get("value"),
-        bsr=rang,
-        bsr_rayon=rayon,
-        bsr_gratuit=gratuit,
-        publication_date=pick("date de publication"),
-        publisher=pick("diteur"),
-        langue=pick("langue"),
-        serie_tome=tome,
-        serie_total=total,
-        series_hint=_series_hint_from_title(title),
-        serp_position=serp_position,
-    )
+    try:
+        return EnrichedBook(
+            asin=asin,
+            title=title,
+            author=item.get("author"),
+            price=_to_float(item.get("price_from")),
+            reviews_count=rating.get("votes_count"),
+            rating=rating.get("value"),
+            bsr=rang,
+            bsr_rayon=rayon,
+            bsr_gratuit=gratuit,
+            publication_date=_text(pick("date de publication")),
+            publisher=_text(pick("diteur")),
+            langue=_text(pick("langue")),
+            serie_tome=tome,
+            serie_total=total,
+            series_hint=_series_hint_from_title(title),
+            serp_position=serp_position,
+        )
+    except ValidationError:
+        # docstring : "None si le payload est inexploitable" -> un livre atypique ne doit
+        # jamais tuer le run (fetch_fiction_shelf n'a pas de filet de sécurité).
+        return None

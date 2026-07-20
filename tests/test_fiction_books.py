@@ -53,6 +53,44 @@ def test_parse_livre_1_sur_1_nest_pas_une_serie():
     assert b.est_serie is False
 
 
+def test_parse_price_from_chaine_fr_ne_plante_pas():
+    # price_from="13,70" (virgule FR) vu en vrai sur des payloads DataForSEO -> float("13,70")
+    # lève ValueError. Le docstring promet "None si inexploitable", pas un crash.
+    payload = {
+        "asin": "X1",
+        "items": [{"type": "amazon_product_info", "data_asin": "X1", "title": "Titre",
+                   "price_from": "13,70", "product_information": []}],
+    }
+    b = parse_enriched_book(payload)
+    assert b is not None and b.price is None
+
+
+def test_parse_langue_type_inattendu_ne_plante_pas():
+    # Amazon peut rendre un champ "texte" sous une forme inattendue (liste au lieu de str) ;
+    # on force str(...) plutôt que de laisser pydantic lever.
+    payload = {
+        "asin": "X2",
+        "items": [{"type": "amazon_product_info", "data_asin": "X2", "title": "Titre",
+                   "product_information": [
+                       {"body": {"Langue": ["Français", "Anglais"]}}]}],
+    }
+    b = parse_enriched_book(payload)
+    assert b is not None
+    assert b.langue == str(["Français", "Anglais"])
+
+
+def test_parse_product_information_dict_au_lieu_de_liste_ne_plante_pas():
+    # product_information est censé être une liste de sections ; un dict isolé (forme
+    # atypique observée) ne doit pas faire planter le parseur.
+    payload = {
+        "asin": "X3",
+        "items": [{"type": "amazon_product_info", "data_asin": "X3", "title": "Titre",
+                   "product_information": {"body": {"Langue": "Français"}}}],
+    }
+    b = parse_enriched_book(payload)
+    assert b is not None and b.langue is None
+
+
 def test_series_hint_notation_t_point_la_plus_courante_sur_amazon_fr():
     # « t. 1 » (avec point) est la notation la plus fréquente sur amazon.fr ; l'ancienne
     # regex (\bvol\.?\s*\d+|\bt\s*\d+) la ratait car elle exigeait "vol" ou "t" collé aux
