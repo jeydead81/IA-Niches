@@ -7,7 +7,9 @@ from models import EnrichedBook
 from search_providers import parse_bsr_rank
 
 _SERIE_KEY = re.compile(r"^livre\s+(\d+)\s+sur\s+(\d+)$", re.I)
-_SERIE_TITLE = re.compile(r"\b(?:tome|livre|vol\.?|t)\s*\d+|#\d+", re.I)
+# amazon.fr écrit « t. 1 » (avec point) bien plus souvent que « t1 » ; et « vol » sans point
+# est un mot courant en polar (« Vol 714 pour Sydney ») -> point obligatoire pour vol.
+_SERIE_TITLE = re.compile(r"\b(?:tome|livre|volume)\s*\d+|\b(?:vol|t)\.\s*\d+|\bt\s*\d+|#\d+", re.I)
 _BSR_KEY = "meilleures ventes"
 
 

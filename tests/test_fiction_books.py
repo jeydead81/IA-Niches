@@ -42,3 +42,37 @@ def test_series_hint_heuristique():
 
 def test_parse_payload_vide():
     assert parse_enriched_book({}, serp_position=0) is None
+
+
+def test_series_hint_notation_t_point_la_plus_courante_sur_amazon_fr():
+    # « t. 1 » (avec point) est la notation la plus fréquente sur amazon.fr ; l'ancienne
+    # regex (\bvol\.?\s*\d+|\bt\s*\d+) la ratait car elle exigeait "vol" ou "t" collé aux
+    # digits sans jamais matcher le point de « t. 1 » explicitement testé ici.
+    assert _series_hint_from_title("t. 1") is True
+    assert _series_hint_from_title("T2") is True
+    assert _series_hint_from_title("tome 15") is True
+    assert _series_hint_from_title("vol. 2") is True
+
+
+def test_series_hint_faux_positifs_vol_sans_point():
+    # « vol » sans point est un mot courant en polar (numéro de vol d'avion) : ne doit
+    # jamais déclencher la détection de série.
+    assert _series_hint_from_title("Vol 714 pour Sydney") is False
+    assert _series_hint_from_title("Le Vol 800 n'existe pas") is False
+    assert _series_hint_from_title("Le Livre des morts") is False
+    assert _series_hint_from_title("Un meurtre absolument splendide") is False
+
+
+def test_series_hint_fixtures_live_non_regression():
+    """Balaie les titres réels des fixtures live (SERP v1a + v1b) : la regex doit détecter
+    au moins 30 séries sur ~80 titres uniques (l'ancienne regex n'en trouvait que 16)."""
+    titres = set()
+    for name in ("v1a_serp_cosy_mystery.json", "v1b_serp_node.json"):
+        d = json.loads((_FIC / name).read_text(encoding="utf-8"))
+        for it in d.get("organic", []) + d.get("sponsored", []):
+            t = it.get("title")
+            if t:
+                titres.add(t)
+    hits = [t for t in titres if _series_hint_from_title(t)]
+    assert len(titres) >= 70
+    assert len(hits) >= 30
