@@ -48,5 +48,32 @@ def test_probe_echo_insensible_casse_espaces():
 
 
 def test_signal_libelle_lisible():
-    absent = AutocompleteSignal(niche_query="q", score=0.0)
+    # « absent » n'est un verdict que si la sonde a effectivement tourné (mesure=True) ;
+    # sans mesure, cf. test_signal_non_sonde_ne_conclut_pas.
+    absent = AutocompleteSignal(niche_query="q", score=0.0, mesure=True)
     assert "absent" in absent.libelle.lower()
+
+
+def test_echo_reconnu_malgre_les_accents():
+    """Les requêtes viennent d'un LLM en français naturel et les suggestions Amazon
+    mélangent « francais » et « français » : sans dépouillement des diacritiques, la même
+    donnée change de note d'un cran entier."""
+    p = AutocompleteProbe(requete="romance milliardaire en francais",
+                          suggestions=["romance milliardaire en français"])
+    assert p.echo is True and p.extras == []
+
+
+def test_extras_dedupliques():
+    """Deux fois la même suggestion ne fait pas deux signaux d'intérêt."""
+    p = AutocompleteProbe(requete="cosy mystery",
+                          suggestions=["cosy mystery", "cosy mystery breton",
+                                       "cosy mystery breton"])
+    assert p.extras == ["cosy mystery breton"]
+
+
+def test_signal_non_sonde_ne_conclut_pas():
+    """Le défaut doit être « je n'ai rien mesuré », pas « absent » : sinon un signal
+    jamais sondé est indiscernable d'un zéro mesuré (la garantie vendue à M5)."""
+    v = AutocompleteSignal(niche_query="q")
+    assert v.mesure is False
+    assert "non mesuré" in v.libelle

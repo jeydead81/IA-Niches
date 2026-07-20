@@ -1,5 +1,7 @@
 """models.py — types partagés du scout v2 (Pydantic).
 Le Plan 2 y ajoutera SearchResult, ScoredNiche."""
+import unicodedata
+
 from pydantic import BaseModel, Field
 
 
@@ -134,7 +136,12 @@ class AutocompleteProbe(BaseModel):
 
     @staticmethod
     def _norm(s: str) -> str:
-        return " ".join((s or "").split()).casefold()
+        """Casse, espaces ET diacritiques : les requêtes viennent d'un LLM en français
+        naturel alors qu'Amazon suggère indifféremment « francais » et « français ».
+        Sans ce dépouillement, la même donnée change de note d'un cran entier."""
+        plat = unicodedata.normalize("NFKD", s or "")
+        plat = "".join(c for c in plat if not unicodedata.combining(c))
+        return " ".join(plat.split()).casefold()
 
     @property
     def echo(self) -> bool:
@@ -144,9 +151,15 @@ class AutocompleteProbe(BaseModel):
 
     @property
     def extras(self) -> list[str]:
-        """Suggestions autres que l'écho — la vraie mesure d'intérêt."""
+        """Suggestions autres que l'écho, dédupliquées — la vraie mesure d'intérêt.
+        Deux fois la même suggestion ne fait pas deux signaux."""
         n = self._norm(self.requete)
-        return [s for s in self.suggestions if self._norm(s) != n]
+        vus: dict[str, str] = {}
+        for s in self.suggestions:
+            k = self._norm(s)
+            if k != n and k not in vus:
+                vus[k] = s
+        return list(vus.values())
 
 
 class AutocompleteSignal(BaseModel):
@@ -155,7 +168,10 @@ class AutocompleteSignal(BaseModel):
     score: float = 0.0                     # 0 / 0.5 / 1
     probes: list[AutocompleteProbe] = Field(default_factory=list)
     sous_genre_cherche: bool | None = None  # barreau 2 : None si non sondé
-    mesure: bool = True                     # False si la sonde du barreau 1 a échoué
+    # Défaut PESSIMISTE : un signal jamais sondé doit se lire « je n'ai rien mesuré », pas
+    # « absent ». Sinon le score 0 par défaut est indiscernable d'un 0 mesuré, et la
+    # garantie vendue à M5 (ne pas confondre les deux) ne vaut rien.
+    mesure: bool = False
 
     @property
     def libelle(self) -> str:

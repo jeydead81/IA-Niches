@@ -67,3 +67,34 @@ def test_barreau_2_saute_si_le_trio_suffit():
 
     sig = probe_niche(_niche("cosy mystery libraire"), fetch_json=fake, pause=0)
     assert sig.score == 1.0 and len(appels) == 1
+
+
+def test_panne_reseau_reelle_nest_pas_un_zero():
+    """util.http_get re-lève requests.RequestException après ses retries : sur le chemin
+    de production, un timeout DNS tuait le run au lieu de rendre mesure=False."""
+    import requests
+
+    def ko(prefix):
+        raise requests.ConnectionError("DNS")
+
+    sig = probe_niche(_niche("cosy mystery libraire"), fetch_json=ko, pause=0)
+    assert sig.mesure is False and sig.score == 0.0
+    assert sig.probes[0].echec is True
+
+
+def test_requete_vide_ne_donne_pas_le_score_maximal():
+    """FictionNiche.query a un défaut vide et n'est jamais vérifiée côté code : un trio
+    dont le LLM a omis la requête décrochait 1.0 (toute suggestion compte comme extra)."""
+    appels = []
+    sig = probe_niche(_niche("   "), fetch_json=lambda p: appels.append(p) or {}, pause=0)
+    assert sig.score == 0.0 and sig.mesure is False
+    assert appels == []                      # on ne sonde même pas
+
+
+def test_sous_genre_fantome_quand_la_requete_est_deja_canonique():
+    """Si le barreau 1 EST la requête canonique et rend 0, le sous-genre vient d'être
+    mesuré à zéro : c'est l'alerte, pas une absence d'information."""
+    for q in ("cosy mystery", "  Cosy   Mystery "):
+        sig = probe_niche(_niche(q), fetch_json=lambda p: {"suggestions": []}, pause=0)
+        assert sig.sous_genre_cherche is False, q
+        assert sig.mesure is True, q
