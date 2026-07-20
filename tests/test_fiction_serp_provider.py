@@ -46,6 +46,26 @@ def test_fetch_shelf_contraint_enrichit_et_compte_le_cout():
     assert b["dataforseo_calls"] == 3            # 1 SERP + 2 ASIN
 
 
+def test_fetch_shelf_deduplique_les_asins_repetes_dans_la_serp():
+    # Une SERP qui répète un ASIN (produit sponsorisé + organique, pagination qui se
+    # chevauche…) le ferait payer deux fois, rendrait le même livre deux fois, et lui
+    # attribuerait la DERNIÈRE position au lieu de la première.
+    class _ProvDupliquee(_Prov):
+        def search(self, keyword, depth=100, books_only=True, search_param=None):
+            self.seen["search_param"] = search_param
+            return SearchResult(keyword=keyword, organic=[
+                SearchItem(title="A", asin="A1"),
+                SearchItem(title="B", asin="A2"),
+                SearchItem(title="A bis", asin="A1")], sponsored=[])
+
+    cost = CostTracker()
+    prov = _ProvDupliquee()
+    books = fetch_fiction_shelf(_niche(), provider=prov, n_top=20, cost=cost, cache=None)
+    assert prov.seen["asins"] == ["A1", "A2"]              # 2 ASIN postés, pas 3
+    assert [b.asin for b in books] == ["A1", "A2"]          # 2 livres rendus
+    assert next(b for b in books if b.asin == "A1").serp_position == 1   # 1re occurrence
+
+
 def test_fetch_shelf_utilise_le_cache(tmp_path):
     from cache import Cache
     c = Cache(tmp_path / "c.db")

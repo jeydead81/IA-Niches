@@ -22,7 +22,10 @@ def fetch_fiction_shelf(niche: FictionNiche, provider, n_top: int = 20, depth: i
     sr = provider.search(niche.query, depth=depth, search_param=sp)
     if cost is not None:
         cost.add_dataforseo(1, getattr(provider, "priority", 2))
-    asins = [o.asin for o in sr.organic if o.asin][:n_top]
+    # dict.fromkeys préserve l'ordre en dédupliquant : une SERP qui répète un ASIN ne doit
+    # ni le facturer deux fois, ni le rendre deux fois, ni écraser sa position par la
+    # DERNIÈRE occurrence au lieu de la première.
+    asins = list(dict.fromkeys(o.asin for o in sr.organic if o.asin))[:n_top]
     loc = getattr(provider, "location_code", 2250)
 
     books: dict = {}
