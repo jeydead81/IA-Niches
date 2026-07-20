@@ -205,10 +205,15 @@ def _lire_taxonomy_version(wb) -> str:
     return (wb.properties.keywords or "").strip()
 
 
-def load_corrections(path) -> list[TropeClassification]:
-    """Ne rend QUE les lignes effectivement corrigées par Baptiste (au moins une colonne
-    *_ok remplie). Une ligne laissée vide n'est pas un avis « d'accord » : la compter
-    gonflerait artificiellement le taux d'accord mesuré."""
+def _lignes_corrigees(path):
+    """Cœur commun à load_corrections (rend l'humain) et load_pairs (rend IA + humain) :
+    parcourt les lignes effectivement corrigées par Baptiste (au moins une colonne *_ok
+    remplie ; `notes` seule ne compte pas, cf. A4) et reconstruit la classification IA et la
+    classification humaine de la MÊME ligne. Une ligne laissée vide n'est pas un avis
+    « d'accord » : la compter gonflerait artificiellement le taux d'accord mesuré.
+
+    Rend des tuples (humain: TropeClassification, ia: TropeClassification | None) — `ia`
+    est None quand le livre n'a jamais été classé (statut_ia = NON CLASSÉ, cf. B2)."""
     wb = load_workbook(str(path))
     ws = wb["Validation"] if "Validation" in wb.sheetnames else wb.active
     version = _lire_taxonomy_version(wb)
@@ -227,7 +232,6 @@ def load_corrections(path) -> list[TropeClassification]:
         tropes_valides = {_normalise_cle(t) for t in tv}
         decors_valides = {_normalise_cle(d) for d in dv}
 
-    out: list[TropeClassification] = []
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row is None or not any(row):
             continue
@@ -239,14 +243,35 @@ def load_corrections(path) -> list[TropeClassification]:
         if not (_rempli(tropes_ok) or _rempli(decor_ok) or _rempli(est_roman_ok)):
             continue                    # rien de corrigé -> pas un avis, on ignore la ligne
 
-        # Valeurs IA de la MÊME ligne : le mode d'emploi dit « corrige uniquement ce qui te
-        # semble faux » — une colonne *_ok laissée vide sur une ligne corrigée doit reprendre
-        # l'étiquette IA, jamais retomber sur le vide (sinon contester le seul décor efface
-        # aussi les tropes et fait chuter le taux artificiellement).
+        asin = row[idx["asin"]]
+        statut_ia = row[idx["statut_ia"]] if "statut_ia" in idx else None
         tropes_ia_brut = row[idx["tropes_ia"]] if "tropes_ia" in idx else None
         decor_ia_brut = row[idx["decor_ia"]] if "decor_ia" in idx else None
         est_roman_ia_brut = row[idx["est_roman_ia"]] if "est_roman_ia" in idx else None
+        confiance_brut = row[idx["confiance"]] if "confiance" in idx else None
 
+        # Livre jamais classé (B2) -> pas de classification IA à comparer (ia=None), au
+        # lieu d'une IA reconstruite depuis des cellules vides qui se lirait comme un
+        # accord fabriqué (cf. A3). Fichier ancien sans colonne statut_ia -> déduit du vide.
+        non_classe = (statut_ia == "NON CLASSÉ") if statut_ia is not None \
+            else not (_rempli(tropes_ia_brut) or _rempli(decor_ia_brut) or _rempli(est_roman_ia_brut))
+
+        ia = None
+        if not non_classe:
+            ia = TropeClassification(
+                asin=asin,
+                taxonomy_version=version,
+                tropes=[t.strip() for t in str(tropes_ia_brut).split(",") if t.strip()]
+                       if _rempli(tropes_ia_brut) else [],
+                decor=str(decor_ia_brut).strip() if _rempli(decor_ia_brut) else None,
+                est_roman=est_roman_ia_brut if isinstance(est_roman_ia_brut, bool) else True,
+                confidence=float(confiance_brut) if _rempli(confiance_brut) else 0.0,
+            )
+
+        # Valeurs IA de la MÊME ligne : le mode d'emploi dit « corrige uniquement ce qui te
+        # semble faux » — une colonne *_ok laissée vide sur une ligne corrigée doit reprendre
+        # l'étiquette IA, jamais retomber sur le vide (sinon contester le seul décor efface
+        # aussi les tropes et fait chuter le taux artificiellement, cf. A2).
         tropes: list[str] = []
         fautes: list[str] = []
         if _rempli(tropes_ok):
@@ -258,8 +283,8 @@ def load_corrections(path) -> list[TropeClassification]:
                     fautes.append(cle)          # faute de saisie, pas un trope hors taxo
                 else:
                     tropes.append(cle)
-        elif _rempli(tropes_ia_brut):
-            tropes = [t.strip() for t in str(tropes_ia_brut).split(",") if t.strip()]
+        elif ia is not None:
+            tropes = list(ia.tropes)
 
         decor = None
         if _rempli(decor_ok):
@@ -268,8 +293,8 @@ def load_corrections(path) -> list[TropeClassification]:
                 fautes.append(cle)
             else:
                 decor = cle
-        elif _rempli(decor_ia_brut):
-            decor = str(decor_ia_brut).strip()
+        elif ia is not None:
+            decor = ia.decor
 
         est_roman = None
         if _rempli(est_roman_ok):
@@ -277,14 +302,29 @@ def load_corrections(path) -> list[TropeClassification]:
             if non_reconnu is not None:
                 fautes.append(f"est_roman_ok:{non_reconnu}")   # signalé, pas deviné
         if est_roman is None:           # vide OU non reconnu -> retombe sur l'IA de la ligne
-            est_roman = est_roman_ia_brut if isinstance(est_roman_ia_brut, bool) else True
+            est_roman = ia.est_roman if ia is not None else True
 
-        out.append(TropeClassification(
-            asin=row[idx["asin"]],
+        humain = TropeClassification(
+            asin=asin,
             taxonomy_version=version,
             tropes=tropes,
             decor=decor,
             fautes_saisie=fautes,
             est_roman=est_roman,
-        ))
-    return out
+        )
+        yield humain, ia
+
+
+def load_corrections(path) -> list[TropeClassification]:
+    """Ne rend QUE les lignes effectivement corrigées par Baptiste (au moins une colonne
+    *_ok remplie). Une ligne laissée vide n'est pas un avis « d'accord » : la compter
+    gonflerait artificiellement le taux d'accord mesuré."""
+    return [humain for humain, _ in _lignes_corrigees(path)]
+
+
+def load_pairs(path) -> list[tuple[TropeClassification | None, TropeClassification]]:
+    """Le seul chemin de mesure du protocole M4 : relit les colonnes *_ia ET *_ok de la même
+    feuille et rend les paires (IA, humain) prêtes pour `agreement_report`. Sans lui,
+    `agreement_report` n'a aucun appelant hors tests — produire le rapport nécessiterait de
+    re-classifier, ce qui n'est pas déterministe."""
+    return [(ia, humain) for humain, ia in _lignes_corrigees(path)]

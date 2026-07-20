@@ -1,7 +1,7 @@
 from openpyxl import load_workbook
 
 from fiction_validation import (accord, agreement_report, export_validation, jaccard,
-                                load_corrections)
+                                load_corrections, load_pairs)
 from models import EnrichedBook, TropeClassification
 
 
@@ -264,6 +264,35 @@ def test_livre_jamais_classe_exclu_du_taux_et_compte_a_part():
     assert r.n_livres == 3
     assert r.taux == 0.0                  # rien de mesurable -> pessimiste, pas 100 %
     assert r.porte_franchie is False
+
+
+def test_load_pairs_relit_ia_et_humain_pour_les_lignes_corrigees(tmp_path):
+    """Sans ce chemin de mesure, agreement_report n'a aucun appelant hors tests : produire
+    le rapport nécessiterait de re-classifier (non déterministe). load_pairs relit les
+    colonnes *_ia ET *_ok de la même feuille pour rendre les paires (IA, humain)."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b"),
+              EnrichedBook(asin="A2", title="T2", blurb="b2")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1",
+                              tropes=["metier_gourmand"], decor="village_breton")]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)      # A2 jamais classé (absent de `ia`)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "decor_ok")).value = "provence"   # A1 : décor contesté
+    ws.cell(row=3, column=_col(ws, "est_roman_ok")).value = "non"    # A2 : corrigé quand même
+    wb.save(str(p))
+
+    paires = load_pairs(p)
+    par_asin = {h.asin: (i, h) for i, h in paires}
+    ia_a1, hu_a1 = par_asin["A1"]
+    assert ia_a1 is not None and ia_a1.tropes == ["metier_gourmand"]
+    assert hu_a1.decor == "provence"
+    ia_a2, hu_a2 = par_asin["A2"]
+    assert ia_a2 is None                        # jamais classé par l'IA
+    assert hu_a2.est_roman is False
+
+    r = agreement_report(paires)
+    assert r.n_non_classes == 1
 
 
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
