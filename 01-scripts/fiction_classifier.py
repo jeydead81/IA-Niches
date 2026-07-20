@@ -115,17 +115,67 @@ def _default_client():
     return anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
-def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str = "fr_v1",
-                   model: str | None = None, client=None,
-                   on_usage=None) -> list[TropeClassification]:
-    """Classifie en un seul appel batché les livres du rayon qui ont un blurb.
-    Clés connues -> tropes/décor ; clés inconnues -> other (jamais perdues) ;
-    ASIN halluciné par le LLM -> ignoré (il ne peut pas ajouter un livre au rayon)."""
-    livres = [b for b in books if b.blurb]
-    if not livres:
-        return []                          # aucun blurb -> aucun appel, rien à payer
-    client = client or _default_client()
-    model = model or DEFAULT_MODEL
+# Mesuré : 20 blurbs ~9k tokens d'entrée (plan M4). Le CLI par défaut (--n-niches 5,
+# n_top=20) groupe par sous-genre et produit ~100 blurbs pour UN sous-genre -> ~36k tokens
+# pour max_tokens=4000 : la troncature devient le cas NOMINAL, pas un accident. Des lots de
+# 20 livres maximum -> plusieurs appels, résultats concaténés.
+LOT_MAX = 20
+
+
+def _parse_livre(l: dict, tropes_ok: list[str], decors_ok: list[str],
+                 version: str) -> TropeClassification:
+    """Construit UNE classification à partir d'une entrée `livres` déjà validée (dict,
+    asin dans le lot, pas déjà vue) — cf. classify_books pour les garde-fous en amont."""
+    asin = l.get("asin")
+    tropes_brut = l.get("tropes") or []
+    if isinstance(tropes_brut, str):
+        tropes_brut = [tropes_brut]       # une chaîne EST un trope, pas une suite de lettres
+    tropes_in = [t for t in dict.fromkeys(tropes_brut) if not _est_meta(t)]
+    decor_in = l.get("decor") or None
+    if _est_meta(decor_in):
+        decor_in = None
+
+    # `other` explicite du LLM (le prompt y renvoie) fusionné avec les clés hors taxo déjà
+    # déduites côté code (tropes/décor absents de la taxo) — dédup, même filtre de
+    # méta-clés que pour tropes/décor.
+    other_llm = l.get("other")
+    if isinstance(other_llm, str):
+        other_llm = [other_llm]
+    elif not isinstance(other_llm, list):
+        other_llm = []
+    other_llm = [o for o in other_llm if not _est_meta(o)]
+
+    other = [t for t in tropes_in if t not in tropes_ok]
+    if decor_in and decor_in not in decors_ok:
+        other.append(decor_in)
+    other = list(dict.fromkeys(other + other_llm))
+
+    est_roman = l.get("est_roman", True)
+    if not isinstance(est_roman, bool):
+        est_roman = True                  # None/type inattendu -> défaut, pas de crash du lot
+
+    # Filtre non-roman explicite du plan : « ne le classe pas en tropes ».
+    tropes_retenus = [t for t in tropes_in if t in tropes_ok] if est_roman else []
+
+    return TropeClassification(
+        asin=asin,
+        taxonomy_version=version,
+        tropes=tropes_retenus,
+        decor=decor_in if decor_in in decors_ok else None,
+        other=other,
+        confidence=l.get("confidence") or 0.0,
+        est_roman=est_roman,
+        hors_sujet=l.get("hors_sujet") or "",
+    )
+
+
+def _classify_lot(lot: list[EnrichedBook], sous_genre_cle: str, version: str, model: str,
+                  client, tropes_ok: list[str], decors_ok: list[str],
+                  on_usage=None, progress=None) -> list[TropeClassification]:
+    """UN appel LLM sur un lot (<= LOT_MAX livres). Lit stop_reason (une troncature ne doit
+    plus passer pour une réponse complète) et compare les ASIN rendus aux ASIN envoyés (un
+    livre silencieusement absent de la réponse doit être signalé, pas lu comme « rien à en
+    dire »)."""
     resp = client.messages.create(
         model=model,
         max_tokens=4000,
@@ -138,14 +188,17 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
         }],
         tool_choice={"type": "tool", "name": "classer_livres"},
         messages=[{"role": "user",
-                   "content": build_user_prompt(sous_genre_cle, livres, version)}],
+                   "content": build_user_prompt(sous_genre_cle, lot, version)}],
     )
     if on_usage is not None and getattr(resp, "usage", None) is not None:
         on_usage(getattr(resp.usage, "input_tokens", 0),
                  getattr(resp.usage, "output_tokens", 0), model)
 
-    tropes_ok, decors_ok = valid_keys(sous_genre_cle, version)
-    asins_envoyes = {b.asin for b in livres}
+    if progress and getattr(resp, "stop_reason", None) == "max_tokens":
+        progress(f"⚠ réponse tronquée (max_tokens) sur un lot de {len(lot)} livres — "
+                 "classification probablement incomplète pour ce lot.")
+
+    asins_lot = {b.asin for b in lot}
     asins_vus: set[str] = set()          # un ASIN rendu deux fois -> une seule classification
     out: list[TropeClassification] = []
     for block in resp.content:
@@ -155,48 +208,35 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
             if not isinstance(l, dict):
                 continue                    # entrée non-dict (LLM fautif) -> ignorée, pas de crash
             asin = l.get("asin")
-            if asin not in asins_envoyes or asin in asins_vus:
-                continue                    # ASIN hors du lot, ou déjà classé une fois
+            if asin not in asins_lot or asin in asins_vus:
+                continue                    # ASIN hors du lot -> le LLM ne peut pas inventer un livre
             asins_vus.add(asin)
+            out.append(_parse_livre(l, tropes_ok, decors_ok, version))
 
-            tropes_brut = l.get("tropes") or []
-            if isinstance(tropes_brut, str):
-                tropes_brut = [tropes_brut]   # une chaîne EST un trope, pas une suite de lettres
-            tropes_in = [t for t in dict.fromkeys(tropes_brut) if not _est_meta(t)]
-            decor_in = l.get("decor") or None
-            if _est_meta(decor_in):
-                decor_in = None
+    manquants = asins_lot - asins_vus
+    if manquants and progress:
+        progress(f"⚠ {len(manquants)}/{len(lot)} livres du lot absents de la réponse : "
+                 f"{sorted(manquants)}")
+    return out
 
-            # `other` explicite du LLM (le prompt y renvoie) fusionné avec les clés hors
-            # taxo déjà déduites côté code (tropes/décor absents de la taxo) — dédup, même
-            # filtre de méta-clés que pour tropes/décor.
-            other_llm = l.get("other")
-            if isinstance(other_llm, str):
-                other_llm = [other_llm]
-            elif not isinstance(other_llm, list):
-                other_llm = []
-            other_llm = [o for o in other_llm if not _est_meta(o)]
 
-            other = [t for t in tropes_in if t not in tropes_ok]
-            if decor_in and decor_in not in decors_ok:
-                other.append(decor_in)
-            other = list(dict.fromkeys(other + other_llm))
+def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str = "fr_v1",
+                   model: str | None = None, client=None,
+                   on_usage=None, progress=None) -> list[TropeClassification]:
+    """Classifie par lots de LOT_MAX livres maximum (un appel par lot, résultats concaténés)
+    les livres du rayon qui ont un blurb. Clés connues -> tropes/décor ; clés inconnues ->
+    other (jamais perdues) ; ASIN halluciné par le LLM -> ignoré (il ne peut pas ajouter un
+    livre au rayon)."""
+    livres = [b for b in books if b.blurb]
+    if not livres:
+        return []                          # aucun blurb -> aucun appel, rien à payer
+    client = client or _default_client()
+    model = model or DEFAULT_MODEL
+    tropes_ok, decors_ok = valid_keys(sous_genre_cle, version)
 
-            est_roman = l.get("est_roman", True)
-            if not isinstance(est_roman, bool):
-                est_roman = True            # None/type inattendu -> défaut, pas de crash du lot
-
-            # Filtre non-roman explicite du plan : « ne le classe pas en tropes ».
-            tropes_retenus = [t for t in tropes_in if t in tropes_ok] if est_roman else []
-
-            out.append(TropeClassification(
-                asin=asin,
-                taxonomy_version=version,
-                tropes=tropes_retenus,
-                decor=decor_in if decor_in in decors_ok else None,
-                other=other,
-                confidence=l.get("confidence") or 0.0,
-                est_roman=est_roman,
-                hors_sujet=l.get("hors_sujet") or "",
-            ))
+    out: list[TropeClassification] = []
+    for i in range(0, len(livres), LOT_MAX):
+        lot = livres[i:i + LOT_MAX]
+        out.extend(_classify_lot(lot, sous_genre_cle, version, model, client,
+                                 tropes_ok, decors_ok, on_usage=on_usage, progress=progress))
     return out

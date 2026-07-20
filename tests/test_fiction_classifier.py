@@ -111,6 +111,57 @@ def test_observation_hors_taxo_reelle_toujours_conservee():
     assert set(cl[0].other) == {"ecosse_highlands", "corse"}
 
 
+def test_plus_de_20_livres_est_decoupe_en_lots():
+    """Le CLI par défaut (--n-niches 5, n_top=20) groupe par sous-genre et produit UN SEUL
+    appel de ~100 blurbs (~36k tokens d'entrée pour max_tokens=4000) : la troncature est le
+    cas NOMINAL. Des lots de 20 livres maximum -> plusieurs appels, résultats concaténés."""
+    livres = [EnrichedBook(asin=f"A{i}", title=f"T{i}", blurb=f"blurb {i}") for i in range(45)]
+    appels = []
+
+    class _ClientMulti:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            appels.append(kw)
+            return _Resp({"livres": []})
+
+    classify_books(livres, "cosy_mystery", client=_ClientMulti())
+    assert len(appels) == 3                                          # 20 + 20 + 5
+    assert "[A0]" in appels[0]["messages"][0]["content"]
+    assert "[A19]" in appels[0]["messages"][0]["content"]
+    assert "[A20]" not in appels[0]["messages"][0]["content"]         # lot suivant
+    assert "[A20]" in appels[1]["messages"][0]["content"]
+    assert "[A44]" in appels[2]["messages"][0]["content"]
+
+
+def test_troncature_signalee_via_progress():
+    """stop_reason n'était jamais lu : une réponse tronquée passait pour complète."""
+    class _ClientTronque:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            r = _Resp({"livres": []})
+            r.stop_reason = "max_tokens"
+            return r
+
+    msgs = []
+    classify_books(_livres(), "cosy_mystery", client=_ClientTronque(), progress=msgs.append)
+    assert any("tronqu" in m.lower() for m in msgs)
+
+
+def test_asins_manquants_dans_la_reponse_sont_signales():
+    """classify_books ne comparait jamais les ASIN rendus aux ASIN envoyés : un livre
+    silencieusement absent de la réponse passait pour « rien à en dire » (cf. B2)."""
+    msgs = []
+    classify_books(_livres(), "cosy_mystery",
+                   client=_Client({"livres": [{"asin": "A1", "tropes": ["metier_gourmand"],
+                                               "est_roman": True}]}),
+                   progress=msgs.append)
+    assert any("A2" in m for m in msgs)
+
+
 def test_schema_expose_other_et_exige_est_roman():
     """Le prompt renvoie déjà au champ `other` (« note ce que tu observes dans `other` »)
     alors qu'il n'existait pas dans le schéma de l'outil ; et `est_roman` omis valait
