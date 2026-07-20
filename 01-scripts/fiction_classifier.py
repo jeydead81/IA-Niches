@@ -72,13 +72,19 @@ LIVRES_INPUT_SCHEMA = {
                     "tropes": {"type": "array", "items": {"type": "string"},
                                "description": "tropes promis par CE blurb, liste ou hors liste"},
                     "decor": {"type": "string", "description": "décor promis, si identifiable"},
+                    "other": {"type": "array", "items": {"type": "string"},
+                              "description": "observations hors taxonomie (décor sans clé, "
+                                             "trope non listé...) — le prompt y renvoie "
+                                             "explicitement, ne le laisse pas implicite"},
                     "est_roman": {"type": "boolean",
                                   "description": "false si ce n'est pas un roman (jeu, cahier...)"},
                     "hors_sujet": {"type": "string",
                                    "description": "pourquoi, quand est_roman est false"},
                     "confidence": {"type": "number", "description": "0 à 1"},
                 },
-                "required": ["asin", "tropes"],
+                # est_roman REQUIS : omis valait "roman" par défaut, le filtre non-roman
+                # n'était donc pas garanti si le LLM oubliait simplement le champ.
+                "required": ["asin", "tropes", "est_roman"],
             },
         }
     },
@@ -161,9 +167,20 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
             if _est_meta(decor_in):
                 decor_in = None
 
+            # `other` explicite du LLM (le prompt y renvoie) fusionné avec les clés hors
+            # taxo déjà déduites côté code (tropes/décor absents de la taxo) — dédup, même
+            # filtre de méta-clés que pour tropes/décor.
+            other_llm = l.get("other")
+            if isinstance(other_llm, str):
+                other_llm = [other_llm]
+            elif not isinstance(other_llm, list):
+                other_llm = []
+            other_llm = [o for o in other_llm if not _est_meta(o)]
+
             other = [t for t in tropes_in if t not in tropes_ok]
             if decor_in and decor_in not in decors_ok:
                 other.append(decor_in)
+            other = list(dict.fromkeys(other + other_llm))
 
             est_roman = l.get("est_roman", True)
             if not isinstance(est_roman, bool):

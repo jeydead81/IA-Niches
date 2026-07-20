@@ -1,4 +1,4 @@
-from fiction_classifier import classify_books
+from fiction_classifier import LIVRES_INPUT_SCHEMA, classify_books
 from models import EnrichedBook
 
 
@@ -109,6 +109,26 @@ def test_observation_hors_taxo_reelle_toujours_conservee():
     cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
         {"asin": "A1", "tropes": ["ecosse_highlands"], "decor": "corse"}]}))
     assert set(cl[0].other) == {"ecosse_highlands", "corse"}
+
+
+def test_schema_expose_other_et_exige_est_roman():
+    """Le prompt renvoie déjà au champ `other` (« note ce que tu observes dans `other` »)
+    alors qu'il n'existait pas dans le schéma de l'outil ; et `est_roman` omis valait
+    "roman" par défaut, donc le filtre non-roman n'était pas garanti."""
+    props = LIVRES_INPUT_SCHEMA["properties"]["livres"]["items"]["properties"]
+    assert "other" in props
+    assert "est_roman" in LIVRES_INPUT_SCHEMA["properties"]["livres"]["items"]["required"]
+
+
+def test_other_du_llm_fusionne_avec_les_cles_hors_taxo_deduites_cote_code():
+    """`other` explicite du LLM et clés hors taxo déjà déduites côté code (tropes/décor
+    absents de la taxo) doivent fusionner sans doublon, méta-clés filtrées (réutilise
+    _est_meta)."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": ["metier_gourmand", "vampires_pirates"], "est_roman": True,
+         "other": ["ambiance_feutree", "vampires_pirates", "other"]}]}))
+    assert cl[0].tropes == ["metier_gourmand"]
+    assert set(cl[0].other) == {"vampires_pirates", "ambiance_feutree"}
 
 
 def test_tropes_rendu_en_chaine_nest_pas_decoupe_en_caracteres():
