@@ -242,6 +242,30 @@ def test_est_roman_ok_valeur_libre_non_reconnue_retombe_sur_l_ia_et_est_signalee
     assert any("jeu" in f for f in out[0].fautes_saisie)
 
 
+def test_agreement_report_leve_si_les_asin_de_la_paire_divergent():
+    """Erreur de programmation, pas une donnée : une paire mal construite doit lever,
+    jamais fausser silencieusement le taux mesuré."""
+    import pytest
+    ia = TropeClassification(asin="A", taxonomy_version="v")
+    humain = TropeClassification(asin="B", taxonomy_version="v")
+    with pytest.raises(ValueError):
+        agreement_report([(ia, humain)])
+
+
+def test_livre_jamais_classe_exclu_du_taux_et_compte_a_part():
+    """Prouve l'exploit d'origine : 3 livres jamais classés par l'IA (seul est_roman_ok
+    rempli côté humain) comptaient comme un accord parfait (tropes vides des deux côtés,
+    décor None, est_roman par défaut identique) -> taux 1.0, porte franchie, sans qu'aucune
+    vraie lecture n'ait été comparée. `ia=None` signale « jamais classé »."""
+    paires = [(None, TropeClassification(asin=str(i), taxonomy_version="v", est_roman=True))
+              for i in range(3)]
+    r = agreement_report(paires)
+    assert r.n_non_classes == 3
+    assert r.n_livres == 3
+    assert r.taux == 0.0                  # rien de mesurable -> pessimiste, pas 100 %
+    assert r.porte_franchie is False
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]

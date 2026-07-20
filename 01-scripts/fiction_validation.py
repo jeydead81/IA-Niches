@@ -61,17 +61,35 @@ class AgreementReport(BaseModel):
     porte_franchie: bool
     cles_litigieuses: dict[str, dict[str, int]] = Field(default_factory=dict)
     desaccords: list[str] = Field(default_factory=list)     # ASIN en désaccord
+    # Livres corrigés par Baptiste mais jamais classés par l'IA (statut_ia = NON CLASSÉ,
+    # cf. B2) : exclus du taux, comptés ici. Sans ce champ, ces paires (tropes vides des
+    # deux côtés, décor None, est_roman par défaut identique) se lisaient comme un accord
+    # parfait -> taux 1.0 sans qu'aucune vraie lecture n'ait été comparée.
+    n_non_classes: int = 0
 
 
-def agreement_report(paires: list[tuple[TropeClassification, TropeClassification]]) -> AgreementReport:
+def agreement_report(paires: list[tuple[TropeClassification | None, TropeClassification]]
+                     ) -> AgreementReport:
     """Mesure le taux d'accord et, pour chaque désaccord, quelles clés de tropes divergent
     (vue seulement par l'IA -> `ia_seule`, vue seulement par l'humain -> `humain_seul`).
-    Une paire en accord ne contribue à aucune clé litigieuse : elle ne pose pas problème."""
+    Une paire en accord ne contribue à aucune clé litigieuse : elle ne pose pas problème.
+
+    `ia=None` signale un livre jamais classé par l'IA (cf. `load_pairs`) : exclu du taux
+    (pas de vraie lecture à comparer), compté à part dans `n_non_classes`.
+    ASIN de la paire discordants -> ValueError : c'est une erreur de programmation (paire
+    mal construite), pas une donnée à mesurer telle quelle."""
     n = len(paires)
     n_accord = 0
+    n_non_classes = 0
     desaccords: list[str] = []
     cles_litigieuses: dict[str, dict[str, int]] = {}
     for ia, humain in paires:
+        if ia is None:
+            n_non_classes += 1
+            continue
+        if ia.asin != humain.asin:
+            raise ValueError(f"ASIN discordants dans la paire : ia={ia.asin!r} "
+                             f"humain={humain.asin!r} — paire mal construite.")
         if accord(ia, humain):
             n_accord += 1
             continue
@@ -82,10 +100,12 @@ def agreement_report(paires: list[tuple[TropeClassification, TropeClassification
         for cle in set(humain.tropes) - set(ia.tropes):
             cles_litigieuses.setdefault(cle, {"ia_seule": 0, "humain_seul": 0})
             cles_litigieuses[cle]["humain_seul"] += 1
-    taux = (n_accord / n) if n else 0.0    # défaut pessimiste : rien mesuré != porte franchie
+    n_mesures = n - n_non_classes
+    taux = (n_accord / n_mesures) if n_mesures else 0.0   # défaut pessimiste
     return AgreementReport(n_livres=n, n_accord=n_accord, taux=taux,
                            porte_franchie=taux >= _SEUIL_ACCORD,
-                           cles_litigieuses=cles_litigieuses, desaccords=desaccords)
+                           cles_litigieuses=cles_litigieuses, desaccords=desaccords,
+                           n_non_classes=n_non_classes)
 
 
 def export_validation(livres: list[EnrichedBook], classifications: list[TropeClassification],
