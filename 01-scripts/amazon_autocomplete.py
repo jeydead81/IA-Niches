@@ -29,16 +29,30 @@ def parse_suggestions(payload: dict) -> list[str]:
     return out
 
 
-def _default_fetch_json(prefix: str) -> dict:
+class AutocompleteError(RuntimeError):
+    """Échec de la sonde (réseau, HTTP, JSON) — à distinguer d'une absence de suggestions :
+    « personne ne cherche ça » est une conclusion, « le réseau a toussé » n'en est pas une."""
+
+
+def fetch_json_strict(prefix: str) -> dict:
+    """Comme _default_fetch_json mais LÈVE au lieu d'avaler l'échec."""
     r = util.http_get(_build_url(prefix), timeout=15)
     status = getattr(r, "status_code", None)
     if status != 200:
-        print(f"[autocomplete] HTTP {status}")
-        return {}
+        raise AutocompleteError(f"HTTP {status}")
     try:
         return json.loads(r.text)
-    except Exception:
-        print("[autocomplete] JSON invalide")
+    except Exception as e:
+        raise AutocompleteError(f"JSON invalide : {e}") from e
+
+
+def _default_fetch_json(prefix: str) -> dict:
+    """Wrapper silencieux : le scout non-fiction (niche_validator) s'appuie sur ce
+    comportement en production, il ne doit PAS lever — on avale l'échec ici seulement."""
+    try:
+        return fetch_json_strict(prefix)
+    except AutocompleteError as e:
+        print(f"[autocomplete] {e}")
         return {}
 
 
