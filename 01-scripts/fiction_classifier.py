@@ -179,7 +179,9 @@ def _classify_lot(lot: list[EnrichedBook], sous_genre_cle: str, version: str, mo
     resp = client.messages.create(
         model=model,
         max_tokens=4000,
-        temperature=0,          # instrument de mesure : pas de variation d'un run à l'autre
+        # PAS de temperature/top_p/top_k : ces paramètres sont supprimés sur claude-sonnet-5
+        # et une valeur non-défaut renvoie une 400. La stabilité des étiquettes se joue dans
+        # le prompt (règles explicites, plafond de tropes, décor à justifier), pas ici.
         system=SYSTEM_PROMPT,
         tools=[{
             "name": "classer_livres",
