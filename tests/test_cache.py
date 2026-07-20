@@ -69,3 +69,47 @@ def test_entree_ecrite_sous_un_ancien_schema_est_ignoree(tmp_path):
     # simule une entrée écrite par une version antérieure du modèle
     c.set("book:vieux:2250:A1", {"asin": "A1", "title": "AMPUTÉ"}, ttl_s=100)
     assert c.get_book("A1", 2250) is None
+
+
+def test_cle_bsr_change_quand_le_modele_gagne_un_champ(monkeypatch):
+    """Même piège que pour EnrichedBook (cf. test_cle_livre_...) mais sur BsrInfo : sans
+    empreinte de schéma dans la clé `bsr:`, un champ ajouté à BsrInfo servirait des BSR
+    amputés 7 jours durant sans que rien ne le signale."""
+    from cache import _bsr_schema_tag
+    from models import BsrInfo
+
+    avant = _bsr_schema_tag()
+    _bsr_schema_tag.cache_clear()
+    monkeypatch.setitem(BsrInfo.model_fields, "champ_neuf", None)
+    apres = _bsr_schema_tag()
+    _bsr_schema_tag.cache_clear()
+    assert avant != apres
+
+
+def test_cle_search_change_quand_le_modele_gagne_un_champ(monkeypatch):
+    """Même piège que pour EnrichedBook mais sur SearchResult, sous la clé `search:`."""
+    from cache import _search_schema_tag
+    from models import SearchResult
+
+    avant = _search_schema_tag()
+    _search_schema_tag.cache_clear()
+    monkeypatch.setitem(SearchResult.model_fields, "champ_neuf", None)
+    apres = _search_schema_tag()
+    _search_schema_tag.cache_clear()
+    assert avant != apres
+
+
+def test_bsr_amputee_sans_empreinte_serait_relue_comme_valide(tmp_path):
+    """Preuve directe du piège : une valeur écrite sous l'ancienne forme de clé SANS
+    empreinte (`bsr:{location}:{asin}`, le format actuel avant correctif) doit devenir
+    injoignable une fois l'empreinte ajoutée — sinon un BsrInfo amputé par un futur champ
+    resterait lisible 7 jours comme si de rien n'était."""
+    c = Cache(tmp_path / "c.db")
+    c.set("bsr:2250:A1", {"rank_livres": 194, "asin": "A1"}, ttl_s=100)
+    assert c.get_bsr("A1", 2250) is None
+
+
+def test_search_amputee_sans_empreinte_serait_relue_comme_valide(tmp_path):
+    c = Cache(tmp_path / "c.db")
+    c.set("search:2250:fr_FR:tarot", {"keyword": "tarot"}, ttl_s=100)
+    assert c.get_search("tarot", 2250, "fr_FR") is None

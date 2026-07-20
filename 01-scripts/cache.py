@@ -13,6 +13,15 @@ from models import BsrInfo, EnrichedBook, SearchResult
 BOOK_TTL_S = 7 * 24 * 3600     # 7 jours : rayon fiction, moins volatil que le BSR seul
 
 
+def _fields_fingerprint(model) -> str:
+    """Empreinte des NOMS de champs d'un modèle pydantic — le même piège (cache qui sert
+    des données amputées en silence après un ajout de champ) menace TOUT modèle mis en
+    cache, pas seulement EnrichedBook : `book:` l'a appris à ses dépens en M4 (blurb ajouté
+    pendant que des livres étaient déjà en cache), `bsr:` et `search:` restaient exposés."""
+    noms = ",".join(sorted(model.model_fields))
+    return hashlib.sha1(noms.encode("utf-8")).hexdigest()[:8]
+
+
 @lru_cache(maxsize=1)
 def _schema_tag() -> str:
     """Empreinte des champs d'EnrichedBook, injectée dans la clé de cache.
@@ -25,8 +34,20 @@ def _schema_tag() -> str:
 
     Limite assumée : elle suit les NOMS des champs, pas leurs types. Changer la
     sémantique d'un champ sans le renommer demande toujours de vider le cache."""
-    noms = ",".join(sorted(EnrichedBook.model_fields))
-    return hashlib.sha1(noms.encode("utf-8")).hexdigest()[:8]
+    return _fields_fingerprint(EnrichedBook)
+
+
+@lru_cache(maxsize=1)
+def _bsr_schema_tag() -> str:
+    """Même empreinte que `_schema_tag`, mais pour BsrInfo (clé `bsr:`) — le piège était
+    resté armé pour ce modèle-là aussi."""
+    return _fields_fingerprint(BsrInfo)
+
+
+@lru_cache(maxsize=1)
+def _search_schema_tag() -> str:
+    """Même empreinte que `_schema_tag`, mais pour SearchResult (clé `search:`)."""
+    return _fields_fingerprint(SearchResult)
 
 
 class Cache:
@@ -58,11 +79,11 @@ class Cache:
     # ── helpers métier ──
     @staticmethod
     def _bsr_key(asin: str, location: int) -> str:
-        return f"bsr:{location}:{asin}"
+        return f"bsr:{_bsr_schema_tag()}:{location}:{asin}"
 
     @staticmethod
     def _search_key(keyword: str, location: int, language: str) -> str:
-        return f"search:{location}:{language}:{(keyword or '').lower().strip()}"
+        return f"search:{_search_schema_tag()}:{location}:{language}:{(keyword or '').lower().strip()}"
 
     @staticmethod
     def _book_key(asin: str, location: int) -> str:
