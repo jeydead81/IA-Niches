@@ -109,16 +109,21 @@ def agreement_report(paires: list[tuple[TropeClassification | None, TropeClassif
 
 
 def export_validation(livres: list[EnrichedBook], classifications: list[TropeClassification],
-                      sous_genre_cle: str, path, version: str = "fr_v1") -> None:
+                      sous_genre_cle: str | list[str], path, version: str = "fr_v1") -> None:
     """xlsx à 2 feuilles : la feuille de saisie (étiquettes IA pré-remplies, colonnes *_ok
     vides pour Baptiste) et les clés autorisées à copier-coller. La version de taxonomie est
     stampée dans les propriétés du classeur (pas une colonne visible) pour que
-    `load_corrections` sache reconstruire des TropeClassification valides."""
+    `load_corrections` sache reconstruire des TropeClassification valides.
+
+    `sous_genre_cle` accepte aussi une LISTE : un set assemblé sur plusieurs niches (cf.
+    build_set) peut mélanger des sous-genres différents, et la feuille « Clés autorisées »
+    doit couvrir chacun d'eux, pas seulement le premier."""
     by_asin = {c.asin: c for c in classifications}
+    sous_genres = [sous_genre_cle] if isinstance(sous_genre_cle, str) else list(sous_genre_cle)
 
     wb = Workbook()
     wb.properties.keywords = version           # relu par load_corrections
-    wb.properties.subject = sous_genre_cle
+    wb.properties.subject = ",".join(sous_genres)
 
     ws = wb.active
     ws.title = "Validation"
@@ -151,14 +156,18 @@ def export_validation(livres: list[EnrichedBook], classifications: list[TropeCla
     # (« enregistrer sous »), et mesurer contre une taxonomie inconnue n'a pas de sens.
     ws2.append(["taxonomy_version", version])
     ws2.append([])
-    tropes, decors = valid_keys(sous_genre_cle, version)
-    ws2.append(["tropes"])
-    for t in tropes:
-        ws2.append([t])
-    ws2.append([])
-    ws2.append(["decors"])
-    for d in decors:
-        ws2.append([d])
+    for sg in sous_genres:
+        tropes, decors = valid_keys(sg, version)
+        if len(sous_genres) > 1:
+            ws2.append([f"[{sg}]"])
+        ws2.append(["tropes"])
+        for t in tropes:
+            ws2.append([t])
+        ws2.append([])
+        ws2.append(["decors"])
+        for d in decors:
+            ws2.append([d])
+        ws2.append([])
 
     wb.save(str(path))
 
@@ -222,15 +231,20 @@ def _lignes_corrigees(path):
                          "classeur) — mesurer contre une taxonomie inconnue n'a pas de sens.")
     idx = {h: i for i, h in enumerate(next(ws.iter_rows(min_row=1, max_row=1, values_only=True)))}
 
-    # Clés valides du sous-genre (feuille "subject" écrite par export_validation) : sans elle
-    # (fichier ancien), on ne peut pas distinguer faute de saisie et clé litigieuse -> on ne
-    # filtre rien plutôt que de deviner.
-    sous_genre_cle = (wb.properties.subject or "").strip()
+    # Clés valides du/des sous-genre(s) (propriété "subject" écrite par export_validation,
+    # potentiellement une liste jointe par des virgules — cf. D1, un set peut mélanger
+    # plusieurs sous-genres) : sans elle (fichier ancien), on ne peut pas distinguer faute
+    # de saisie et clé litigieuse -> on ne filtre rien plutôt que de deviner. Avec plusieurs
+    # sous-genres, on prend l'UNION des clés valides (moins précis qu'un genre connu par
+    # ligne, mais un typo qui n'existe dans AUCUN des sous-genres reste détecté).
+    sous_genres = [s.strip() for s in (wb.properties.subject or "").split(",") if s.strip()]
     tropes_valides = decors_valides = None
-    if sous_genre_cle:
-        tv, dv = valid_keys(sous_genre_cle, version)
-        tropes_valides = {_normalise_cle(t) for t in tv}
-        decors_valides = {_normalise_cle(d) for d in dv}
+    if sous_genres:
+        tropes_valides, decors_valides = set(), set()
+        for sg in sous_genres:
+            tv, dv = valid_keys(sg, version)
+            tropes_valides |= {_normalise_cle(t) for t in tv}
+            decors_valides |= {_normalise_cle(d) for d in dv}
 
     for row in ws.iter_rows(min_row=2, values_only=True):
         if row is None or not any(row):

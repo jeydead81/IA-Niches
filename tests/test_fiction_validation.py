@@ -1,5 +1,6 @@
 from openpyxl import load_workbook
 
+from fiction_taxonomy import valid_keys
 from fiction_validation import (accord, agreement_report, export_validation, jaccard,
                                 load_corrections, load_pairs)
 from models import EnrichedBook, TropeClassification
@@ -293,6 +294,21 @@ def test_load_pairs_relit_ia_et_humain_pour_les_lignes_corrigees(tmp_path):
 
     r = agreement_report(paires)
     assert r.n_non_classes == 1
+
+
+def test_cles_autorisees_couvre_plusieurs_sous_genres(tmp_path):
+    """Un set assemblé sur plusieurs niches peut mélanger des sous-genres différents : la
+    feuille « Clés autorisées » ne doit pas se limiter au premier, sinon Baptiste ne peut
+    pas copier-coller les clés valides pour les livres des autres sous-genres."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, [], ["cosy_mystery", "thriller_psychologique"], p)
+    ws2 = load_workbook(str(p))["Clés autorisées"]
+    valeurs = {c[0].value for c in ws2.iter_rows() if c[0].value}
+    # une clé propre à chaque sous-genre doit être présente
+    assert "metier_gourmand" in valeurs             # cosy_mystery
+    tropes_thriller, _ = valid_keys("thriller_psychologique")
+    assert any(t in valeurs for t in tropes_thriller)
 
 
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
