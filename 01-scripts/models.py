@@ -112,3 +112,71 @@ class NicheValidation(BaseModel):
     demand_score: int = 0                   # nb de suggestions Amazon distinctes surfacées
     queries_hit: int = 0                    # nb de requêtes (niche+satellites) qu'Amazon auto-complète
     validated: bool = False                 # True si Amazon auto-complète au moins une requête
+
+
+class FictionNiche(BaseModel):
+    """Un trio fiction : sous-genre × trope(s) × décor, sur un marketplace et un rayon."""
+    sous_genre: str
+    tropes: list[str] = Field(default_factory=list)     # 1..3 clés de la taxonomie
+    decor: str | None = None
+    marketplace: str = "fr"                             # paramètre de premier rang
+    rayon: str = "kindle"                               # "kindle" | "papier" — commutable
+    query: str = ""                                     # requête naturelle dérivée
+
+
+class EnrichedBook(BaseModel):
+    """Un livre du rayon, enrichi via l'endpoint ASIN. Le BSR porte TOUJOURS son rayon :
+    les rangs « Livres » et « Boutique Kindle » ne sont pas comparables, et un classement
+    « titres gratuits » n'est pas un rang de ventes payantes."""
+    asin: str
+    title: str
+    author: str | None = None
+    price: float | None = None
+    reviews_count: int | None = None
+    rating: float | None = None
+    bsr: int | None = None
+    bsr_rayon: str | None = None                        # "Boutique Kindle" | "Livres"
+    bsr_gratuit: bool = False                           # rang « titres gratuits » -> hors scoring
+    bsr_subcats: list[dict] = Field(default_factory=list)
+    publication_date: str | None = None
+    publisher: str | None = None
+    langue: str | None = None
+    serie_tome: int | None = None                       # clé « Livre N sur M »
+    serie_total: int | None = None
+    series_hint: bool = False                           # fallback heuristique
+    serp_position: int = 0
+
+    @property
+    def est_serie(self) -> bool:
+        return bool(self.serie_total or self.series_hint)
+
+    def est_payant_dans(self, rayon_vise: str) -> bool:
+        """Le BSR est-il exploitable pour le scoring de ce rayon ?"""
+        return bool(self.bsr) and not self.bsr_gratuit and self.bsr_rayon == rayon_vise
+
+
+class TropeClassification(BaseModel):
+    """Classification sémantique d'un blurb, contrainte à la taxonomie."""
+    asin: str
+    taxonomy_version: str
+    tropes: list[str] = Field(default_factory=list)
+    decor: str | None = None
+    other: list[str] = Field(default_factory=list)      # hors taxo -> fait évoluer la taxo
+    confidence: float = 0.0
+
+
+class FictionNicheReport(BaseModel):
+    """Rapport complet d'une niche fiction (couches 1 et 2)."""
+    niche: FictionNiche
+    books: list[EnrichedBook] = Field(default_factory=list)
+    classifications: list[TropeClassification] = Field(default_factory=list)
+    depth_score: float = 0.0
+    openness_score: float = 0.0
+    saturation_trio: float = 0.0
+    autocomplete_score: float = 0.0
+    demand_matrix: str = ""
+    series_share: float = 0.0
+    price_band: list[float] = Field(default_factory=list)
+    seasonality: str | None = None
+    verdict: str = ""
+    cost_run: float = 0.0
