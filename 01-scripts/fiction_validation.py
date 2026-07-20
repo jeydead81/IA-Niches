@@ -14,12 +14,25 @@ from fiction_taxonomy import valid_keys
 from models import EnrichedBook, TropeClassification
 
 _SEUIL_ACCORD = 0.8            # la porte des 80 % (plan M4)
-_BLURB_TRONQUE = 600           # lisibilité du xlsx, pas une limite de contenu
+# Mesuré sur les fixtures live : à 600 caractères, l'humain ne voyait que 44 % du texte
+# lu par l'IA — le désaccord mesurait une asymétrie d'information, pas une vraie divergence
+# de lecture. 2000 caractères couvrent la quasi-totalité des blurbs Amazon.fr (1200-1800).
+_BLURB_TRONQUE = 2000
 
 # Colonnes de la feuille "Validation", dans l'ordre exact du plan M4 (les 4 dernières
 # vides = ce que Baptiste remplit).
 _HEADERS = ["asin", "titre", "auteur", "blurb", "tropes_ia", "decor_ia", "est_roman_ia",
            "confiance", "tropes_ok", "decor_ok", "est_roman_ok", "notes"]
+
+
+def _blurb_tronque(blurb: str | None) -> str:
+    """Tronque à _BLURB_TRONQUE caractères en le disant : un blurb coupé sans marque se
+    lit comme un blurb complet, et le désaccord humain/IA mesurerait alors une asymétrie
+    d'information plutôt qu'une vraie divergence de lecture."""
+    b = blurb or ""
+    if len(b) <= _BLURB_TRONQUE:
+        return b
+    return b[:_BLURB_TRONQUE] + " […] tronqué"
 
 
 def jaccard(a: set, b: set) -> float:
@@ -91,7 +104,7 @@ def export_validation(livres: list[EnrichedBook], classifications: list[TropeCla
         c = by_asin.get(b.asin)
         ws.append([
             b.asin, b.title, b.author or "",
-            (b.blurb or "")[:_BLURB_TRONQUE],
+            _blurb_tronque(b.blurb),
             ", ".join(c.tropes) if c else "",
             c.decor if c and c.decor else "",
             (c.est_roman if c else True),
