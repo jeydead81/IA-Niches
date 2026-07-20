@@ -1,4 +1,5 @@
 from cache import Cache
+from models import EnrichedBook
 
 
 def test_set_get_roundtrip(tmp_path):
@@ -47,3 +48,24 @@ def test_book_helpers(tmp_path):
     got = c.get_book("A1", 2250)
     assert got.asin == "A1" and got.bsr == 20 and got.bsr_rayon == "Boutique Kindle"
     assert c.get_book("A2", 2250) is None
+
+
+def test_cle_livre_change_quand_le_modele_gagne_un_champ(tmp_path, monkeypatch):
+    """Le blurb a été ajouté à EnrichedBook APRÈS que des livres soient entrés en cache :
+    sans empreinte de schéma dans la clé, le cache aurait servi 7 jours durant des livres
+    amputés du nouveau champ, et le classifieur aurait lu « pas de blurb » comme un fait."""
+    from cache import _schema_tag
+
+    avant = _schema_tag()
+    _schema_tag.cache_clear()
+    monkeypatch.setitem(EnrichedBook.model_fields, "champ_neuf", None)
+    apres = _schema_tag()
+    _schema_tag.cache_clear()
+    assert avant != apres
+
+
+def test_entree_ecrite_sous_un_ancien_schema_est_ignoree(tmp_path):
+    c = Cache(tmp_path / "c.db")
+    # simule une entrée écrite par une version antérieure du modèle
+    c.set("book:vieux:2250:A1", {"asin": "A1", "title": "AMPUTÉ"}, ttl_s=100)
+    assert c.get_book("A1", 2250) is None

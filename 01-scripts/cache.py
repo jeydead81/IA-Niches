@@ -1,14 +1,32 @@
 """cache.py — cache clé/valeur SQLite partagé (cross-user), avec TTL.
 Sûr en concurrence (le serveur lance des scouts en threads) : connexion par appel + WAL.
 Valeurs JSON-sérialisables. Helpers dédiés BSR (par ASIN) et search (par mot-clé normalisé)."""
+import hashlib
 import json
 import sqlite3
 import time
+from functools import lru_cache
 from pathlib import Path
 
 from models import BsrInfo, EnrichedBook, SearchResult
 
 BOOK_TTL_S = 7 * 24 * 3600     # 7 jours : rayon fiction, moins volatil que le BSR seul
+
+
+@lru_cache(maxsize=1)
+def _schema_tag() -> str:
+    """Empreinte des champs d'EnrichedBook, injectée dans la clé de cache.
+
+    Sans elle, enrichir le modèle sert des livres périmés en silence : le blurb a été
+    ajouté en M4 alors que des livres étaient déjà en cache, et pendant 7 jours le
+    classifieur aurait reçu des fiches sans blurb — puis M5 aurait lu « aucun trope
+    identifié » comme un fait mesuré. Un compteur de version manuel se serait oublié
+    exactement de la même façon ; l'empreinte, elle, se met à jour toute seule.
+
+    Limite assumée : elle suit les NOMS des champs, pas leurs types. Changer la
+    sémantique d'un champ sans le renommer demande toujours de vider le cache."""
+    noms = ",".join(sorted(EnrichedBook.model_fields))
+    return hashlib.sha1(noms.encode("utf-8")).hexdigest()[:8]
 
 
 class Cache:
@@ -48,7 +66,7 @@ class Cache:
 
     @staticmethod
     def _book_key(asin: str, location: int) -> str:
-        return f"book:{location}:{asin}"
+        return f"book:{_schema_tag()}:{location}:{asin}"
 
     def get_bsr(self, asin: str, location: int) -> BsrInfo | None:
         d = self.get(self._bsr_key(asin, location))
