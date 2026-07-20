@@ -6,13 +6,18 @@ import re
 from pydantic import ValidationError
 
 from models import EnrichedBook
-from search_providers import _to_float, parse_bsr_rank
+from search_providers import _bsr_to_int, _to_float, parse_bsr_rank
 
 _SERIE_KEY = re.compile(r"^livre\s+(\d+)\s+sur\s+(\d+)$", re.I)
 # amazon.fr écrit « t. 1 » (avec point) bien plus souvent que « t1 » ; et « vol » sans point
 # est un mot courant en polar (« Vol 714 pour Sydney ») -> point obligatoire pour vol.
 _SERIE_TITLE = re.compile(r"\b(?:tome|livre|volume)\s*\d+|\b(?:vol|t)\.\s*\d+|\bt\s*\d+|#\d+", re.I)
-_BSR_KEY = "meilleures ventes"
+# clé FR observée en majorité, "best sellers rank" en repli (parse_asin_bsr accepte déjà les deux)
+_BSR_KEY = ("meilleures ventes", "best sellers rank")
+# sous-catégorie : "RANG en CATÉGORIE", une par ligne, APRÈS la parenthèse fermante du rang
+# principal. Le "(Livres)" qui qualifie parfois la catégorie (ex. "Jeux (Livres)") fait
+# partie du libellé Amazon -> on ne s'arrête pas au premier "(".
+_SUBCAT_LINE = re.compile(r"^\s*([\d][\d\s.]*)\s*en\s+(.+?)\s*$")
 
 
 def _series_hint_from_title(title: str) -> bool:
@@ -43,6 +48,27 @@ def _text(v) -> str | None:
     return None if v is None else str(v)
 
 
+def _parse_subcats(raw: str) -> list[dict]:
+    """Sous-catégories BSR situées après la parenthèse fermante du rang principal (ex.
+    « 1 597 en Livres ( Voir les 100 premiers en Livres )  6 en Enquêtes et humour » ->
+    [{"rang": 6, "categorie": "Enquêtes et humour"}]). Une ligne qui ne matche pas le
+    format attendu est ignorée plutôt que de produire une donnée douteuse ; si rien ne
+    matche, on rend une liste vide."""
+    if not isinstance(raw, str) or ")" not in raw:
+        return []
+    tail = raw.split(")", 1)[1]
+    out: list[dict] = []
+    for line in tail.split("\n"):
+        m = _SUBCAT_LINE.match(line)
+        if not m:
+            continue
+        rang = _bsr_to_int(m.group(1))
+        categorie = m.group(2).strip(" .,;:")
+        if rang and categorie:
+            out.append({"rang": rang, "categorie": categorie})
+    return out
+
+
 def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | None:
     """Payload ASIN (advanced) -> EnrichedBook. None si le payload est inexploitable."""
     items = (result or {}).get("items") or []
@@ -56,17 +82,20 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
     det = _details(item)
     low = {k.lower(): (k, v) for k, v in det.items()}
 
-    def pick(frag: str):
+    def pick(frag):
+        fragments = (frag,) if isinstance(frag, str) else tuple(frag)
         for kl, (k, v) in low.items():
-            if frag in kl:
+            if any(f in kl for f in fragments):
                 return v
         return None
 
     rang = rayon = None
     gratuit = False
+    subcats: list[dict] = []
     bsr_raw = pick(_BSR_KEY)
     if isinstance(bsr_raw, str):
         rang, rayon, gratuit = parse_bsr_rank(bsr_raw)
+        subcats = _parse_subcats(bsr_raw)
 
     tome = total = None
     for k in det:
@@ -88,6 +117,7 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
             bsr=rang,
             bsr_rayon=rayon,
             bsr_gratuit=gratuit,
+            bsr_subcats=subcats,
             publication_date=_text(pick("date de publication")),
             publisher=_text(pick("diteur")),
             langue=_text(pick("langue")),

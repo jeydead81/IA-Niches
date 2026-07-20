@@ -91,6 +91,55 @@ def test_parse_product_information_dict_au_lieu_de_liste_ne_plante_pas():
     assert b is not None and b.langue is None
 
 
+def test_bsr_subcats_une_seule_sous_categorie():
+    # 1923235036 : "1 597 en Livres ( Voir les 100 premiers en Livres )  6 en Enquêtes et humour"
+    b = parse_enriched_book(_PRINT["1923235036"])
+    assert b.bsr_subcats == [{"rang": 6, "categorie": "Enquêtes et humour"}]
+
+
+def test_bsr_subcats_plusieurs_sous_categories_separees_par_saut_de_ligne():
+    # B0CH23Z17T : "... 280 en Enquêtes et humour\n 551 en Femmes détectives"
+    b = parse_enriched_book(_PRINT["B0CH23Z17T"])
+    assert b.bsr_subcats == [{"rang": 280, "categorie": "Enquêtes et humour"},
+                             {"rang": 551, "categorie": "Femmes détectives"}]
+
+
+def test_bsr_subcats_conserve_le_qualificatif_entre_parentheses():
+    # 2036073689 : "... 3 955 en Jeux (Livres)" — le "(Livres)" fait partie du libellé
+    # Amazon de la sous-catégorie (disambiguïsation papier/Kindle), pas du bruit à couper.
+    b = parse_enriched_book(_PRINT["2036073689"])
+    assert b.bsr_subcats == [{"rang": 3955, "categorie": "Jeux (Livres)"}]
+
+
+def test_bsr_subcats_trois_niveaux_avec_qualificatif_mixte():
+    # 2253253103 : trois sous-catégories, dont une avec le qualificatif "(Livres)".
+    b = parse_enriched_book(_PRINT["2253253103"])
+    assert b.bsr_subcats == [
+        {"rang": 718, "categorie": "Crime et enquête"},
+        {"rang": 1420, "categorie": "Romans policiers (Livres)"},
+        {"rang": 5905, "categorie": "Romans et littérature"},
+    ]
+
+
+def test_bsr_subcats_vide_quand_pas_de_bsr():
+    b = parse_enriched_book(_PRINT["B0FS7JQNJ6"])
+    assert b.bsr_subcats == []
+
+
+def test_parse_bsr_reconnait_aussi_la_cle_anglaise_best_sellers_rank():
+    # _BSR_KEY était une chaîne unique ("meilleures ventes") ; parse_asin_bsr (search_providers)
+    # accepte déjà les deux formes FR/EN, fiction_books.py devait suivre.
+    payload = {
+        "asin": "X4",
+        "items": [{"type": "amazon_product_info", "data_asin": "X4", "title": "Titre",
+                   "product_information": [{"body": {
+                       "Best Sellers Rank": "1 234 en Livres ( Voir les 100 premiers en Livres )  9 en Romans"}}]}],
+    }
+    b = parse_enriched_book(payload)
+    assert b.bsr == 1234 and b.bsr_rayon == "Livres"
+    assert b.bsr_subcats == [{"rang": 9, "categorie": "Romans"}]
+
+
 def test_series_hint_notation_t_point_la_plus_courante_sur_amazon_fr():
     # « t. 1 » (avec point) est la notation la plus fréquente sur amazon.fr ; l'ancienne
     # regex (\bvol\.?\s*\d+|\bt\s*\d+) la ratait car elle exigeait "vol" ou "t" collé aux
