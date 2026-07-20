@@ -1,0 +1,81 @@
+=== V3 — couverture autocomplete FR sur les tropes (gratuit) ===
+  'romance seconde chance' -> 1 sugg. : ['romance seconde chance']
+  'cosy mystery bretagne' -> 1 sugg. : ['cosy mystery bretagne']
+  'romance noel montagne' -> 0 sugg. : []
+  'romantasy ennemis' -> 0 sugg. : []
+  'thriller psychologique famille' -> 0 sugg. : []
+  'cosy mystery libraire' -> 0 sugg. : []
+  'romance milliardaire' -> 4 sugg. : ['romance milliardaire', 'romance milliardaire en français', 'romance milliardaire avec trahison', 'romance milliardaire adulte']
+  'polar breton' -> 1 sugg. : ['polar breton']
+  'romance hockey' -> 4 sugg. : ['romance hockey', 'romance hockey francais', 'romance hockey mm', 'romance hockey sur glace']
+  'fantasy academie magie' -> 0 sugg. : []
+  >> couverture : 5/10 requêtes complétées
+
+=== V1a — Products « cosy mystery » (sans contrainte) ===
+  organiques 53 · sponsorisés 1
+    B0FF82S9MW | Cupcake à la Crème de Fraise & Meurtre (Un Mystère Cosy de | prix None | note 3.9 (63)
+    2253253103 | Un meurtre absolument splendide | prix 9.4 | note 4.2 (37)
+    B0FS7JQNJ6 | Meurtre au Dolphin Hotel - Les enquêtes de Miss Underhay T | prix None | note 4.6 (25)
+    2749187052 | Meurtres et caramels de Noël - Les enquêtes d'Hannah Swens | prix 14.9 | note None (None)
+    2036073689 | Cosy Mystery : le détective, c'est vous ! | prix 12.9 | note 5.0 (1)
+    B0CH23Z17T | Advienne que mourra (Les Thés meurtriers d’Oxford - Livre  | prix 15.9 | note 4.4 (1100)
+    B0GN4G414V | Embauche mortelle: Cosy mystery | prix 14.9 | note 4.5 (29)
+    1923235036 | Les Racines du Mal (Petits crimes et jardin secret ~ Tome  | prix 15.9 | note 4.6 (155)
+    B0FR56SDD7 | Le Vol du Metropolis: Cosy Christmas Mystery, Vol. 3 | prix None | note 4.7 (92)
+    2749181518 | Les Enquêtes d'Hannah Swensen - tome 15 Meurtres et cupcak | prix 15.9 | note 4.4 (164)
+
+=== V2 — payload ASIN complet sur 8 livres ===
+  8 tâches créées
+  8 payloads récupérés
+   B0FF82S9MW | Cupcake à la Crème de Fraise & Meurtre (Un Mystère C
+      catégories : ['Boutique Kindle', 'Ebooks Kindle', 'Policier, mystère et suspense', 'Fiction criminelle']
+   1923235036 | Les Racines du Mal (Petits crimes et jardin secret ~
+      catégories : ['Livres', 'Mystère et suspense', 'Romans policiers', 'Enquêtes et humour']
+   2749187052 | Meurtres et caramels de Noël - Les enquêtes d'Hannah
+      catégories : ['Livres', 'Mystère et suspense', 'Romans policiers']
+   B0CH23Z17T | Advienne que mourra (Les Thés meurtriers d’Oxford - 
+      catégories : ['Livres', 'Mystère et suspense', 'Romans policiers', 'Enquêtes et humour']
+   B0FS7JQNJ6 | Meurtre au Dolphin Hotel - Les enquêtes de Miss Unde
+      catégories : ['Livres', 'Mystère et suspense', 'Romans policiers', 'Enquêtes et humour']
+   2253253103 | Un meurtre absolument splendide
+      catégories : ['Livres', 'Mystère et suspense', 'Thrillers', 'Crime et enquête']
+   2036073689 | Cosy Mystery : le détective, c'est vous !
+      catégories : ['Livres', 'Loisirs créatifs, décoration et maison', 'Jeux']
+   B0GN4G414V | Embauche mortelle: Cosy mystery
+      catégories : ['Livres', 'Mystère et suspense', 'Romans policiers', 'Enquêtes et humour']
+
+  --- COUVERTURE des champs (sur 8 livres) ---
+    date_publication     7/8  (87%)
+    editeur              6/8  (75%)
+    langue               7/8  (87%)
+    serie                0/8  (0%)
+    bsr                  7/8  (87%)
+    prix                 8/8  (100%)
+    note                 7/8  (87%)
+    avis                 7/8  (87%)
+    ku_badge             3/8  (37%)
+    bought_past_month    1/8  (12%)
+    description          8/8  (100%)
+
+  --- clés 'Détails sur le produit' vues ---
+    ['ASIN', 'Accessibilité', "Classement des meilleures ventes d'Amazon", 'Commentaires client', 'Confort de lecture', 'Date de publication', 'Dimensions', 'ISBN-10', 'ISBN-13', 'Langue', 'Lecteur d’écran', 'Livre 1 sur 1', 'Livre 1 sur 10', 'Livre 5 sur 6', 'Livre 8 sur 12', "Nombre de pages de l'édition imprimée", 'Page Flip', "Poids de l'article", 'Taille du fichier', 'Word Wise', 'Éditeur']
+
+  --- clés item ASIN ---
+    ['applicable_vouchers', 'author', 'categories', 'currency', 'data_asin', 'description', 'details', 'image_url', 'is_amazon_choice', 'is_available', 'is_newer_model_available', 'is_prime_video', 'newer_model', 'parent_asin', 'percentage_discount', 'position', 'price_from', 'price_to', 'product_asins', 'product_images_list', 'product_information', 'product_videos_list', 'rank_absolute', 'rank_group', 'rating', 'title', 'top_global_reviews', 'top_local_reviews', 'type', 'xpath']
+
+  >> node IDs extraits des fils d'Ariane : ['205566718031', '301061', '301134', '302054', '302068', '355635011', '672108031', '695398031', '895004031', '9691469031', '9691472031', '9691488031']
+
+=== V1b — Products « cosy mystery » contraint au node 9691488031 (rh=n:9691488031) ===
+  task_post : 20100 Task Created.
+  organiques 30 (vs 53 sans contrainte)
+    2253253103 | Un meurtre absolument splendide
+    B0DKTJV74S | Murder Party au manoir: Cosy Christmas Mystery 2
+    B0GKYWJ14R | Meurtre dans les roses: Un cosy mystery en Provence (Enquê
+    B0H4RYGW12 | Crime et pièce montée: Une enquête cosy mystery à la franç
+    226407809X | Cottage, fantômes et guet-apens - poche (01)
+    2376101867 | Les Enquêtes d'Etsy Westbrooke - Bienvenue à Dunley !: Cos
+    B0D8BVLYXJ | Meurtre dans les lavandes: Un cosy mystery en Provence (En
+    2266337742 | Petits meurtres à Endgame
+    B0D86N176L | Réception funeste à Oxford: Une nouvelle enquête cosy parf
+    0008567425 | The Mysterious Affair Of Judith Potts
+  >> recouvrement avec la SERP non contrainte : 7 ASIN communs
