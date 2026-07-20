@@ -167,3 +167,21 @@ def test_product_raw_batch_rend_les_payloads_bruts():
     prov = DataForSEOProvider(login="l", password="p")
     out = prov.product_raw_batch(["A1"], post_json=fake_post, get_json=fake_get, poll_interval=0)
     assert out["A1"]["asin"] == "A1"          # payload brut, pas un BsrInfo
+
+
+def test_echo_asin_hors_lot_retombe_sur_la_position():
+    """Un écho qui ne fait pas partie du lot posté classerait le payload sous une clé
+    fantôme et le perdrait pour l'ASIN demandé — on ne fait confiance à l'écho que s'il
+    appartient au lot."""
+    def fake_post(url, body):
+        return {"tasks": [{"status_code": 20100, "id": "T1",
+                           "data": {"asin": "XX-INCONNU"}}]}
+
+    def fake_get(url):
+        return {"tasks": [{"status_code": 20000, "result": [{"asin": "A1", "items": []}]}]}
+
+    prov = DataForSEOProvider(login="l", password="p")
+    out = prov.product_raw_batch(["A1"], post_json=fake_post, get_json=fake_get,
+                                 poll_interval=0)
+    assert out["A1"] is not None
+    assert "XX-INCONNU" not in out

@@ -172,3 +172,17 @@ def test_series_hint_fixtures_live_non_regression():
     hits = [t for t in titres if _series_hint_from_title(t)]
     assert len(titres) >= 70
     assert len(hits) >= 30
+
+
+def test_titre_non_textuel_ne_leve_pas():
+    """Le titre passe par _series_hint_from_title AVANT la validation pydantic : sans cast,
+    un titre non-str lève un TypeError que le `except ValidationError` ne rattrape pas —
+    et fetch_fiction_shelf n'a pas de filet, donc le run entier tombe APRÈS facturation."""
+    p = {"asin": "X", "items": [{"type": "amazon_product_info",
+                                 "title": ["Meurtre", "au village"]}]}
+    b = parse_enriched_book(p)
+    assert b is not None and isinstance(b.title, str)
+
+    b2 = parse_enriched_book({"asin": "Y", "items": [{"type": "amazon_product_info",
+                                                     "title": 42}]})
+    assert b2 is not None and b2.title == "42"

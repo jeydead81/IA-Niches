@@ -105,7 +105,9 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
             break
 
     rating = item.get("rating") if isinstance(item.get("rating"), dict) else {}
-    title = item.get("title") or ""
+    # caster AVANT _series_hint_from_title : la regex lève un TypeError sur un non-str,
+    # et le `except ValidationError` plus bas ne le rattraperait pas.
+    title = _text(item.get("title")) or ""
     try:
         return EnrichedBook(
             asin=asin,

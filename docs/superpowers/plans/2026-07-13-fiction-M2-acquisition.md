@@ -401,6 +401,7 @@ Passe de correctifs TDD sur ce chunk après revue de code, un commit par correct
 3. `parse_enriched_book` ne lève plus jamais (price FR, champ texte atypique, `product_information` en dict) : `None` si inexploitable, comme promis — `7873086`
 4. Dédup des ASIN de la SERP (`dict.fromkeys`, ordre préservé) avant facturation/enrichissement — `d9b16b3`
 5. `product_raw_batch` apparie les payloads par ASIN rendu (écho `task["data"]["asin"]`), plus par position — `b743f0d`
+   · ⚠ **l'écho n'est pas vérifié en live** : aucune réponse `task_post` brute n'est capturée en fixture. Le code ne s'y fie que si l'écho appartient au lot posté, sinon repli sur la position (comportement d'origine). À confirmer par une fixture le jour où on en capture une.
 6. `fetch_fiction_shelf` rend un `FictionShelf` (compteurs `asins_demandes`/`n_echecs`/`complet`) au lieu de dropper les échecs d'enrichissement en silence — `f73ab39`
 7. `label_rayon()` — pont explicite entre `FictionNiche.rayon` ("kindle"/"papier") et `EnrichedBook.bsr_rayon` (libellé Amazon), piège désamorcé pour M5 — `8898b74`
 8. `bsr_subcats` rempli (sous-catégories BSR extraites après le rang principal, qualificatif "(Livres)" conservé) — `44d128b`

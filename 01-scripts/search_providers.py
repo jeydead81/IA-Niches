@@ -141,11 +141,14 @@ class DataForSEOProvider:
         for i, t in enumerate(tasks):
             if t.get("status_code") not in (20000, 20100) or not t.get("id"):
                 continue
-            # task_post fait écho à l'ASIN posté (task["data"]["asin"]) : s'y fier plutôt
-            # qu'à zip(tasks, asins), qui suppose à tort que l'API rend les tâches dans
-            # l'ordre posté (repli sur la position si l'écho est absent).
+            # task_post SEMBLE faire écho à l'ASIN posté (task["data"]["asin"]) — non
+            # vérifié en live, aucune réponse task_post brute n'est capturée en fixture.
+            # On s'y fie quand l'écho appartient au lot posté, sinon repli sur la position
+            # (comportement d'origine) : un écho hors lot classerait le payload sous une
+            # clé fantôme et le perdrait pour l'ASIN demandé.
             echo = (t.get("data") or {}).get("asin")
-            a = echo or (asins[i] if i < len(asins) else None)
+            pos = asins[i] if i < len(asins) else None
+            a = echo if echo in set(asins) else pos
             if a:
                 pending[t["id"]] = a
         out: dict = {a: None for a in asins}
