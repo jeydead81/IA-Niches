@@ -321,3 +321,17 @@ def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     assert p.exists()
     relu = load_corrections(p)            # sans correction humaine -> colonnes vides
     assert relu == []                     # rien de corrigé = rien à comparer
+
+
+def test_le_classeur_est_relache_apres_lecture(tmp_path):
+    """openpyxl garde le fichier ouvert : sous Windows le xlsx reste verrouillé et
+    régénérer le set dans le même processus échoue (PermissionError WinError 32).
+    Vu en conditions réelles sur le test de bout en bout du protocole."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+
+    load_pairs(p)
+    export_validation(livres, ia, "cosy_mystery", p)   # réécriture : verrou => échec
+    p.unlink()                                          # suppression : verrou => échec

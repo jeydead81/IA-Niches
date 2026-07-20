@@ -6,6 +6,8 @@ la définition est ici, assumée explicitement (cf. plan M4, tâche M4-3) :
 - un livre est en accord si jaccard(tropes) >= 0.5 ET décor identique ET est_roman identique.
 Sous la porte des 80 %, ce n'est pas le classifieur qu'on corrige mais la TAXONOMIE
 (clés ambiguës) — d'où `cles_litigieuses`, qui dit QUELLES clés divergent."""
+import io
+
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment
 from pydantic import BaseModel, Field
@@ -223,7 +225,17 @@ def _lignes_corrigees(path):
 
     Rend des tuples (humain: TropeClassification, ia: TropeClassification | None) — `ia`
     est None quand le livre n'a jamais été classé (statut_ia = NON CLASSÉ, cf. B2)."""
-    wb = load_workbook(str(path))
+    # On lit le fichier EN MÉMOIRE avant de le donner à openpyxl : passer un chemin lui fait
+    # garder une poignée que `close()` ne relâche pas (seul le ramasse-miettes le fait), et
+    # sous Windows le xlsx reste alors verrouillé — régénérer ou supprimer le set dans le
+    # même processus lève un PermissionError (WinError 32). Mesuré. Un set de validation
+    # fait quelques dizaines de lignes : le charger entièrement ne coûte rien.
+    with open(path, "rb") as f:
+        contenu = io.BytesIO(f.read())
+    return _lire_paires(load_workbook(contenu), path)
+
+
+def _lire_paires(wb, path):
     ws = wb["Validation"] if "Validation" in wb.sheetnames else wb.active
     version = _lire_taxonomy_version(wb)
     if not version:
