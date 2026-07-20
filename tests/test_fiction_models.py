@@ -1,4 +1,5 @@
-from models import FictionNiche, EnrichedBook, TropeClassification, FictionNicheReport
+from models import (AutocompleteProbe, AutocompleteSignal, FictionNiche, EnrichedBook,
+                    TropeClassification, FictionNicheReport)
 
 
 def test_fiction_niche_defauts():
@@ -32,3 +33,20 @@ def test_classification_et_report():
         books=[], classifications=[c], depth_score=0.4, openness_score=0.7,
         saturation_trio=0.2, autocomplete_score=0.5, demand_matrix="ouvert_valide")
     assert r.demand_matrix == "ouvert_valide" and r.classifications[0].asin == "B1"
+
+
+def test_probe_extras_exclut_l_echo():
+    p = AutocompleteProbe(requete="romance hockey",
+                          suggestions=["romance hockey", "romance hockey mm"])
+    assert p.echo is True
+    assert p.extras == ["romance hockey mm"]
+
+
+def test_probe_echo_insensible_casse_espaces():
+    p = AutocompleteProbe(requete=" Romance Hockey ", suggestions=["romance hockey"])
+    assert p.echo is True and p.extras == []
+
+
+def test_signal_libelle_lisible():
+    absent = AutocompleteSignal(niche_query="q", score=0.0)
+    assert "absent" in absent.libelle.lower()

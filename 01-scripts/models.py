@@ -124,6 +124,46 @@ class FictionNiche(BaseModel):
     query: str = ""                                     # requête naturelle dérivée
 
 
+class AutocompleteProbe(BaseModel):
+    """Une requête sondée. `echec`/`erreur` renseignés = la sonde n'a rien mesuré ;
+    ce n'est PAS la même chose que zéro suggestion (CLAUDE.md §10)."""
+    requete: str
+    suggestions: list[str] = Field(default_factory=list)
+    echec: bool = False
+    erreur: str | None = None
+
+    @staticmethod
+    def _norm(s: str) -> str:
+        return " ".join((s or "").split()).casefold()
+
+    @property
+    def echo(self) -> bool:
+        """Amazon renvoie souvent la requête elle-même : présence = le terme existe,
+        mais sans aucune expansion (signal faible, pas nul)."""
+        return any(self._norm(s) == self._norm(self.requete) for s in self.suggestions)
+
+    @property
+    def extras(self) -> list[str]:
+        """Suggestions autres que l'écho — la vraie mesure d'intérêt."""
+        n = self._norm(self.requete)
+        return [s for s in self.suggestions if self._norm(s) != n]
+
+
+class AutocompleteSignal(BaseModel):
+    """Soft signal M5. Le spike M0 §V3 est formel : ne gate JAMAIS seul."""
+    niche_query: str
+    score: float = 0.0                     # 0 / 0.5 / 1
+    probes: list[AutocompleteProbe] = Field(default_factory=list)
+    sous_genre_cherche: bool | None = None  # barreau 2 : None si non sondé
+    mesure: bool = True                     # False si la sonde du barreau 1 a échoué
+
+    @property
+    def libelle(self) -> str:
+        if not self.mesure:
+            return "non mesuré (sonde en échec)"
+        return {1.0: "expansions", 0.5: "écho seul"}.get(self.score, "absent")
+
+
 class EnrichedBook(BaseModel):
     """Un livre du rayon, enrichi via l'endpoint ASIN. Le BSR porte TOUJOURS son rayon :
     les rangs « Livres » et « Boutique Kindle » ne sont pas comparables, et un classement
