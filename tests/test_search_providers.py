@@ -136,6 +136,27 @@ def test_search_param_explicite_prime_sur_books_only():
     assert captured["body"][0]["search_param"] == "rh=n:205566725031"
 
 
+def test_product_raw_batch_apparie_par_asin_rendu_pas_par_position():
+    # task_post peut échoer les tâches dans un ordre différent de la requête postée ; la
+    # réponse fait écho à l'ASIN dans task["data"]["asin"]. zip(tasks, asins) suppose que
+    # l'ordre posté == l'ordre rendu -> mauvais payload sous le mauvais ASIN si inversé.
+    def fake_post(url, body):
+        tasks = [{"status_code": 20100, "id": f"T-{item['asin']}", "data": {"asin": item["asin"]}}
+                 for item in reversed(body)]           # ordre INVERSÉ vs la requête postée
+        return {"tasks": tasks}
+
+    def fake_get(url):
+        tid = url.rsplit("/", 1)[-1]
+        asin = tid.split("T-", 1)[1]
+        return {"tasks": [{"status_code": 20000, "result": [{"asin": asin, "items": []}]}]}
+
+    prov = DataForSEOProvider(login="l", password="p")
+    out = prov.product_raw_batch(["A1", "A2"], post_json=fake_post, get_json=fake_get,
+                                 poll_interval=0)
+    assert out["A1"]["asin"] == "A1"
+    assert out["A2"]["asin"] == "A2"
+
+
 def test_product_raw_batch_rend_les_payloads_bruts():
     def fake_post(url, body):
         return {"tasks": [{"status_code": 20100, "id": "T1"}]}

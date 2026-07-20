@@ -137,9 +137,16 @@ class DataForSEOProvider:
                  "language_code": self.language_code, "priority": self.priority} for a in asins]
         d = post_json(_ASIN_BASE + "/task_post", body)
         tasks = d.get("tasks") or []
-        pending: dict[str, str] = {}          # task_id -> asin (ordre de requête)
-        for t, a in zip(tasks, asins):
-            if t.get("status_code") in (20000, 20100) and t.get("id"):
+        pending: dict[str, str] = {}          # task_id -> asin
+        for i, t in enumerate(tasks):
+            if t.get("status_code") not in (20000, 20100) or not t.get("id"):
+                continue
+            # task_post fait écho à l'ASIN posté (task["data"]["asin"]) : s'y fier plutôt
+            # qu'à zip(tasks, asins), qui suppose à tort que l'API rend les tâches dans
+            # l'ordre posté (repli sur la position si l'écho est absent).
+            echo = (t.get("data") or {}).get("asin")
+            a = echo or (asins[i] if i < len(asins) else None)
+            if a:
                 pending[t["id"]] = a
         out: dict = {a: None for a in asins}
         for _ in range(max_polls):
