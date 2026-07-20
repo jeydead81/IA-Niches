@@ -85,6 +85,13 @@ def test_tool_use_force_et_cout_remonte():
     assert vus == [(100, 20, c.vu["model"])]
 
 
+def test_temperature_zero_pour_la_reproductibilite():
+    """Un instrument de mesure ne doit pas varier d'un run à l'autre."""
+    c = _Client({"livres": []})
+    classify_books(_livres(), "cosy_mystery", client=c)
+    assert c.vu["temperature"] == 0
+
+
 def test_meta_cles_ne_polluent_pas_les_observations():
     """Vu en live : le LLM a rendu littéralement « other » comme trope, et le mot a fini
     dans other[]. Une méta-clé du schéma n'est pas une observation — la garder ferait

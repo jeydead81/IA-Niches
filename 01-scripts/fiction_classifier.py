@@ -123,6 +123,7 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
     resp = client.messages.create(
         model=model,
         max_tokens=4000,
+        temperature=0,          # instrument de mesure : pas de variation d'un run à l'autre
         system=SYSTEM_PROMPT,
         tools=[{
             "name": "classer_livres",
