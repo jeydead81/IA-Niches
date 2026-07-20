@@ -193,6 +193,25 @@ def parse_asin_bsr(result: dict) -> BsrInfo | None:
                    subcategories=subs[:5], raw=bsr_val[:300])
 
 
+_BSR_RAYON = re.compile(r".*?(?:\ben\b|\bdans\s+la\b)\s+(.+?)\s*$", re.I | re.S)
+
+
+def parse_bsr_rank(raw) -> tuple[int | None, str | None, bool]:
+    """(rang, rayon, gratuit) depuis une chaîne BSR Amazon.
+
+    Le rang PRINCIPAL est dans la tête de chaîne (avant la 1re parenthèse) ; les
+    sous-catégories suivent et ne doivent jamais être prises pour le rayon.
+    « titres gratuits » = classement des gratuits, PAS un rang de ventes payantes."""
+    head = (raw or "").split("(")[0].strip()
+    if not head:
+        return None, None, False
+    gratuit = "gratuit" in head.lower()
+    m = _BSR_RAYON.match(head)
+    rayon = m.group(1).strip(" .,;:") if m else None
+    num = re.search(r"([\d][\d\s .]*)", head)
+    return (_bsr_to_int(num.group(1)) if num else None), rayon, gratuit
+
+
 _PROVIDERS = {"dataforseo": DataForSEOProvider}
 
 
