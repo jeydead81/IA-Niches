@@ -147,6 +147,26 @@ def _rempli(v) -> bool:
     return v is not None and str(v).strip() != ""
 
 
+# Formes usuelles acceptées pour est_roman_ok, des deux côtés. "x" seul (sans pendant) est
+# traité comme un marqueur négatif : l'usage principal de cette colonne est de flaguer un
+# jeu/cahier de coloriage à ÉCARTER, pas de confirmer un roman (déjà le défaut IA).
+_EST_ROMAN_VRAI = {"oui", "vrai", "true", "1", "o", "y"}
+_EST_ROMAN_FAUX = {"non", "faux", "false", "0", "n", "x"}
+
+
+def _parse_est_roman_ok(v):
+    """Rend (valeur, brut_si_non_reconnu). Une valeur non reconnue ("jeu", "pas un
+    roman"...) NE DOIT PAS deviner True par défaut — champ même qui sert à écarter les
+    jeux/cahiers de coloriage (CLAUDE.md §10 : pas de devinette). Elle est traitée comme
+    une colonne NON corrigée (valeur=None) et son texte brut est rendu pour signalement."""
+    normalise = str(v).strip().casefold()
+    if normalise in _EST_ROMAN_VRAI:
+        return True, None
+    if normalise in _EST_ROMAN_FAUX:
+        return False, None
+    return None, str(v).strip()
+
+
 def _normalise_cle(s: str) -> str:
     """Trim + casse + séparateurs : " Metier_Gourmand " et "metier-gourmand" doivent matcher
     la même clé de taxonomie "metier_gourmand" — sinon une simple différence de saisie se
@@ -231,12 +251,13 @@ def load_corrections(path) -> list[TropeClassification]:
         elif _rempli(decor_ia_brut):
             decor = str(decor_ia_brut).strip()
 
+        est_roman = None
         if _rempli(est_roman_ok):
-            est_roman = str(est_roman_ok).strip().lower() not in ("false", "faux", "0", "non")
-        elif isinstance(est_roman_ia_brut, bool):
-            est_roman = est_roman_ia_brut
-        else:
-            est_roman = True            # pas de correction, pas d'IA exploitable -> défaut neutre
+            est_roman, non_reconnu = _parse_est_roman_ok(est_roman_ok)
+            if non_reconnu is not None:
+                fautes.append(f"est_roman_ok:{non_reconnu}")   # signalé, pas deviné
+        if est_roman is None:           # vide OU non reconnu -> retombe sur l'IA de la ligne
+            est_roman = est_roman_ia_brut if isinstance(est_roman_ia_brut, bool) else True
 
         out.append(TropeClassification(
             asin=row[idx["asin"]],

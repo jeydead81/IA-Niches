@@ -209,6 +209,39 @@ def test_notes_seule_ne_vaut_pas_correction(tmp_path):
     assert load_corrections(p) == []
 
 
+def test_est_roman_ok_reconnait_les_formes_negatives_usuelles(tmp_path):
+    """Avant le correctif, seule la forme exacte "non" (parmi false/faux/0/non) était
+    reconnue : "n" (paire o/n) tombait dans le else -> True, sur le champ même qui sert à
+    écarter les jeux et cahiers de coloriage."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", est_roman=True)]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "est_roman_ok")).value = "n"
+    wb.save(str(p))
+    out = load_corrections(p)
+    assert out[0].est_roman is False
+
+
+def test_est_roman_ok_valeur_libre_non_reconnue_retombe_sur_l_ia_et_est_signalee(tmp_path):
+    """Une valeur libre non reconnue ("jeu", "pas un roman"...) ne doit pas s'inverser en
+    True par défaut. Elle doit être traitée comme une colonne NON corrigée (retombe sur
+    l'IA de la même ligne) et être signalée plutôt que devinée en silence."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", est_roman=False)]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "est_roman_ok")).value = "jeu"
+    wb.save(str(p))
+    out = load_corrections(p)
+    assert out[0].est_roman is False        # retombe sur l'IA (False), pas un True deviné
+    assert any("jeu" in f for f in out[0].fautes_saisie)
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]
