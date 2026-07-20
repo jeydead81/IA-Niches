@@ -153,7 +153,13 @@ class EnrichedBook(BaseModel):
         return bool((self.serie_total or 0) > 1 or self.series_hint)
 
     def est_payant_dans(self, rayon_vise: str) -> bool:
-        """Le BSR est-il exploitable pour le scoring de ce rayon ?"""
+        """Le BSR est-il exploitable pour le scoring de ce rayon ?
+
+        `rayon_vise` attend le LIBELLÉ AMAZON ("Boutique Kindle" | "Livres"), le même
+        vocabulaire que `bsr_rayon` — PAS le paramètre interne FictionNiche.rayon
+        ("kindle"/"papier"). Obtenir ce libellé via `fiction_taxonomy.label_rayon()` ;
+        passer "kindle"/"papier" tel quel ne matche jamais rien et fait déclarer la
+        niche morte pour TOUS les livres (piège M5)."""
         return bool(self.bsr) and not self.bsr_gratuit and self.bsr_rayon == rayon_vise
 
 

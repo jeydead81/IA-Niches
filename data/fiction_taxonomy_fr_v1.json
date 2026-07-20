@@ -3,6 +3,7 @@
   "marketplace": "fr",
   "rayon_defaut": "kindle",
   "filtres_rayon": { "kindle": "i=digital-text", "papier": "i=stripbooks" },
+  "labels_rayon": { "kindle": "Boutique Kindle", "papier": "Livres" },
   "sous_genres": {
     "cosy_mystery": {
       "label": "Cosy mystery",

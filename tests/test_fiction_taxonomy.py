@@ -1,5 +1,6 @@
 import pytest
-from fiction_taxonomy import load_taxonomy, sous_genre, node_for, search_param_for, valid_keys
+from fiction_taxonomy import (load_taxonomy, sous_genre, node_for, search_param_for,
+                              valid_keys, label_rayon)
 
 
 def test_load_and_shape():
@@ -35,3 +36,16 @@ def test_valid_keys_contraint_le_classifieur():
 def test_sous_genre_inconnu_leve():
     with pytest.raises(KeyError):
         sous_genre("space_opera")
+
+
+def test_label_rayon_libelle_amazon():
+    # FictionNiche.rayon vaut "kindle"/"papier" mais EnrichedBook.bsr_rayon porte le
+    # libellé Amazon ("Boutique Kindle"/"Livres") : un appelant qui passerait "kindle" tel
+    # quel à est_payant_dans() n'obtiendrait jamais de match. label_rayon() fait le pont.
+    assert label_rayon("kindle") == "Boutique Kindle"
+    assert label_rayon("papier") == "Livres"
+
+
+def test_label_rayon_inconnu_leve():
+    with pytest.raises(ValueError):
+        label_rayon("audio")
