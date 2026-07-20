@@ -140,6 +140,24 @@ def test_parse_bsr_reconnait_aussi_la_cle_anglaise_best_sellers_rank():
     assert b.bsr_subcats == [{"rang": 9, "categorie": "Romans"}]
 
 
+def test_blurb_extrait_des_payloads_reels():
+    b = parse_enriched_book(_PRINT["1923235036"])
+    assert b.blurb and len(b.blurb) > 200
+    assert "Poppy" in b.blurb            # contenu réel, pas un placeholder
+
+
+def test_blurb_couverture_totale_sur_la_fixture():
+    """M0 mesure 8/8 : si ça tombe, l'entrée du classifieur n'est plus sûre."""
+    avec = [a for a in _PRINT if (parse_enriched_book(_PRINT[a]) or EnrichedBook(asin="x", title="")).blurb]
+    assert len(avec) == len(_PRINT)
+
+
+def test_blurb_absent_ne_leve_pas():
+    b = parse_enriched_book({"asin": "X", "items": [{"type": "amazon_product_info",
+                                                    "title": "T", "description": None}]})
+    assert b is not None and b.blurb is None
+
+
 def test_series_hint_notation_t_point_la_plus_courante_sur_amazon_fr():
     # « t. 1 » (avec point) est la notation la plus fréquente sur amazon.fr ; l'ancienne
     # regex (\bvol\.?\s*\d+|\bt\s*\d+) la ratait car elle exigeait "vol" ou "t" collé aux

@@ -201,6 +201,7 @@ class EnrichedBook(BaseModel):
     serie_total: int | None = None
     series_hint: bool = False                           # fallback heuristique
     serp_position: int = 0
+    blurb: str | None = None  # items[0].description — entrée du classifieur M4 (100 % de couverture mesurée au spike)
 
     @property
     def est_serie(self) -> bool:
@@ -241,6 +242,8 @@ class TropeClassification(BaseModel):
     decor: str | None = None
     other: list[str] = Field(default_factory=list)      # hors taxo -> fait évoluer la taxo
     confidence: float = 0.0
+    est_roman: bool = True          # False = jeu, coloriage, cahier… -> hors scoring
+    hors_sujet: str = ""            # pourquoi, quand est_roman est False
 
 
 class FictionNicheReport(BaseModel):

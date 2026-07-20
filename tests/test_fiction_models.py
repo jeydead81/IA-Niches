@@ -38,6 +38,12 @@ def test_classification_et_report():
     assert r.autocomplete_score == 0.5
 
 
+def test_classification_ecarte_les_non_romans():
+    c = TropeClassification(asin="A", taxonomy_version="fr_v1", est_roman=False,
+                            hors_sujet="jeu de société, pas un roman")
+    assert c.est_roman is False and "jeu" in c.hors_sujet
+
+
 def test_probe_extras_exclut_l_echo():
     p = AutocompleteProbe(requete="romance hockey",
                           suggestions=["romance hockey", "romance hockey mm"])

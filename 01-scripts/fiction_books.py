@@ -127,6 +127,7 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
             serie_total=total,
             series_hint=_series_hint_from_title(title),
             serp_position=serp_position,
+            blurb=_text(item.get("description")),
         )
     except ValidationError:
         # docstring : "None si le payload est inexploitable" -> un livre atypique ne doit
