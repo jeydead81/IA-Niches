@@ -157,6 +157,20 @@ class EnrichedBook(BaseModel):
         return bool(self.bsr) and not self.bsr_gratuit and self.bsr_rayon == rayon_vise
 
 
+class FictionShelf(BaseModel):
+    """Rayon reconstitué d'une niche fiction. Porte les compteurs d'échec : sans eux, un
+    rayon amputé en silence passerait pour une niche déserte (CLAUDE.md §10)."""
+    niche: FictionNiche
+    search_param: str
+    books: list[EnrichedBook] = Field(default_factory=list)
+    asins_demandes: int = 0
+    n_echecs: int = 0
+
+    @property
+    def complet(self) -> bool:
+        return self.n_echecs == 0
+
+
 class TropeClassification(BaseModel):
     """Classification sémantique d'un blurb, contrainte à la taxonomie."""
     asin: str

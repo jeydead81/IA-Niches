@@ -3,7 +3,7 @@ SERP contrainte au browse node (ou à la requête si le sous-genre n'a pas de ra
 puis enrichissement BATCHÉ des n_top premiers ASIN, avec cache inter-runs et coût mesuré."""
 from fiction_books import parse_enriched_book
 from fiction_taxonomy import node_for, search_param_for
-from models import EnrichedBook, FictionNiche
+from models import EnrichedBook, FictionNiche, FictionShelf
 
 BOOK_TTL_S = 7 * 24 * 3600
 
@@ -16,8 +16,12 @@ def search_param_for_niche(niche: FictionNiche, version: str = "fr_v1") -> str:
 
 
 def fetch_fiction_shelf(niche: FictionNiche, provider, n_top: int = 20, depth: int = 30,
-                        cache=None, cost=None, version: str = "fr_v1") -> list[EnrichedBook]:
-    """SERP contrainte -> n_top premiers ASIN -> EnrichedBook (cache + coût)."""
+                        cache=None, cost=None, version: str = "fr_v1",
+                        progress=None) -> FictionShelf:
+    """SERP contrainte -> n_top premiers ASIN (dédupliqués) -> EnrichedBook (cache + coût).
+    Rend un FictionShelf qui porte asins_demandes/n_echecs : un ASIN qui ne s'enrichit pas
+    est COMPTÉ, jamais droppé en silence — un rayon amputé se lirait en aval comme « niche
+    déserte = place à prendre », faux signal interdit par CLAUDE.md §10."""
     sp = search_param_for_niche(niche, version)
     sr = provider.search(niche.query, depth=depth, search_param=sp)
     if cost is not None:
@@ -54,4 +58,10 @@ def fetch_fiction_shelf(niche: FictionNiche, provider, n_top: int = 20, depth: i
         if b is not None:
             b.serp_position = i          # la position dépend du run, pas du cache
             out.append(b)
-    return out
+
+    n_echecs = len(asins) - len(out)
+    if n_echecs and progress:
+        progress(f"⚠ {n_echecs}/{len(asins)} ASIN non enrichis (payload absent ou "
+                 f"inexploitable) — rayon incomplet, ne pas lire comme une niche déserte.")
+    return FictionShelf(niche=niche, search_param=sp, books=out,
+                        asins_demandes=len(asins), n_echecs=n_echecs)
