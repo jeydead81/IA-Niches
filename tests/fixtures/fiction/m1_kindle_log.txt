@@ -1,0 +1,92 @@
+=== 1) recherches batchées avec search_param=i=digital-text (rayon Kindle) ===
+  6 tâches créées
+  6 SERP récupérées
+
+  ▸ dark_romance (16 organiques)
+      B0H8BL764N | La Révolte de l'Omega: Romance Dark Omegaverse de Hocke | prix None
+      B0GK1Q5RJX | Black Sword, tome 1 : Belle et sa bête (dark romance) | prix None
+      B0DQGBY443 | UNHOLY DEVOTION | prix None
+      B0C7R1SH7N | Dark Romance | prix 6.99
+
+  ▸ thriller_polar (16 organiques)
+      B0GX6GYS67 | Une épouse digne de confiance (Un thriller psychologiqu | prix None
+      B0G1KT935P | Vacances en famille: Un thriller psychologique captivan | prix None
+      B0G1YGV1M6 | L'Homme que j'ai épousé: Un thriller psychologique capt | prix None
+      B0FF9LW2MT | Le Chalet enneigé: Un thriller psychologique complèteme | prix None
+
+  ▸ romantasy (16 organiques)
+      B0GGJF3QL7 | Le dernier dragon: One shot de romantasy | prix None
+      B0GX7PWD5P | De glace et de feu: Une romantasy avec des dragons et d | prix None
+      B0GQ4JBN59 | Demetra: romantasy gothique (Sorcières Maudites t. 1) | prix None
+      B0F9ZGRHTS | Le prince sans épouse: Romantasy (Olympiaque t.1) | prix None
+
+  ▸ cosy_mystery (16 organiques)
+      B0FV62V1MD | Mort d'un mousquetaire: Un cosy mystery pétillant teint | prix None
+      B0H7JKN6D5 | En eaux troubles: Un cosy mystery sur les îles Scilly ( | prix 4.99
+      B0GH59RQPG | La Faucheuse stagiaire: Un cosy mystery paranormal plei | prix None
+      B0GY8BX1QQ | Mort sur les rochers: Un cosy mystery britannique (Les  | prix None
+
+  ▸ feel_good (16 organiques)
+      B0H18G9WMG | Un été pour me retrouver: Roman feel-good sur le change | prix None
+      B0FQ5Q9CKR | Chez Marguerite : Un roman feel-good tendre et lumineux | prix None
+      B0H29FTCB8 | UN ÉTÉ SANS CHICHI ! Un roman feel-good pétillant sous  | prix None
+      B0G13X59VN | La disparue des Lofoten: Un roman feel-good à lire sous | prix None
+
+  ▸ romance_contemporaine (16 organiques)
+      B0H9GK1GZ3 | Les Jumeaux Secrets du Mafieux Italien: Une Romance de  | prix None
+      B0H99TD19Y | Encore un mètre: Une romance MM contemporaine slow burn | prix None
+      B0H9B839VT | Sa chatonne soumise | prix None
+      B0H9CRWMX3 | Sweet Harbor: Romance lesbienne — Small-town, friends-t | prix None
+
+=== 2) 12 ASIN batchés ===
+  12 payloads récupérés
+
+=== 3) NODES KINDLE PAR SOUS-GENRE + CHAÎNES BSR ===
+
+  ▸ dark_romance
+     B0H8BL764N | La Révolte de l'Omega: Romance Dark Omegaverse de Hockey (Bé | prix None | série []
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Romance et littérature sentimentale(894269031) > Paranormal(89265514031)
+       BSR   : 'n°73 des titres gratuits dans la Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  1 en Livres éle'
+     B0GK1Q5RJX | Black Sword, tome 1 : Belle et sa bête (dark romance) | prix 5.99 | série ['Livre 1 sur 1']
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Romance et littérature sentimentale(894269031) > Romance à suspense(85904755031)
+       BSR   : '20 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  4 en Romance à suspense (Livres)\n 4 en Rom'
+
+  ▸ thriller_polar
+     B0GX6GYS67 | Une épouse digne de confiance (Un thriller psychologique Emi | prix None | série ['Livre 1 sur 5']
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Policier, mystère et suspense(895004031) > Roman policier(205566719031) > Détectives féminins(205566723031)
+       BSR   : 'n°4 des titres gratuits dans la Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  1 en Littérature'
+     B0G1KT935P | Vacances en famille: Un thriller psychologique captivant ave | prix 5.99 | série []
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Policier, mystère et suspense(895004031) > Thrillers et œuvres à suspense(205566720031) > Psychologique(205566731031)
+       BSR   : '53 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  7 en Livres électroniques de thrillers psy'
+
+  ▸ romantasy
+     B0GGJF3QL7 | Le dernier dragon: One shot de romantasy | prix 5.99 | série []
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > SF, fantasy et horreur(895157031) > Fantasy(895261031) > Épique(12363082031)
+       BSR   : '18 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  1 en Fantasy épique - ebooks\n 1 en Fantasy'
+     B0GX7PWD5P | De glace et de feu: Une romantasy avec des dragons et des ph | prix 5.99 | série []
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > SF, fantasy et horreur(895157031) > Fantasy(895261031) > Épique(12363082031)
+       BSR   : '171 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  5 en Fantasy épique - ebooks\n 10 en Fanta'
+
+  ▸ cosy_mystery
+     B0FV62V1MD | Mort d'un mousquetaire: Un cosy mystery pétillant teinté de  | prix 4.99 | série ['Livre 7 sur 7']
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Romance et littérature sentimentale(894269031) > Littérature sentimentale sur le thème de l’Histoire(85904753031) > Renaissance(85904764031)
+       BSR   : '589 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  1 en Livres électroniques de romance hist'
+     B0H7JKN6D5 | En eaux troubles: Un cosy mystery sur les îles Scilly (Les E | prix 4.99 | série ['Livre 5 sur 6']
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Policier, mystère et suspense(895004031) > Roman policier(205566719031) > Détectives amateurs(205566725031)
+       BSR   : '2\u202f968 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  15 en Romans policiers de détectives pr'
+
+  ▸ feel_good
+     B0H18G9WMG | Un été pour me retrouver: Roman feel-good sur le changement  | prix 2.99 | série []
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Santé et Bien-être(895405031) > Développement personnel(895437031) > Réussite personnelle(895447031)
+       BSR   : '2\u202f366 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  4 en Livres électroniques de self-help '
+     B0FQ5Q9CKR | Chez Marguerite : Un roman feel-good tendre et lumineux sur  | prix 3.49 | série []
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Littérature(894268031) > Correspondances et mémoires(894291031)
+       BSR   : '2\u202f114 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  2 en Correspondances et mémoires littér'
+
+  ▸ romance_contemporaine
+     B0H9GK1GZ3 | Les Jumeaux Secrets du Mafieux Italien: Une Romance de Secon | prix None | série ['Livre 1 sur 3']
+       rayon : Livres(301061) > Mystère et suspense(301134) > Romans policiers(9691469031) > Crimes et enquêtes à l'international(302078) > Italie(404858)
+       BSR   : 'n°21 des titres gratuits dans la Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  2 en Romance de'
+     B0H99TD19Y | Encore un mètre: Une romance MM contemporaine slow burn (Les | prix 14.9 | série ['Livre 4 sur 4']
+       rayon : Boutique Kindle(672108031) > Ebooks Kindle(695398031) > Romance et littérature sentimentale(894269031) > Médical(92063151031)
+       BSR   : '2\u202f688 en Boutique Kindle ( Voir les 100 premiers en Boutique Kindle )  6 en Fiction sur le handicap\n 24 en Rom'
