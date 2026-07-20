@@ -140,16 +140,23 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
 
     tropes_ok, decors_ok = valid_keys(sous_genre_cle, version)
     asins_envoyes = {b.asin for b in livres}
+    asins_vus: set[str] = set()          # un ASIN rendu deux fois -> une seule classification
     out: list[TropeClassification] = []
     for block in resp.content:
         if getattr(block, "type", None) != "tool_use":
             continue
         for l in ((block.input or {}).get("livres") or []):
+            if not isinstance(l, dict):
+                continue                    # entrée non-dict (LLM fautif) -> ignorée, pas de crash
             asin = l.get("asin")
-            if asin not in asins_envoyes:
-                continue                    # ASIN hors du lot -> le LLM ne peut pas inventer un livre
-            tropes_in = [t for t in dict.fromkeys(l.get("tropes") or [])
-                         if not _est_meta(t)]                        # dédup, ordre préservé
+            if asin not in asins_envoyes or asin in asins_vus:
+                continue                    # ASIN hors du lot, ou déjà classé une fois
+            asins_vus.add(asin)
+
+            tropes_brut = l.get("tropes") or []
+            if isinstance(tropes_brut, str):
+                tropes_brut = [tropes_brut]   # une chaîne EST un trope, pas une suite de lettres
+            tropes_in = [t for t in dict.fromkeys(tropes_brut) if not _est_meta(t)]
             decor_in = l.get("decor") or None
             if _est_meta(decor_in):
                 decor_in = None
@@ -158,14 +165,21 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
             if decor_in and decor_in not in decors_ok:
                 other.append(decor_in)
 
+            est_roman = l.get("est_roman", True)
+            if not isinstance(est_roman, bool):
+                est_roman = True            # None/type inattendu -> défaut, pas de crash du lot
+
+            # Filtre non-roman explicite du plan : « ne le classe pas en tropes ».
+            tropes_retenus = [t for t in tropes_in if t in tropes_ok] if est_roman else []
+
             out.append(TropeClassification(
                 asin=asin,
                 taxonomy_version=version,
-                tropes=[t for t in tropes_in if t in tropes_ok],
+                tropes=tropes_retenus,
                 decor=decor_in if decor_in in decors_ok else None,
                 other=other,
                 confidence=l.get("confidence") or 0.0,
-                est_roman=l.get("est_roman", True),
+                est_roman=est_roman,
                 hors_sujet=l.get("hors_sujet") or "",
             ))
     return out

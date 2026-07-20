@@ -109,3 +109,49 @@ def test_observation_hors_taxo_reelle_toujours_conservee():
     cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
         {"asin": "A1", "tropes": ["ecosse_highlands"], "decor": "corse"}]}))
     assert set(cl[0].other) == {"ecosse_highlands", "corse"}
+
+
+def test_tropes_rendu_en_chaine_nest_pas_decoupe_en_caracteres():
+    """Si le LLM rend `tropes` comme une chaîne au lieu d'une liste, dict.fromkeys(chaine)
+    itère caractère par caractère -> chaque lettre finirait comme un faux trope "hors
+    taxo" dans `other`. La chaîne doit être traitée comme UN SEUL trope, pas décomposée."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": "metier_gourmand"}]}))
+    assert cl[0].tropes == ["metier_gourmand"]
+    assert cl[0].other == []
+
+
+def test_entree_non_dict_est_ignoree_sans_lever():
+    """Une entrée de `livres` qui n'est pas un dict (ex. le LLM rend une chaîne au lieu
+    d'un objet) ne doit pas faire planter tout le lot avec un AttributeError."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        "ceci n'est pas un livre", {"asin": "A1", "tropes": ["metier_gourmand"]}]}))
+    assert len(cl) == 1 and cl[0].asin == "A1"
+
+
+def test_est_roman_none_ne_fait_pas_tomber_le_lot():
+    """est_roman: null (JSON) doit être traité comme le défaut (True), pas planter la
+    construction du modèle pydantic (bool strict) et perdre TOUT le lot."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": ["metier_gourmand"], "est_roman": None},
+        {"asin": "A2", "tropes": ["metier_gourmand"]}]}))
+    assert len(cl) == 2
+    assert cl[0].est_roman is True
+
+
+def test_asin_duplique_ne_produit_quune_classification():
+    """Un ASIN rendu deux fois par le LLM ne doit produire qu'UNE classification —
+    sinon agreement_report comparerait une paire mal formée (deux IA pour un humain)."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": ["metier_gourmand"]},
+        {"asin": "A1", "tropes": ["duo_improbable"]}]}))
+    assert len([c for c in cl if c.asin == "A1"]) == 1
+
+
+def test_est_roman_false_ne_conserve_pas_les_tropes():
+    """Le plan est explicite : quand est_roman=false, on « ne le classe pas en tropes »."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": ["metier_gourmand"], "est_roman": False,
+         "hors_sujet": "jeu"}]}))
+    assert cl[0].est_roman is False
+    assert cl[0].tropes == []
