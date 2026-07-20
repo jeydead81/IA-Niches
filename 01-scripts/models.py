@@ -2,7 +2,7 @@
 Le Plan 2 y ajoutera SearchResult, ScoredNiche."""
 import unicodedata
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BsrInfo(BaseModel):
@@ -245,16 +245,31 @@ class TropeClassification(BaseModel):
 
 class FictionNicheReport(BaseModel):
     """Rapport complet d'une niche fiction (couches 1 et 2)."""
+    # extra interdit : un champ mal nommé (ex. l'ancien `autocomplete_score`) serait
+    # sinon avalé en silence, laissant croire que la note est portée alors qu'elle est
+    # perdue. Mieux vaut lever à la construction.
+    model_config = ConfigDict(extra="forbid")
+
     niche: FictionNiche
     books: list[EnrichedBook] = Field(default_factory=list)
     classifications: list[TropeClassification] = Field(default_factory=list)
     depth_score: float = 0.0
     openness_score: float = 0.0
     saturation_trio: float = 0.0
-    autocomplete_score: float = 0.0
+    # Le SIGNAL entier, pas sa note : un float perdrait `mesure` et `sous_genre_cherche`,
+    # et 0.0 redeviendrait à la fois le défaut et le verdict « absent ».
+    autocomplete: AutocompleteSignal | None = None
     demand_matrix: str = ""
     series_share: float = 0.0
     price_band: list[float] = Field(default_factory=list)
     seasonality: str | None = None
     verdict: str = ""
     cost_run: float = 0.0
+
+    @property
+    def autocomplete_score(self) -> float | None:
+        """None tant que la sonde n'a rien mesuré — M5 doit trancher explicitement au
+        lieu de recevoir un 0.0 qui ressemble à un verdict."""
+        if self.autocomplete is None or not self.autocomplete.mesure:
+            return None
+        return self.autocomplete.score

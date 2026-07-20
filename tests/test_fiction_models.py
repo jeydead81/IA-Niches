@@ -31,8 +31,11 @@ def test_classification_et_report():
     r = FictionNicheReport(
         niche=FictionNiche(sous_genre="dark_romance", tropes=["mafia"], query="dark romance mafia"),
         books=[], classifications=[c], depth_score=0.4, openness_score=0.7,
-        saturation_trio=0.2, autocomplete_score=0.5, demand_matrix="ouvert_valide")
+        saturation_trio=0.2, demand_matrix="ouvert_valide",
+        autocomplete=AutocompleteSignal(niche_query="dark romance mafia", score=0.5,
+                                        mesure=True))
     assert r.demand_matrix == "ouvert_valide" and r.classifications[0].asin == "B1"
+    assert r.autocomplete_score == 0.5
 
 
 def test_probe_extras_exclut_l_echo():
@@ -77,3 +80,25 @@ def test_signal_non_sonde_ne_conclut_pas():
     v = AutocompleteSignal(niche_query="q")
     assert v.mesure is False
     assert "non mesuré" in v.libelle
+
+
+def test_report_ne_donne_pas_de_note_sans_mesure():
+    """Le rapport doit rendre None tant que la sonde n'a rien mesuré. Rendre 0.0 referait
+    exactement la confusion que la sonde s'emploie à éviter : défaut et verdict « absent »
+    deviennent le même chiffre."""
+    r = FictionNicheReport(niche=FictionNiche(sous_genre="feel_good", query="q"))
+    assert r.autocomplete_score is None
+
+    non_mesure = AutocompleteSignal(niche_query="q")          # mesure=False par défaut
+    r2 = FictionNicheReport(niche=FictionNiche(sous_genre="feel_good", query="q"),
+                            autocomplete=non_mesure)
+    assert r2.autocomplete_score is None
+
+
+def test_report_refuse_l_ancien_champ_au_lieu_de_l_ignorer():
+    """Passer l'ancien float doit LEVER, pas être avalé en silence : un champ ignoré
+    laisserait croire que la note est portée alors qu'elle est perdue."""
+    import pytest
+    with pytest.raises(Exception):
+        FictionNicheReport(niche=FictionNiche(sous_genre="feel_good", query="q"),
+                           autocomplete_score=0.5)
