@@ -194,6 +194,21 @@ def test_colonne_ok_vide_sur_ligne_corrigee_retombe_sur_l_ia(tmp_path):
     assert out[0].tropes == ["metier_gourmand"]      # pas effacé par la correction du décor
 
 
+def test_notes_seule_ne_vaut_pas_correction(tmp_path):
+    """Une note « pas sûr » ne doit pas fabriquer une étiquette humaine : seules les
+    colonnes *_ok comptent comme un avis (c'est déjà ce que dit la docstring de
+    load_corrections, mais le code comptait aussi `notes` dans la condition)."""
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+    ia = [TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["metier_gourmand"])]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    wb = load_workbook(str(p))
+    ws = wb["Validation"]
+    ws.cell(row=2, column=_col(ws, "notes")).value = "pas sûr"     # aucune colonne *_ok touchée
+    wb.save(str(p))
+    assert load_corrections(p) == []
+
+
 def test_export_puis_relecture_conserve_les_etiquettes(tmp_path):
     """Aller-retour Excel : ce que Baptiste corrige doit revenir tel quel."""
     livres = [EnrichedBook(asin="A1", title="Titre", blurb="Un blurb.")]

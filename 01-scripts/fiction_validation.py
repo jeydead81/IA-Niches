@@ -194,8 +194,9 @@ def load_corrections(path) -> list[TropeClassification]:
         tropes_ok = row[idx["tropes_ok"]]
         decor_ok = row[idx["decor_ok"]]
         est_roman_ok = row[idx["est_roman_ok"]]
-        notes = row[idx["notes"]]
-        if not (_rempli(tropes_ok) or _rempli(decor_ok) or _rempli(est_roman_ok) or _rempli(notes)):
+        # `notes` NE COMPTE PAS comme un avis : une note « pas sûr » ne doit pas fabriquer
+        # une étiquette humaine — seules les colonnes *_ok sont un avis (cf. docstring).
+        if not (_rempli(tropes_ok) or _rempli(decor_ok) or _rempli(est_roman_ok)):
             continue                    # rien de corrigé -> pas un avis, on ignore la ligne
 
         # Valeurs IA de la MÊME ligne : le mode d'emploi dit « corrige uniquement ce qui te
