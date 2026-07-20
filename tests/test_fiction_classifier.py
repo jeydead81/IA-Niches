@@ -83,3 +83,22 @@ def test_tool_use_force_et_cout_remonte():
                    on_usage=lambda i, o, m: vus.append((i, o, m)))
     assert c.vu["tool_choice"] == {"type": "tool", "name": "classer_livres"}
     assert vus == [(100, 20, c.vu["model"])]
+
+
+def test_meta_cles_ne_polluent_pas_les_observations():
+    """Vu en live : le LLM a rendu littéralement « other » comme trope, et le mot a fini
+    dans other[]. Une méta-clé du schéma n'est pas une observation — la garder ferait
+    croire à un trope hors taxonomie récurrent et fausserait l'évolution de la taxo."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": ["other", "metier_gourmand", "  ", "AUTRE"],
+         "decor": "other"}]}))
+    assert cl[0].tropes == ["metier_gourmand"]
+    assert cl[0].other == []
+    assert cl[0].decor is None
+
+
+def test_observation_hors_taxo_reelle_toujours_conservee():
+    """Le filtre ne doit pas emporter les vraies observations avec les méta-clés."""
+    cl = classify_books(_livres(), "cosy_mystery", client=_Client({"livres": [
+        {"asin": "A1", "tropes": ["ecosse_highlands"], "decor": "corse"}]}))
+    assert set(cl[0].other) == {"ecosse_highlands", "corse"}

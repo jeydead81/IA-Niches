@@ -14,6 +14,15 @@ from models import EnrichedBook, TropeClassification
 
 DEFAULT_MODEL = os.getenv("FICTION_CLASSIFIER_MODEL", "claude-sonnet-5")
 
+# Le LLM rend parfois littéralement le nom du champ (« other », « autre ») au lieu d'une
+# observation — vu en live. Une méta-clé du schéma n'est pas un trope : la conserver ferait
+# croire à un trope hors taxonomie récurrent et fausserait l'évolution de la taxonomie.
+_META_CLES = {"other", "autre", "none", "aucun", "n/a", "null"}
+
+
+def _est_meta(cle) -> bool:
+    return not isinstance(cle, str) or not cle.strip() or cle.strip().lower() in _META_CLES
+
 SYSTEM_PROMPT = """\
 Tu es un ÉDITEUR DE FICTION francophone qui LIT les quatrièmes de couverture d'un rayon \
 Amazon.fr pour savoir ce que chaque livre PROMET réellement au lecteur.
@@ -21,9 +30,27 @@ Amazon.fr pour savoir ce que chaque livre PROMET réellement au lecteur.
 MISSION : pour chaque quatrième de couverture fournie, extraire les tropes et le décor \
 qu'elle promet — pas ce que tu imaginerais toi-même, ce que CE texte précis annonce.
 
-RÈGLE : préfère ne PAS forcer une clé approchante quand aucune ne colle vraiment. Un `other` \
-honnête (tu notes ce que tu observes même hors liste) vaut mieux qu'un trope de la liste \
-plaqué de force sur un livre qui ne le promet pas.
+RÈGLE ABSOLUE — NE FORCE JAMAIS UNE CLÉ APPROCHANTE. Une clé de la liste plaquée de force \
+sur un livre qui ne la promet pas est bien PIRE qu'une case vide : elle fait croire à une \
+saturation qui n'existe pas. Si rien ne colle vraiment, laisse vide et note ce que tu \
+observes dans `other`.
+
+DÉCOR — il doit être ÉCRIT dans le texte, pas déduit d'une ambiance. Choisis la clé la plus \
+SPÉCIFIQUE qui corresponde vraiment au lieu nommé. Si le lieu du livre n'a aucune clé, \
+laisse `decor` VIDE et mets le lieu réel dans `other`. Exemples de fautes à ne pas commettre :
+- « cosy mystery écossais » -> l'Écosse n'a PAS de clé : decor vide, other = ["ecosse"]. \
+Surtout pas une autre région au hasard.
+- « l'île de Beauté » (la Corse) -> c'est une ÎLE : la clé « ile » existe, prends-la, \
+pas « montagne » parce qu'on y parle de maquis.
+
+TROPES — 3 au maximum, les plus SAILLANTS, ceux qui distinguent CE livre des autres du \
+rayon. N'empile pas les tropes constitutifs du genre (dans un cosy mystery, « enquêtrice \
+amatrice » et « petite communauté » sont presque toujours vrais : ne les cite que s'ils \
+sont vraiment mis en avant par le texte). Six tropes sur un livre = tu as décrit le genre, \
+pas le livre.
+
+`confidence` : ta confiance réelle dans CETTE lecture (0 à 1). Un blurb vague et \
+promotionnel qui ne dit rien de l'intrigue mérite une confiance basse, dis-le.
 
 FILTRE NON-ROMAN : certains produits d'un rayon romans ne sont pas des romans (jeu, cahier \
 de coloriage, guide pratique...). Si le texte ne promet pas une HISTOIRE à lire, marque \
@@ -120,8 +147,11 @@ def classify_books(books: list[EnrichedBook], sous_genre_cle: str, version: str 
             asin = l.get("asin")
             if asin not in asins_envoyes:
                 continue                    # ASIN hors du lot -> le LLM ne peut pas inventer un livre
-            tropes_in = list(dict.fromkeys(l.get("tropes") or []))   # dédup, ordre préservé
+            tropes_in = [t for t in dict.fromkeys(l.get("tropes") or [])
+                         if not _est_meta(t)]                        # dédup, ordre préservé
             decor_in = l.get("decor") or None
+            if _est_meta(decor_in):
+                decor_in = None
 
             other = [t for t in tropes_in if t not in tropes_ok]
             if decor_in and decor_in not in decors_ok:
