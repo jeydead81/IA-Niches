@@ -1,0 +1,77 @@
+{
+  "version": "fr_v1",
+  "marketplace": "fr",
+  "rayon_defaut": "kindle",
+  "filtres_rayon": { "kindle": "i=digital-text", "papier": "i=stripbooks" },
+  "sous_genres": {
+    "cosy_mystery": {
+      "label": "Cosy mystery",
+      "query_fr": "cosy mystery",
+      "node_kindle": "205566725031",
+      "node_papier": "9691472031",
+      "tropes": ["enquetrice_amatrice", "petite_communaute", "animal_compagnon",
+                 "metier_gourmand", "librairie_ou_fleuriste", "retour_au_village",
+                 "duo_improbable", "paranormal_leger", "huis_clos_festif"],
+      "decors": ["village_breton", "provence", "cote_normande", "cotswolds_uk",
+                 "ile", "montagne", "bord_de_mer", "petite_ville"]
+    },
+    "thriller_psychologique": {
+      "label": "Thriller psychologique",
+      "query_fr": "thriller psychologique",
+      "node_kindle": "205566731031",
+      "node_papier": "302068",
+      "tropes": ["narrateur_non_fiable", "secret_de_famille", "voisin_inquietant",
+                 "disparition", "amnesie", "manipulation_conjugale",
+                 "huis_clos_domestique", "double_vie"],
+      "decors": ["banlieue_pavillonnaire", "chalet_isole", "bord_de_mer_hors_saison",
+                 "grande_ville", "campagne_isolee", "maison_de_famille"]
+    },
+    "romantasy": {
+      "label": "Romantasy",
+      "query_fr": "romantasy",
+      "node_kindle": "895261031",
+      "node_papier": null,
+      "tropes": ["ennemis_to_lovers", "elu_prophetie", "dragons", "cour_feerique",
+                 "academie_magie", "lien_ame_soeur", "malediction", "mariage_force"],
+      "decors": ["royaume_feerique", "academie", "montagne_glace", "cite_antique",
+                 "foret_ancienne", "cour_royale"]
+    },
+    "romance_contemporaine": {
+      "label": "Romance contemporaine",
+      "query_fr": "romance contemporaine",
+      "node_kindle": "894269031",
+      "node_papier": null,
+      "tropes": ["seconde_chance", "faux_couple", "ennemis_to_lovers", "slow_burn",
+                 "frere_du_meilleur_ami", "small_town", "celebrite_anonyme",
+                 "coloc_forcee"],
+      "decors": ["small_town", "grande_ville", "bord_de_mer", "montagne",
+                 "milieu_sportif", "milieu_medical"]
+    },
+    "dark_romance": {
+      "label": "Dark romance",
+      "query_fr": "dark romance",
+      "node_kindle": "894269031",
+      "node_papier": null,
+      "tropes": ["mafia", "possessif_obsessionnel", "captivite", "vengeance",
+                 "mariage_arrange", "anti_heros", "triangle_toxique", "omegaverse"],
+      "decors": ["milieu_mafieux", "campus", "milieu_criminel", "huis_clos",
+                 "monde_underground"]
+    },
+    "feel_good": {
+      "label": "Feel-good",
+      "query_fr": "roman feel good",
+      "node_kindle": null,
+      "node_papier": null,
+      "tropes": ["reconstruction_apres_rupture", "changement_de_vie",
+                 "heritage_inattendu", "retour_aux_sources",
+                 "amitie_intergenerationnelle", "deuil_lumineux", "seconde_carriere"],
+      "decors": ["village", "bord_de_mer", "montagne", "librairie_cafe", "ferme", "ile"]
+    }
+  },
+  "saisonnalite": {
+    "noel": { "cles": ["huis_clos_festif", "montagne", "montagne_glace"],
+              "fenetre": "oct-dec", "risque_hors_saison": "fort" },
+    "ete": { "cles": ["bord_de_mer", "ile", "cote_normande"],
+             "fenetre": "mai-aout", "risque_hors_saison": "moyen" }
+  }
+}
