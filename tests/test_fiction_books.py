@@ -44,6 +44,15 @@ def test_parse_payload_vide():
     assert parse_enriched_book({}, serp_position=0) is None
 
 
+def test_parse_livre_1_sur_1_nest_pas_une_serie():
+    # B0GN4G414V porte la clé « Livre 1 sur 1 » : Amazon balise ainsi un tome UNIQUE
+    # (collection d'un seul titre), pas une série. serie_total=1 ne doit pas déclencher
+    # est_serie.
+    b = parse_enriched_book(_PRINT["B0GN4G414V"], serp_position=2)
+    assert b.serie_tome == 1 and b.serie_total == 1
+    assert b.est_serie is False
+
+
 def test_series_hint_notation_t_point_la_plus_courante_sur_amazon_fr():
     # « t. 1 » (avec point) est la notation la plus fréquente sur amazon.fr ; l'ancienne
     # regex (\bvol\.?\s*\d+|\bt\s*\d+) la ratait car elle exigeait "vol" ou "t" collé aux

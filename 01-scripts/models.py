@@ -148,7 +148,9 @@ class EnrichedBook(BaseModel):
 
     @property
     def est_serie(self) -> bool:
-        return bool(self.serie_total or self.series_hint)
+        # « Livre 1 sur 1 » = tome unique : Amazon le balise comme une collection d'un seul
+        # titre, ce n'est PAS une série (vu sur B0GN4G414V).
+        return bool((self.serie_total or 0) > 1 or self.series_hint)
 
     def est_payant_dans(self, rayon_vise: str) -> bool:
         """Le BSR est-il exploitable pour le scoring de ce rayon ?"""
