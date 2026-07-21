@@ -103,3 +103,26 @@ def test_cles_autorisees_couvre_tous_les_sous_genres_du_set(tmp_path):
     assert "metier_gourmand" in valeurs                          # cosy_mystery
     tropes_thriller, _ = valid_keys("thriller_psychologique")
     assert any(t in valeurs for t in tropes_thriller)             # thriller_psychologique
+
+
+def test_le_cout_llm_de_la_classification_est_compte(tmp_path):
+    """build_set imprime « coût réel du run » : sans brancher on_usage sur le CostTracker,
+    la moitié LLM de la dépense est absente et le chiffre affiché est faux (§10). Vu en
+    conditions réelles : 50 livres classés, llm_usd = 0 au rapport."""
+    from cost_tracker import CostTracker
+
+    livres = [EnrichedBook(asin="A1", title="T", blurb="b")]
+
+    def faux_shelf(niche, **kw):
+        return FictionShelf(niche=niche, search_param="x", books=livres, asins_demandes=1)
+
+    def faux_classify(bks, sg, on_usage=None, **kw):
+        if on_usage:                       # le classifieur réel appelle ce callback
+            on_usage(1000, 200, "claude-sonnet-5")
+        return [TropeClassification(asin=b.asin, taxonomy_version="fr_v1") for b in bks]
+
+    cost = CostTracker()
+    build_set([_niche("cosy mystery a")], tmp_path / "v.xlsx",
+              fetch_shelf=faux_shelf, classify=faux_classify, cost=cost)
+    assert cost.breakdown()["llm_tokens_in"] == 1000
+    assert cost.breakdown()["llm_usd"] > 0

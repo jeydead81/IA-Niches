@@ -49,7 +49,12 @@ def build_set(niches: list[FictionNiche], path, fetch_shelf=None, classify=None,
 
     classifications: list[TropeClassification] = []
     for sous_genre_cle, livres in groupes.items():
-        classifications.extend(classify(livres, sous_genre_cle, version=version) or [])
+        # on_usage branché sur le CostTracker : sans lui, le « coût réel du run » affiché
+        # plus bas omet toute la moitié LLM de la dépense et ment (§10).
+        classifications.extend(classify(
+            livres, sous_genre_cle, version=version,
+            on_usage=(lambda i, o, m: cost.add_llm(m, i, o)) if cost is not None else None,
+        ) or [])
 
     livres_finaux = list(vus.values())
     # « Clés autorisées » doit couvrir TOUS les sous-genres du set, pas seulement le premier
