@@ -8,9 +8,13 @@ import time
 from functools import lru_cache
 from pathlib import Path
 
-from models import BsrInfo, EnrichedBook, SearchResult
+from models import BsrInfo, EnrichedBook, SearchResult, TropeClassification
 
 BOOK_TTL_S = 7 * 24 * 3600     # 7 jours : rayon fiction, moins volatil que le BSR seul
+# Une classification de blurb est DÉTERMINISTE pour un (livre, taxonomie, modèle, prompt)
+# donné : le texte de la quatrième de couverture ne bouge quasiment jamais. TTL long — la
+# clé porte déjà tout ce qui peut invalider le résultat.
+CLASSIFICATION_TTL_S = 30 * 24 * 3600
 
 
 def _fields_fingerprint(model) -> str:
@@ -42,6 +46,19 @@ def _bsr_schema_tag() -> str:
     """Même empreinte que `_schema_tag`, mais pour BsrInfo (clé `bsr:`) — le piège était
     resté armé pour ce modèle-là aussi."""
     return _fields_fingerprint(BsrInfo)
+
+
+@lru_cache(maxsize=1)
+def _prompt_tag() -> str:
+    """Empreinte du prompt système du classifieur, injectée dans la clé de cache.
+
+    Le prompt a été durci en cours de route (le modèle inventait des décors) : sans cette
+    empreinte, le cache resservirait indéfiniment des étiquettes produites par l'ANCIENNE
+    consigne, et le durcissement n'aurait aucun effet sur les livres déjà vus. Même leçon
+    que `_schema_tag` — un compteur de version manuel s'oublie exactement au moment où il
+    compte, l'empreinte se met à jour toute seule."""
+    from fiction_classifier import SYSTEM_PROMPT
+    return hashlib.sha1(SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:8]
 
 
 @lru_cache(maxsize=1)
@@ -103,6 +120,22 @@ class Cache:
     def set_search(self, keyword: str, location: int, language: str,
                    result: SearchResult, ttl_s: float) -> None:
         self.set(self._search_key(keyword, location, language), result.model_dump(), ttl_s)
+
+    @staticmethod
+    def _classification_key(asin: str, version: str, model: str) -> str:
+        # taxonomie + modèle + prompt : les trois choses qui changent le résultat pour un
+        # même livre. En omettre une resservirait une étiquette produite autrement.
+        return f"clf:{version}:{model}:{_prompt_tag()}:{asin}"
+
+    def get_classification(self, asin: str, version: str,
+                           model: str) -> TropeClassification | None:
+        d = self.get(self._classification_key(asin, version, model))
+        return TropeClassification.model_validate(d) if d else None
+
+    def set_classification(self, asin: str, version: str, model: str,
+                           classification: TropeClassification, ttl_s: float) -> None:
+        self.set(self._classification_key(asin, version, model),
+                 classification.model_dump(), ttl_s)
 
     def get_book(self, asin: str, location: int) -> EnrichedBook | None:
         d = self.get(self._book_key(asin, location))

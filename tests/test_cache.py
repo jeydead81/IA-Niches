@@ -113,3 +113,23 @@ def test_search_amputee_sans_empreinte_serait_relue_comme_valide(tmp_path):
     c = Cache(tmp_path / "c.db")
     c.set("search:2250:fr_FR:tarot", {"keyword": "tarot"}, ttl_s=100)
     assert c.get_search("tarot", 2250, "fr_FR") is None
+
+
+def test_cache_de_classification_depend_du_modele_de_la_taxo_ET_du_prompt(tmp_path):
+    """Une classification est déterministe pour un (livre, taxonomie, modèle, prompt) donné :
+    la re-payer à chaque run est du gaspillage pur. Mais la clé doit dépendre du PROMPT
+    aussi — on l'a durci aujourd'hui même (décors inventés), et un cache qui l'ignorerait
+    resservirait des étiquettes produites par l'ancienne consigne. Même leçon que
+    `_schema_tag` : un compteur de version manuel s'oublie, une empreinte non."""
+    from cache import _prompt_tag
+    from models import TropeClassification
+
+    c = Cache(tmp_path / "c.db")
+    cl = TropeClassification(asin="A1", taxonomy_version="fr_v1", tropes=["mafia"])
+    c.set_classification("A1", "fr_v1", "claude-sonnet-5", cl, ttl_s=100)
+
+    assert c.get_classification("A1", "fr_v1", "claude-sonnet-5").tropes == ["mafia"]
+    assert c.get_classification("A1", "fr_v2", "claude-sonnet-5") is None      # autre taxo
+    assert c.get_classification("A1", "fr_v1", "claude-haiku-4-5") is None     # autre modèle
+    assert c.get_classification("A2", "fr_v1", "claude-sonnet-5") is None      # autre livre
+    assert len(_prompt_tag()) == 8                                            # empreinte courte

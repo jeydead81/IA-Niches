@@ -137,3 +137,36 @@ def test_progress_et_cout_remontent():
                       enrich_fn=_faux_enrich, classify=_faux_classify, probe=_faux_probe,
                       cost=cost, progress=msgs.append)
     assert msgs and cost is not None
+
+
+def test_les_classifications_deja_connues_ne_sont_pas_repayees(tmp_path):
+    """Une classification est déterministe : la re-payer à chaque run est du gaspillage.
+    Sur un sous-genre exploré plusieurs fois — le cas normal — les rayons se recouvrent
+    largement, et en SaaS tous les clients d'un même sous-genre repayaient les mêmes
+    livres."""
+    from cache import Cache
+    from models import TropeClassification
+
+    cache = Cache(tmp_path / "c.db")
+    cache.set_classification("PARTAGE", "fr_v1", "claude-sonnet-5",
+                             TropeClassification(asin="PARTAGE", taxonomy_version="fr_v1",
+                                                 tropes=["mafia"]),
+                             ttl_s=1000)
+    envoyes = {}
+
+    def faux_classify(livres, sg, **kw):
+        envoyes["asins"] = [b.asin for b in livres]
+        return [TropeClassification(asin=b.asin, taxonomy_version="fr_v1") for b in livres]
+
+    def faux_enrich(asins, **kw):
+        return {a: EnrichedBook(asin=a, title="T", blurb="b", bsr=3000,
+                                bsr_rayon="Boutique Kindle") for a in asins}
+
+    def faux_serp(niche, **kw):
+        return "rh=n:1", ["PARTAGE", "NEUF"]
+
+    rapports = run_fiction_scout("dark_romance", n_niches=1, ideate=_faux_ideate,
+                                 serp_fn=faux_serp, enrich_fn=faux_enrich,
+                                 classify=faux_classify, probe=_faux_probe, cache=cache)
+    assert envoyes["asins"] == ["NEUF"]          # PARTAGE servi par le cache, pas repayé
+    assert rapports                               # et le rapport dispose des DEUX étiquettes

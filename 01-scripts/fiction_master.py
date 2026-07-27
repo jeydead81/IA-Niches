@@ -18,8 +18,10 @@ import argparse
 
 from dotenv import load_dotenv
 
+from cache import CLASSIFICATION_TTL_S
 from cost_tracker import CostTracker
 from fiction_autocomplete import probe_niche as _probe_niche
+from fiction_classifier import DEFAULT_MODEL as _CLASSIFIER_MODEL
 from fiction_classifier import classify_books as _classify_books
 from fiction_ideator import generate_trios as _generate_trios
 from fiction_scoring import build_report
@@ -105,12 +107,33 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     # (par lots de LOT_MAX côté classify_books), pas un groupement par sous-genre comme
     # build_validation_set (qui, lui, mélange plusieurs sous-genres).
     livres_avec_blurb = {a: b for a, b in enriched.items() if b.blurb}
-    progress(f"Classification de {len(livres_avec_blurb)} quatrièmes de couverture…")
-    classifications_list = classify(list(livres_avec_blurb.values()), sous_genre_cle,
-                                    version=version, model=model,
-                                    on_usage=lambda i, o, m: cost.add_llm(m, i, o),
-                                    progress=progress)
-    classifications = {c.asin: c for c in classifications_list}
+
+    # Cache des classifications : une étiquette est DÉTERMINISTE pour un (livre, taxonomie,
+    # modèle, prompt) donné — la clé porte les quatre. Sans ça, explorer deux fois le même
+    # sous-genre (le cas normal) repaie les mêmes blurbs, et en SaaS chaque client repaie
+    # ceux de tous les autres. C'est le poste LLM dominant d'un run fiction.
+    modele_clf = model or _CLASSIFIER_MODEL
+    classifications: dict = {}
+    a_classer = []
+    for asin, livre in livres_avec_blurb.items():
+        connue = cache.get_classification(asin, version, modele_clf) if cache else None
+        if connue is not None:
+            classifications[asin] = connue
+        else:
+            a_classer.append(livre)
+
+    deja = len(classifications)
+    if deja:
+        progress(f"{deja} quatrième(s) de couverture déjà classée(s) — non repayée(s).")
+    if a_classer:
+        progress(f"Classification de {len(a_classer)} quatrièmes de couverture…")
+        for c in classify(a_classer, sous_genre_cle, version=version, model=model,
+                          on_usage=lambda i, o, m: cost.add_llm(m, i, o),
+                          progress=progress) or []:
+            classifications[c.asin] = c
+            if cache:
+                cache.set_classification(c.asin, version, modele_clf, c,
+                                         CLASSIFICATION_TTL_S)
 
     # E) Sonde autocomplete (gratuite, par niche) + reconstruction du rayon depuis la table
     # globale + F) scoring.
