@@ -198,3 +198,13 @@ def test_le_budget_de_poll_serp_vaut_celui_du_chemin_asin():
     budget_asin = (inspect.signature(DataForSEOProvider.product_raw_batch)
                    .parameters["max_polls"].default)
     assert budget_serp >= budget_asin
+
+
+def test_priorite_configurable_par_environnement(monkeypatch):
+    """La file « standard » coûte moitié prix (0,0015 $ vs 0,003 $) mais peut mettre ~45 min
+    quand priority tourne autour de 1-4 min. C'est un ARBITRAGE, donc un réglage — le défaut
+    reste priority pour ne pas dégrader l'usage interactif à l'insu de l'appelant."""
+    monkeypatch.setenv("DATAFORSEO_PRIORITY", "1")
+    assert DataForSEOProvider(login="l", password="p").priority == 1
+    monkeypatch.delenv("DATAFORSEO_PRIORITY")
+    assert DataForSEOProvider(login="l", password="p").priority == 2

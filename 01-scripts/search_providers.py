@@ -10,6 +10,7 @@ réponse observée en live. Les appels HTTP sont injectables (aucun réseau en u
 import os
 import re
 import time
+import warnings
 
 import requests
 from dotenv import load_dotenv
@@ -21,6 +22,26 @@ _ASIN_BASE = "https://api.dataforseo.com/v3/merchant/amazon/asin"
 DEFAULT_LOCATION = 2250       # France (location_code)
 DEFAULT_LANGUAGE = "fr_FR"    # "French (France)" — code validé en live (pas "fr")
 COST_PER_CALL_USD = {1: 0.0015, 2: 0.003}  # standard (~45 min) / priority (~1 min)
+
+
+def _resolve_priority(priority: int | None) -> int:
+    """Argument explicite > env DATAFORSEO_PRIORITY > défaut 2 (priority). Standard (1) coûte
+    moitié prix mais peut monter à ~45 min de file : un ARBITRAGE, donc un réglage — jamais un
+    défaut qui dégraderait l'usage interactif à l'insu de l'appelant (cf. plan SaaS S1)."""
+    if priority is not None:
+        return priority
+    raw = os.getenv("DATAFORSEO_PRIORITY")
+    if raw is None:
+        return 2
+    try:
+        val = int(raw)
+    except ValueError:
+        warnings.warn(f"DATAFORSEO_PRIORITY={raw!r} invalide (attendu 1 ou 2) — repli sur 2.")
+        return 2
+    if val not in (1, 2):
+        warnings.warn(f"DATAFORSEO_PRIORITY={val} hors plage (1 ou 2) — repli sur 2.")
+        return 2
+    return val
 
 
 def _to_float(x) -> float | None:
@@ -71,12 +92,12 @@ class DataForSEOProvider:
     name = "dataforseo"
 
     def __init__(self, login: str | None = None, password: str | None = None,
-                 priority: int = 2, location_code: int = DEFAULT_LOCATION,
+                 priority: int | None = None, location_code: int = DEFAULT_LOCATION,
                  language_code: str = DEFAULT_LANGUAGE):
         load_dotenv()
         self.auth = (login or os.getenv("DATAFORSEO_LOGIN", ""),
                      password or os.getenv("DATAFORSEO_PASSWORD", ""))
-        self.priority = priority
+        self.priority = _resolve_priority(priority)
         self.location_code = location_code
         self.language_code = language_code
 
