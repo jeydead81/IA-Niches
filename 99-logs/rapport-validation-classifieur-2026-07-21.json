@@ -1,0 +1,15 @@
+{
+  "n_livres": 35,
+  "n_accord": 35,
+  "taux": 1.0,
+  "porte_franchie": true,
+  "cles_litigieuses": {},
+  "desaccords": [],
+  "n_non_classes": 0,
+  "n_valides_tacitement": 35,
+  "lignes_relues_declarees": 35,
+  "livres_du_set": 50,
+  "modele": "claude-sonnet-5",
+  "taxonomie": "fr_v1",
+  "methode": "validation tacite declaree par Baptiste (35 lignes relues, 0 correction)"
+}

@@ -198,52 +198,104 @@
     </div>
   </header>
 
-  <div class="panel controls">
-    <form id="form">
-      <div class="field grow">
-        <label for="seed">Graine</label>
-        <input type="text" id="seed" placeholder="ex. ésotérisme, sommeil, stoïcisme…  (vide = à partir de rien)" autocomplete="off" />
-      </div>
-      <div class="field">
-        <label for="ideas">Idées IA</label>
-        <input type="number" id="ideas" value="10" min="4" max="30" />
-      </div>
-      <div class="field">
-        <label for="search">À analyser</label>
-        <input type="number" id="search" value="4" min="1" max="12" />
-      </div>
-      <button class="run" id="run" type="submit">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
-        <span id="run-label">Lancer le scout</span>
-      </button>
-    </form>
-    <p class="hint">« À analyser » = nb de niches passées à l'étape concurrence (payante DataForSEO, ~0,003 $/niche). Le reste est gratuit. Un run prend ~2-3 min.</p>
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab active" id="tab-nf" role="tab" aria-selected="true">Non-fiction</button>
+    <button type="button" class="tab" id="tab-fic" role="tab" aria-selected="false">Fiction</button>
   </div>
 
-  <div class="panel progress" id="progress">
-    <div class="bar"><span></span></div>
-    <ul class="steps" id="steps"></ul>
-  </div>
-
-  <div class="errbox" id="errbox"></div>
-
-  <section class="results panel" id="results" style="border:none;background:none;box-shadow:none">
-    <div class="rsum"><h2>Niches classées</h2><span id="rcount"></span></div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr>
-          <th>Score</th><th>Niche</th><th class="num">Demande</th><th class="num">Pénétration</th>
-          <th>BSR (meilleur / moy. 5)</th><th class="num">Concurrents</th><th class="num">Sponso écartés</th><th></th>
-        </tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
+  <div id="view-nf">
+    <div class="panel controls">
+      <form id="form">
+        <div class="field grow">
+          <label for="seed">Graine</label>
+          <input type="text" id="seed" placeholder="ex. ésotérisme, sommeil, stoïcisme…  (vide = à partir de rien)" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="ideas">Idées IA</label>
+          <input type="number" id="ideas" value="10" min="4" max="30" />
+        </div>
+        <div class="field">
+          <label for="search">À analyser</label>
+          <input type="number" id="search" value="4" min="1" max="12" />
+        </div>
+        <button class="run" id="run" type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
+          <span id="run-label">Lancer le scout</span>
+        </button>
+      </form>
+      <p class="hint">« À analyser » = nb de niches passées à l'étape concurrence (payante DataForSEO, ~0,003 $/niche). Le reste est gratuit. Un run prend ~2-3 min.</p>
     </div>
-    <div id="cost" class="cost" hidden></div>
-  </section>
 
-  <div class="panel empty" id="empty">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
-    <div>Entre une graine et lance le scout pour voir les niches classées.</div>
+    <div class="panel progress" id="progress">
+      <div class="bar"><span></span></div>
+      <ul class="steps" id="steps"></ul>
+    </div>
+
+    <div class="errbox" id="errbox"></div>
+
+    <section class="results panel" id="results" style="border:none;background:none;box-shadow:none">
+      <div class="rsum"><h2>Niches classées</h2><span id="rcount"></span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr>
+            <th>Score</th><th>Niche</th><th class="num">Demande</th><th class="num">Pénétration</th>
+            <th>BSR (meilleur / moy. 5)</th><th class="num">Concurrents</th><th class="num">Sponso écartés</th><th></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div id="cost" class="cost" hidden></div>
+    </section>
+
+    <div class="panel empty" id="empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
+      <div>Entre une graine et lance le scout pour voir les niches classées.</div>
+    </div>
+  </div>
+
+  <div id="view-fic" hidden>
+    <div class="panel controls">
+      <form id="form-fic">
+        <div class="field grow">
+          <label for="fic-sous-genre">Sous-genre</label>
+          <select id="fic-sous-genre"><option value="">Chargement…</option></select>
+        </div>
+        <div class="field">
+          <label for="fic-rayon">Rayon</label>
+          <select id="fic-rayon">
+            <option value="kindle">Kindle</option>
+            <option value="papier">Papier</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fic-n">Trios</label>
+          <input type="number" id="fic-n" value="8" min="3" max="15" />
+        </div>
+        <button class="run" id="run-fic" type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
+          <span id="run-fic-label">Lancer le scout fiction</span>
+        </button>
+      </form>
+      <p class="hint">Un trio = sous-genre × tropes × décor. La file ASIN est payée UNE fois pour tous les trios (~4-5 min quel que soit leur nombre).</p>
+    </div>
+
+    <div class="panel progress" id="progress-fic">
+      <div class="bar"><span></span></div>
+      <ul class="steps" id="steps-fic"></ul>
+    </div>
+
+    <div class="errbox" id="errbox-fic"></div>
+
+    <section class="results panel" id="results-fic" style="border:none;background:none;box-shadow:none">
+      <div class="rsum"><h2>Niches fiction classées</h2><span id="rcount-fic"></span></div>
+      <div class="fic-grid" id="grid-fic"></div>
+      <div id="cost-fic" class="cost" hidden></div>
+    </section>
+
+    <div class="panel empty" id="empty-fic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
+      <div>Choisis un sous-genre et lance le scout fiction pour voir les trios classés.</div>
+    </div>
   </div>
 
   <footer>IA-Niches · moteur local · données Amazon.fr</footer>
@@ -373,6 +425,141 @@ form.addEventListener('submit',e=>{
     runBtn.disabled=false; runLabel.textContent='Lancer le scout';
     runBtn.querySelector('.spin').outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
     if(!tbody.children.length && !errbox.classList.contains('on')){ empty.style.display='block'; }
+  });
+});
+
+// ================= Fiction =================
+const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>';
+
+const tabNf=$('#tab-nf'), tabFic=$('#tab-fic'), viewNf=$('#view-nf'), viewFic=$('#view-fic');
+function switchTab(which){
+  const nf = which==='nf';
+  tabNf.classList.toggle('active', nf); tabNf.setAttribute('aria-selected', nf);
+  tabFic.classList.toggle('active', !nf); tabFic.setAttribute('aria-selected', !nf);
+  viewNf.hidden = !nf; viewFic.hidden = nf;
+}
+tabNf.addEventListener('click', ()=>switchTab('nf'));
+tabFic.addEventListener('click', ()=>switchTab('fic'));
+
+const formFic=$('#form-fic'), runFicBtn=$('#run-fic'), runFicLabel=$('#run-fic-label'),
+      progressFic=$('#progress-fic'), stepsFic=$('#steps-fic'), resultsFic=$('#results-fic'),
+      gridFic=$('#grid-fic'), rcountFic=$('#rcount-fic'), emptyFic=$('#empty-fic'),
+      errboxFic=$('#errbox-fic'), sgSelect=$('#fic-sous-genre');
+let esFic=null;
+
+// Peuple le sélecteur depuis la taxonomie (source de vérité unique) — jamais une liste
+// dupliquée en dur ici, qui se périmerait à la moindre taxo v2.
+fetch('/api/fiction/sous-genres').then(r=>r.json()).then(list=>{
+  sgSelect.innerHTML = list.map(o=>`<option value="${esc(o.cle)}">${esc(o.label)}</option>`).join('')
+    || '<option value="">(aucun sous-genre)</option>';
+}).catch(()=>{ sgSelect.innerHTML='<option value="">(taxonomie indisponible)</option>'; });
+
+function addStepFic(msg){
+  stepsFic.querySelectorAll('li.cur').forEach(li=>{li.classList.remove('cur');li.querySelector('.dot').innerHTML=ICON_CHECK;});
+  const li=document.createElement('li'); li.className='cur';
+  li.innerHTML=`<span class="dot">${ICON_DOT}</span><span>${esc(msg)}</span>`;
+  stepsFic.appendChild(li); stepsFic.scrollTop=stepsFic.scrollHeight;
+}
+
+const DM_LABEL={pepite:['Pépite','g'], porteur_encombre:['Porteur encombré','a'],
+  mur_installe:['Mur installé','r'], desert:['Désert','a'], mort:['Mort','r']};
+const fmtPct = n => Math.round((n??0)*100)+'%';
+const fmtEur = n => n==null ? '—' : Number(n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+
+// Reprend exactement AutocompleteSignal.libelle (models.py) : le champ n'est PAS sérialisé
+// par le backend hors `autocomplete_score`, donc on retrouve le texte depuis mesure+score
+// plutôt que d'inventer un libellé qui pourrait diverger du moteur.
+function autocompleteLabel(r){
+  const ac=r.autocomplete;
+  if(!ac || !ac.mesure) return 'non mesuré (sonde en échec)';
+  if(r.autocomplete_score===1.0) return 'expansions';
+  if(r.autocomplete_score===0.5) return 'écho seul';
+  return 'absent';
+}
+
+// Le verdict (fiction_scoring._verdict) est UN texte où les réserves ("Rayon INCOMPLET…",
+// "Alerte […] fantôme", "N/M non classés") sont embarquées comme de simples phrases. On les
+// détecte pour les sortir en alertes visibles séparées — sinon un lecteur pressé ne voit que
+// le score et surinterprète (CLAUDE.md §10 : transparence des réserves obligatoire).
+const WARN_RE = /incomplet|alerte|non class/i;
+function verdictBlockFic(v){
+  const phrases = (v||'').split(/(?<=\.)\s+/).filter(Boolean);
+  const normal = phrases.filter(p=>!WARN_RE.test(p));
+  const warn = phrases.filter(p=>WARN_RE.test(p));
+  const normalHtml = normal.length ? `<p class="vrow">${esc(normal.join(' '))}</p>` : '';
+  const warnHtml = warn.map(p=>`<p class="fic-warn">${ICON_WARN}<span>${esc(p)}</span></p>`).join('');
+  return normalHtml + warnHtml;
+}
+
+function renderFic(rows){
+  gridFic.innerHTML='';
+  rcountFic.textContent = rows.length ? `${rows.length} trio(s) analysé(s) en profondeur` : 'aucun trio';
+  rows.forEach(r=>{
+    const [dmLabel, dmGrade] = DM_LABEL[r.demand_matrix] || [r.demand_matrix || '—', 'a'];
+    const satHigh = r.saturation_trio >= 0.6;
+    const n = r.niche || {};
+    const tropesHtml = (n.tropes||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('') || '<span class="mut">—</span>';
+    const acLabel = esc(autocompleteLabel(r));
+    const acVal = r.autocomplete_score==null
+      ? `<span class="mval mut">non mesuré</span>`
+      : `<span class="mval">${r.autocomplete_score.toFixed(1)} <span class="mut">(${acLabel})</span></span>`;
+    const [pmin,pmed,pmax] = (r.price_band && r.price_band.length===3) ? r.price_band : [null,null,null];
+    const card=document.createElement('div'); card.className='panel fic-card';
+    card.innerHTML=`
+      <div class="fic-head">
+        <div class="fic-trio">
+          <span class="fic-sg">${esc(n.sous_genre||'—')}</span>
+          <span class="fic-sep">×</span>${tropesHtml}
+          <span class="fic-sep">·</span><span class="chip">${esc(n.decor||'—')}</span>
+        </div>
+        <span class="dm ${dmGrade}">${esc(dmLabel)}</span>
+      </div>
+      <div class="fic-sat ${satHigh?'high':'low'}">
+        <span class="sval">${r.saturation_trio.toFixed(2)}</span>
+        <span class="stext"><strong>Saturation du trio</strong>combien de livres promettent déjà exactement ce trio — ${satHigh?'déjà largement couvert':'encore de la place'}</span>
+      </div>
+      <div class="fic-metrics">
+        <div class="metric"><span class="mlabel">Profondeur</span><span class="mval">${r.depth_score.toFixed(2)}</span></div>
+        <div class="metric"><span class="mlabel">Ouverture</span><span class="mval">${r.openness_score.toFixed(2)}</span></div>
+        <div class="metric"><span class="mlabel">Part séries</span><span class="mval">${fmtPct(r.series_share)}</span></div>
+        <div class="metric"><span class="mlabel">Prix min/méd/max</span><span class="mval">${fmtEur(pmin)} / ${fmtEur(pmed)} / ${fmtEur(pmax)}</span></div>
+        <div class="metric"><span class="mlabel">Sonde autocomplete</span>${acVal}</div>
+      </div>
+      <div class="fic-verdict">${verdictBlockFic(r.verdict)}</div>`;
+    gridFic.appendChild(card);
+  });
+  emptyFic.style.display='none'; resultsFic.classList.add('on');
+}
+
+formFic.addEventListener('submit', e=>{
+  e.preventDefault();
+  if(!sgSelect.value) return;
+  if(esFic) esFic.close();
+  stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
+  errboxFic.classList.remove('on'); errboxFic.textContent='';
+  $('#cost-fic').hidden=true; $('#cost-fic').textContent='';
+  emptyFic.style.display='none'; progressFic.classList.add('on');
+  runFicBtn.disabled=true; runFicLabel.textContent='Scout en cours…';
+  runFicBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
+
+  const q=new URLSearchParams({sous_genre:sgSelect.value, n_niches:$('#fic-n').value, rayon:$('#fic-rayon').value});
+  esFic=new EventSource('/api/fiction?'+q.toString());
+  esFic.addEventListener('progress',ev=>addStepFic(JSON.parse(ev.data)));
+  esFic.addEventListener('result',ev=>renderFic(JSON.parse(ev.data)));
+  esFic.addEventListener('cost',ev=>{
+    const c=JSON.parse(ev.data);
+    const el=$('#cost-fic');
+    el.hidden=false;
+    el.textContent=`Coût de ce run : ~$${c.usd.toFixed(4)} `
+      +`(DataForSEO $${c.dataforseo_usd.toFixed(4)} · LLM $${c.llm_usd.toFixed(4)} · `
+      +`${c.dataforseo_calls} appels)`;
+  });
+  esFic.addEventListener('error',ev=>{ if(ev.data){errboxFic.textContent='Erreur : '+JSON.parse(ev.data);errboxFic.classList.add('on');} });
+  esFic.addEventListener('done',()=>{
+    esFic.close(); progressFic.classList.remove('on');
+    runFicBtn.disabled=false; runFicLabel.textContent='Lancer le scout fiction';
+    runFicBtn.querySelector('.spin').outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
+    if(!gridFic.children.length && !errboxFic.classList.contains('on')){ emptyFic.style.display='block'; }
   });
 });
 </script>
