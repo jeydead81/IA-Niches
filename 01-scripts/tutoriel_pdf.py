@@ -1,5 +1,14 @@
-"""tutoriel_pdf.py — dossier de passation d'IA-Niches, à destination du développeur
-chargé de déployer l'outil.
+"""tutoriel_pdf.py — les deux documents PDF d'IA-Niches.
+
+- `build_tutoriel_pdf()`    : dossier de PASSATION, pour le développeur qui déploie.
+- `build_guide_utilisateur_pdf()` : GUIDE, pour l'auteur qui se sert de l'outil.
+
+Les deux partagent le même fond métier mais pas le même angle : le développeur a besoin
+de savoir qu'il ne doit pas colorer la saturation comme les autres jauges ; l'auteur a
+besoin de savoir qu'un chiffre élevé y est mauvais. Les textes sont donc distincts,
+volontairement, et vivent dans des constantes séparées.
+
+Dossier de passation à destination du développeur chargé de déployer l'outil.
 
 Contient ce qu'on ne peut pas deviner en lisant le code : la grille de coûts par type de
 demande (chiffres MESURÉS, pas estimés), ce qui change entre le poste local et un serveur,
@@ -269,6 +278,16 @@ def build_tutoriel_pdf(out_path) -> Path:
     _para(pdf, "L'analyse éditoriale n'est plus générée pendant le run : elle se demande "
                "sur la niche choisie. Les trois analyses pré-générées pesaient 78 % du "
                "coût d'un run pour des textes rarement lus.")
+    _para(pdf, "Les chiffres ci-dessus sont ceux d'un PREMIER passage. Les classifications "
+               "de quatrièmes de couverture sont mises en cache (clé : livre + taxonomie + "
+               "modèle + empreinte du prompt, TTL 30 jours) : un run répété sur un "
+               "sous-genre déjà exploré tombe à 0,139 $ pour 8 trios à 70 % de "
+               "recouvrement, soit -66 %. À l'échelle, c'est l'économie principale — deux "
+               "clients analysant le même rayon ne le paient qu'une fois.")
+    _para(pdf, "Piste écartée après mesure : tronquer les blurbs à 600 caractères économise "
+               "0,083 $ mais fait tomber l'accord du classifieur de 100 % à 60 % contre "
+               "l'étalon-or. Le modèle perd les tropes révélés en seconde moitié de texte. "
+               "Ne pas retenter sans remesurer.")
 
     _titre(pdf, "2. Variables d'environnement")
     _paires(pdf, ENV_VARS)
@@ -321,7 +340,197 @@ def build_tutoriel_pdf(out_path) -> Path:
     return out_path
 
 
+
+
+# ── Guide UTILISATEUR ────────────────────────────────────────────────────────────
+# Textes distincts de ceux du dossier développeur : même fond métier, autre angle. Le
+# développeur doit savoir qu'il ne doit pas colorer la saturation comme les autres
+# jauges ; l'auteur doit savoir qu'un chiffre élevé y est mauvais POUR LUI.
+
+U_GLOSSAIRE = [
+    ("BSR", "Le classement des ventes d'Amazon. Plus le nombre est PETIT, plus le livre "
+            "se vend. Sous 10 000 : très bon. Au-delà de 100 000 : faible. C'est la "
+            "preuve la plus solide que le sujet trouve des acheteurs."),
+    ("Rayon", "L'endroit d'Amazon où le livre est classé : boutique Kindle, ou livres "
+              "papier. Ne comparez jamais un classement Kindle à un classement papier, "
+              "ce sont deux listes différentes."),
+    ("Trio", "La recette d'un roman : un sous-genre, un ou deux thèmes, un décor. "
+             "Exemple : cosy mystery + enquêtrice amatrice + village breton."),
+    ("Trope", "Un ressort d'intrigue que le lecteur attend et recherche activement. "
+              "Exemple : « ennemis devenus amants », « mariage arrangé »."),
+    ("Profondeur", "Est-ce que les livres de ce rayon SE VENDENT ? Plus le chiffre est "
+                   "proche de 1, plus la réponse est oui."),
+    ("Ouverture", "Reste-t-il de la PLACE ? Proche de 1 : oui. Proche de 0 : les bonnes "
+                  "positions sont tenues par des livres bien installés."),
+    ("Saturation du trio", "La part des livres qui promettent DÉJÀ la même chose que "
+                           "vous. ATTENTION : c'est le seul chiffre de l'outil où un "
+                           "score ÉLEVÉ est une MAUVAISE nouvelle. 0,7 signifie que "
+                           "7 livres sur 10 racontent déjà votre idée."),
+    ("Part séries", "La proportion de livres qui font partie d'une série. Si elle est "
+                    "élevée, un roman isolé partira avec un handicap : les lecteurs de "
+                    "ce rayon cherchent des suites."),
+    ("Sonde autocomplete", "Est-ce que les lecteurs tapent vraiment ces mots dans la "
+                           "barre de recherche Amazon ? Un zéro n'est pas alarmant : "
+                           "beaucoup de rayons se parcourent au lieu de se chercher."),
+]
+
+U_VERDICTS = [
+    ("Pépite", _GREEN, "Ça se vend, il reste de la place, et personne ne raconte encore "
+                       "tout à fait ça. À creuser en priorité."),
+    ("Porteur mais encombré", _AMBER,
+     "Ça se vend et il reste de la place, mais beaucoup de livres promettent déjà la même "
+     "chose. Gardez le sous-genre, changez de thème ou de décor."),
+    ("Mur installé", _RED, "Ça se vend, mais les places sont tenues par des livres bien "
+                           "installés. Difficile d'entrer sans un angle très différent."),
+    ("Désert", _AMBER, "Il reste de la place, mais rien ne prouve que ces livres se "
+                       "vendent. Risqué."),
+    ("Sans intérêt", _RED, "Peu de ventes et peu de place. Passez à autre chose."),
+    ("Non mesuré", _GREY, "Impossible de conclure : le rayon était vide, ou tous les "
+                          "livres ont été écartés. Reformulez votre requête ou changez de "
+                          "rayon. Ce n'est PAS un mauvais résultat, c'est une ABSENCE de "
+                          "résultat — la niche peut très bien être excellente."),
+]
+
+U_ETAPES_NF = [
+    "Restez sur l'onglet « Non-fiction ».",
+    "Tapez un sujet dans « Graine » : sommeil, stoïcisme, jardinage... Vous pouvez aussi "
+    "laisser vide, l'IA proposera des sujets d'elle-même.",
+    "Laissez les deux nombres tels quels la première fois.",
+    "Cliquez sur « Lancer le scout » et patientez 2 à 3 minutes.",
+    "Lisez les niches de haut en bas : la meilleure est la première. Sur celle qui vous "
+    "intéresse, demandez l'analyse éditoriale : elle propose des titres et des angles.",
+]
+
+U_ETAPES_FIC = [
+    "Cliquez sur l'onglet « Fiction ».",
+    "Choisissez un sous-genre dans la liste (cosy mystery, dark romance...).",
+    "Choisissez le rayon : Kindle ou Papier.",
+    "Cliquez sur « Lancer le scout fiction ».",
+    "Comptez 10 à 15 minutes. VOUS POUVEZ FERMER LA PAGE : le travail continue tout seul "
+    "et vous le retrouverez à votre retour.",
+    "Lisez d'abord le badge de conclusion, puis la saturation du trio.",
+]
+
+U_PIEGES = [
+    ("Un score de saturation élevé est un MAUVAIS signe",
+     "C'est le seul chiffre inversé par rapport aux autres. 0,8 veut dire que 8 livres "
+     "sur 10 promettent déjà votre idée : mieux vaut changer d'angle."),
+    ("« Non mesuré » ne veut pas dire « mauvais »",
+     "Cela veut dire qu'aucun livre n'a pu être analysé. Reformulez votre requête plutôt "
+     "que d'abandonner la niche — elle n'a jamais été évaluée."),
+    ("Ne comparez jamais un BSR Kindle à un BSR papier",
+     "Un 2 000 en Kindle et un 2 000 en papier ne représentent pas du tout les mêmes "
+     "ventes. Restez dans un seul rayon pour comparer."),
+    ("Une part de séries élevée change votre stratégie",
+     "Si 7 livres sur 10 sont des tomes de séries, prévoyez une série plutôt qu'un roman "
+     "isolé, sinon vous partirez avec un handicap."),
+    ("L'outil dit ce qui se vend, pas ce que vous devez écrire",
+     "Un excellent score sur un sujet qui ne vous inspire pas donnera un mauvais livre. "
+     "Servez-vous en pour choisir entre plusieurs idées qui vous plaisent déjà."),
+]
+
+
+def _etapes(pdf: "_Pdf", etapes) -> None:
+    """Liste numérotée : le numéro en ambre, le texte qui suit peut déborder sur
+    plusieurs lignes sans casser l'alignement."""
+    W = pdf.w - 20
+    for i, e in enumerate(etapes, 1):
+        pdf.set_font("Helvetica", "B", 9.5)
+        pdf.set_text_color(*_AMBER)
+        pdf.cell(6, 4.8, _safe(f"{i}."))
+        pdf.set_font("Helvetica", "", 9.5)
+        pdf.set_text_color(*_DARK)
+        pdf.multi_cell(W - 6, 4.8, _safe(e), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(1.5)
+
+
+def build_guide_utilisateur_pdf(out_path) -> Path:
+    """Guide pour l'auteur qui SE SERT de l'outil (pas celui qui le déploie)."""
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf = _Pdf(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.add_page()
+    W = pdf.w - 20
+
+    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_text_color(*_BLUE)
+    pdf.cell(0, 12, _safe("IA-Niches"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_font("Helvetica", "", 12)
+    pdf.set_text_color(*_DARK)
+    pdf.cell(0, 7, _safe("Guide d'utilisation"), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(3)
+    pdf.set_fill_color(*_LIGHT)
+    pdf.set_font("Helvetica", "", 9.5)
+    pdf.multi_cell(W, 5, _safe(
+        "À quoi sert cet outil ? À savoir, AVANT d'écrire un livre, si le sujet que vous "
+        "visez se vend sur Amazon et s'il reste de la place pour un livre de plus.\n\n"
+        "L'IA propose des idées, Amazon les valide avec de vrais chiffres de ventes. "
+        "Vous gardez la décision."), fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(2)
+
+    _titre(pdf, "1. Les deux modes")
+    _para(pdf, "NON-FICTION : guides pratiques, développement personnel, histoire, santé. "
+               "Vous partez d'un sujet, l'outil cherche les angles porteurs.")
+    _para(pdf, "FICTION : romans. Vous partez d'un sous-genre et l'outil teste des "
+               "combinaisons de thèmes et de décors. Il fait quelque chose d'unique : il "
+               "LIT les quatrièmes de couverture de vos concurrents pour savoir ce qu'ils "
+               "promettent déjà aux lecteurs.")
+
+    _titre(pdf, "2. Lancer une analyse non-fiction")
+    _etapes(pdf, U_ETAPES_NF)
+
+    _titre(pdf, "3. Lancer une analyse fiction")
+    _etapes(pdf, U_ETAPES_FIC)
+
+    pdf.add_page()
+    _titre(pdf, "4. Comprendre les mots et les chiffres")
+    for terme, expl in U_GLOSSAIRE:
+        pdf.set_font("Helvetica", "B", 9.5)
+        pdf.set_text_color(*_BLUE)
+        pdf.cell(0, 5, _safe(terme), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*_DARK)
+        pdf.multi_cell(W, 4.4, _safe(expl), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(1.2)
+
+    pdf.add_page()
+    _titre(pdf, "5. Les six conclusions possibles, et quoi faire")
+    for nom, couleur, conseil in U_VERDICTS:
+        pdf.set_fill_color(*couleur)
+        pdf.rect(pdf.l_margin, pdf.get_y(), 2.2, 9, style="F")
+        pdf.set_x(pdf.l_margin + 4)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(*couleur)
+        pdf.cell(0, 4.6, _safe(nom), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_x(pdf.l_margin + 4)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*_DARK)
+        pdf.multi_cell(W - 4, 4.4, _safe(conseil), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(2)
+
+    _titre(pdf, "6. Les cinq pièges à connaître")
+    for titre, expl in U_PIEGES:
+        pdf.set_font("Helvetica", "B", 9.5)
+        pdf.set_text_color(*_AMBER)
+        pdf.multi_cell(W, 4.6, _safe(titre), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*_DARK)
+        pdf.multi_cell(W, 4.4, _safe(expl), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.ln(1.5)
+
+    _titre(pdf, "7. Combien de temps, combien ça coûte")
+    _para(pdf, "Une analyse non-fiction prend 2 à 3 minutes. Une analyse fiction prend "
+               "10 à 15 minutes, parce qu'Amazon met du temps à répondre. Vous pouvez "
+               "fermer la page : le travail continue et vous le retrouverez à votre retour.")
+    _para(pdf, "Le coût réel de chaque analyse s'affiche en fin de parcours, et votre "
+               "consommation du mois est rappelée en haut de la page. Cela se compte en "
+               "centimes.")
+
+    pdf.output(str(out_path))
+    return out_path
+
+
 if __name__ == "__main__":
-    import sys
-    cible = sys.argv[1] if len(sys.argv) > 1 else "IA-Niches - Dossier de passation.pdf"
-    print(f"Dossier genere : {build_tutoriel_pdf(cible)}")
+    print("Dossier passation :", build_tutoriel_pdf("IA-Niches - Dossier de passation.pdf"))
+    print("Guide utilisateur :", build_guide_utilisateur_pdf("IA-Niches - Guide utilisateur.pdf"))

@@ -59,3 +59,39 @@ def test_le_dossier_est_ecrit_en_francais_accentue():
 
 def test_aucun_caractere_ne_casse_le_pdf(tmp_path):
     build_tutoriel_pdf(tmp_path / "g2.pdf")     # ne doit pas lever
+
+
+def test_le_guide_utilisateur_se_genere(tmp_path):
+    from tutoriel_pdf import build_guide_utilisateur_pdf
+    p = build_guide_utilisateur_pdf(tmp_path / "guide.pdf")
+    assert p.exists() and p.stat().st_size > 5000 and p.read_bytes()[:4] == b"%PDF"
+
+
+def test_le_guide_utilisateur_previent_du_score_inverse():
+    """Le lecteur du guide n'est pas développeur : il ne déduira pas tout seul qu'un
+    chiffre élevé est mauvais alors que tous les autres disent l'inverse."""
+    from tutoriel_pdf import U_GLOSSAIRE, U_PIEGES
+    txt = (" ".join(e for _, e in U_GLOSSAIRE) + " ".join(e for _, e in U_PIEGES)).lower()
+    assert "seul chiffre" in txt and "mauvais" in txt
+
+
+def test_le_guide_utilisateur_distingue_non_mesure_de_mauvais():
+    from tutoriel_pdf import U_VERDICTS
+    c = next(c for nom, _, c in U_VERDICTS if nom.startswith("Non mesur"))
+    assert "absence" in c.lower() and "excellente" in c.lower()
+
+
+def test_les_deux_documents_ont_des_textes_DISTINCTS():
+    """Même fond métier, deux publics : recopier les textes du dossier développeur dans le
+    guide donnerait à l'auteur des consignes d'implémentation (label_rayon(), n_echecs...)
+    qui ne lui servent à rien."""
+    from tutoriel_pdf import GLOSSAIRE, U_GLOSSAIRE
+    dev = dict(GLOSSAIRE)["Rayon"]
+    usr = dict(U_GLOSSAIRE)["Rayon"]
+    assert dev != usr
+    assert "label_rayon" in dev and "label_rayon" not in usr
+
+
+def test_le_guide_dit_qu_on_peut_fermer_la_page():
+    from tutoriel_pdf import U_ETAPES_FIC
+    assert any("fermer la page" in e.lower() for e in U_ETAPES_FIC)
