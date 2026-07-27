@@ -121,3 +121,30 @@ def test_fetch_shelf_complet_quand_aucun_echec():
     shelf = fetch_fiction_shelf(_niche(), provider=prov, n_top=2, cost=None, cache=None)
     assert shelf.asins_demandes == 2 and shelf.n_echecs == 0
     assert shelf.complet is True
+
+
+class _ProvLarge(_Prov):
+    """SERP à 20 organiques distincts : sert à vérifier où se coupe le rayon par défaut."""
+
+    def search(self, keyword, depth=100, books_only=True, search_param=None):
+        self.seen["search_param"] = search_param
+        items = [SearchItem(title=f"T{i}", asin=f"B{i}") for i in range(20)]
+        return SearchResult(keyword=keyword, organic=items, sponsored=[])
+
+
+def test_fetch_shelf_n_top_vaut_12_par_defaut():
+    """Le signal concurrentiel est dans les 12 premiers ; les ASIN 13-20 coûtent 0,024 $
+    et n'apportent presque rien (perf(fiction): rayon top 12 par défaut)."""
+    cost = CostTracker()
+    shelf = fetch_fiction_shelf(_niche(), provider=_ProvLarge(), cost=cost, cache=None)
+    assert shelf.asins_demandes == 12
+    assert len(shelf.books) == 12
+
+
+def test_fetch_shelf_n_top_20_reste_possible():
+    """Le compromis (price_band/series_share plus bruités sur 12 livres) doit rester
+    contournable niche par niche via n_top=20."""
+    cost = CostTracker()
+    shelf = fetch_fiction_shelf(_niche(), provider=_ProvLarge(), n_top=20, cost=cost, cache=None)
+    assert shelf.asins_demandes == 20
+    assert len(shelf.books) == 20

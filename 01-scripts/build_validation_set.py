@@ -12,12 +12,18 @@ MAX_LIVRES = 50     # le set de validation M4-3 est dimensionné pour ~50 livres
 
 
 def build_set(niches: list[FictionNiche], path, fetch_shelf=None, classify=None,
-             n_top: int = 20, cache=None, cost=None, version: str = "fr_v1") -> int:
+             n_top: int = 12, cache=None, cost=None, version: str = "fr_v1") -> int:
     """Pour chaque niche : rayon -> livres. Déduplique par ASIN ENTRE niches (une même
     fiche vue sur deux trios ne compte, ni ne se fait classer, qu'une fois). Ignore les
     livres sans blurb (rien à classifier, cf. classify_books). Classe par lots groupés par
     sous-genre (la taxonomie autorisée dépend du sous-genre), exporte, affiche le coût
     réel. Rend le nombre de livres effectivement retenus dans le set.
+
+    n_top=12 par défaut, aligné sur `fetch_fiction_shelf` (-40% de coût ASIN) : le set de
+    validation M4-3 vise ~50 livres au global, pas la profondeur d'un seul rayon — les
+    ASIN 13-20 de chaque rayon coûtent plus qu'ils n'apportent de signal. `price_band` et
+    `series_share` (calculés en aval par M5) sont donc plus bruités par rayon ; passer
+    `n_top=20` si un rayon précis a besoin d'un échantillon plus large.
 
     Chaque rayon est ISOLÉ (try/except) : un rayon qui lève ne doit pas faire perdre les
     rayons DÉJÀ PAYÉS ni empêcher l'export de ce qui a été collecté. Plafond de MAX_LIVRES

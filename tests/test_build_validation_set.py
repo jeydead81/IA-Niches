@@ -105,6 +105,20 @@ def test_cles_autorisees_couvre_tous_les_sous_genres_du_set(tmp_path):
     assert any(t in valeurs for t in tropes_thriller)             # thriller_psychologique
 
 
+def test_n_top_par_defaut_vaut_12(tmp_path):
+    """build_set répercute le défaut économe de fetch_fiction_shelf (perf(fiction): rayon
+    top 12 par défaut) : un appelant qui ne précise rien ne doit pas repayer 20 ASIN."""
+    vus = []
+
+    def faux_shelf(niche, n_top=None, **kw):
+        vus.append(n_top)
+        return FictionShelf(niche=niche, search_param="x", books=[], asins_demandes=0)
+
+    build_set([_niche("cosy mystery a")], tmp_path / "v.xlsx", fetch_shelf=faux_shelf,
+             classify=lambda bks, sg, **kw: [])
+    assert vus == [12]
+
+
 def test_le_cout_llm_de_la_classification_est_compte(tmp_path):
     """build_set imprime « coût réel du run » : sans brancher on_usage sur le CostTracker,
     la moitié LLM de la dépense est absente et le chiffre affiché est faux (§10). Vu en
