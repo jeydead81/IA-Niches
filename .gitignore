@@ -45,3 +45,10 @@ desktop.ini
 
 # Cache SQLite DataForSEO (local)
 99-logs/df-cache.db
+
+# Bases SQLite d'exécution : état local, jamais du code. Le WAL et le SHM sont en plus
+# des fichiers transitoires que SQLite recrée — les versionner produit des conflits
+# permanents et peut committer des données d'usage réelles.
+99-logs/*.db
+99-logs/*.db-shm
+99-logs/*.db-wal

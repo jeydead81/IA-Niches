@@ -50,7 +50,7 @@ def test_run_scout_end_to_end_mocked():
     cost = CostTracker()
     res = run_scout(seed="ésotérisme", n_search=3, bsr_pause=0, use_cache=False, cost=cost,
                     ideate=_fake_ideate, validate=_fake_validate, provider=_FakeProvider(),
-                    fetch_bsr_fn=_fake_bsr, verdict_fn=_fake_verdict)
+                    fetch_bsr_fn=_fake_bsr, verdict_fn=_fake_verdict, n_verdict=1)
     assert len(res) == 1
     s = res[0]
     assert s.niche == "tarot" and s.bsr_best == 3000 and s.criteres_bsr_ok is True
@@ -72,3 +72,21 @@ def test_run_scout_no_validated_returns_empty():
     res = run_scout(seed="x", ideate=_fake_ideate, validate=validate_none,
                     provider=_FakeProvider(), fetch_bsr_fn=_fake_bsr, bsr_pause=0, use_cache=False)
     assert res == []
+
+
+def test_aucun_verdict_genere_par_defaut():
+    """Mesuré : un verdict coûte 0,0283 $ et 3 verdicts font 78 % du coût d'un run — payés
+    pour les 3 premières niches alors que l'utilisateur n'en lit qu'une. Le défaut est
+    donc 0 : le verdict se demande sur la niche choisie.
+
+    `assert res` d'ABORD : sans lui, ce test passerait à vide si le scout ne rendait
+    aucune niche — il ne prouverait alors rien du tout (piège vérifié en conditions
+    réelles : une première version de ce test validait un code jamais modifié)."""
+    appels = []
+    res = run_scout(seed="ésotérisme", n_search=3, bsr_pause=0, use_cache=False,
+                    ideate=_fake_ideate, validate=_fake_validate, provider=_FakeProvider(),
+                    fetch_bsr_fn=_fake_bsr,
+                    verdict_fn=lambda *a, **k: appels.append(1))
+    assert res, "le scout n'a rendu aucune niche : le test ne prouverait rien"
+    assert appels == []                      # aucun verdict payé sans qu'on l'ait demandé
+    assert all(r.verdict is None for r in res)

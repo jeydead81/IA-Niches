@@ -33,7 +33,7 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
               bsr_pause: float = 0.4, books_only: bool = True,
               use_cache: bool = True, cache_path: str | None = None,
               bsr_source: str | None = None, bsr_priority: int = 2,
-              n_verdict: int = 3, verdict_model: str | None = None, verdict_fn=None,
+              n_verdict: int = 0, verdict_model: str | None = None, verdict_fn=None,
               cost=None, ideate=None, validate=None, fetch_bsr_fn=None) -> list[ScoredNiche]:
     """Scout complet, 3 phases : ideator → validation demande → [search par niche] →
     [BSR batché global : dédup + cache] → scoring §4.1. Renvoie les niches triées.
@@ -107,7 +107,10 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
         pairs.append((score_niche(v, sr, bsrs), sr))
     pairs.sort(key=lambda p: p[0].global_score, reverse=True)
 
-    # Verdict IA (directeur éditorial), gaté au top-N pour maîtriser le coût
+    # Verdict IA (directeur éditorial) : n_verdict=0 PAR DÉFAUT. Mesuré à 0,0283 $ pièce
+    # (85 % en tokens de sortie), 3 verdicts pesaient 78 % du coût d'un run — payés pour
+    # les 3 premières niches alors que l'utilisateur n'en lit qu'une. Il se demande
+    # désormais sur la niche choisie (POST /api/verdict) ; n_verdict>0 les pré-génère.
     if n_verdict:
         for sc, sr in pairs[:n_verdict]:
             progress(f"Verdict éditorial : {sc.niche}…")
