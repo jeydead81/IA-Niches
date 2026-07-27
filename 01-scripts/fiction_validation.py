@@ -68,6 +68,10 @@ class AgreementReport(BaseModel):
     # deux côtés, décor None, est_roman par défaut identique) se lisaient comme un accord
     # parfait -> taux 1.0 sans qu'aucune vraie lecture n'ait été comparée.
     n_non_classes: int = 0
+    # Accords établis par VALIDATION TACITE (ligne déclarée relue, laissée telle quelle)
+    # plutôt que par correction explicite. Preuve plus faible qu'une correction ligne à
+    # ligne : la distinction doit rester lisible dans le rapport, pas se fondre dans le taux.
+    n_valides_tacitement: int = 0
 
 
 def agreement_report(paires: list[tuple[TropeClassification | None, TropeClassification]]
@@ -83,12 +87,15 @@ def agreement_report(paires: list[tuple[TropeClassification | None, TropeClassif
     n = len(paires)
     n_accord = 0
     n_non_classes = 0
+    n_tacites = 0
     desaccords: list[str] = []
     cles_litigieuses: dict[str, dict[str, int]] = {}
     for ia, humain in paires:
         if ia is None:
             n_non_classes += 1
             continue
+        if humain.valide_tacitement:
+            n_tacites += 1
         if ia.asin != humain.asin:
             raise ValueError(f"ASIN discordants dans la paire : ia={ia.asin!r} "
                              f"humain={humain.asin!r} — paire mal construite.")
@@ -107,7 +114,7 @@ def agreement_report(paires: list[tuple[TropeClassification | None, TropeClassif
     return AgreementReport(n_livres=n, n_accord=n_accord, taux=taux,
                            porte_franchie=taux >= _SEUIL_ACCORD,
                            cles_litigieuses=cles_litigieuses, desaccords=desaccords,
-                           n_non_classes=n_non_classes)
+                           n_non_classes=n_non_classes, n_valides_tacitement=n_tacites)
 
 
 def export_validation(livres: list[EnrichedBook], classifications: list[TropeClassification],
@@ -216,7 +223,7 @@ def _lire_taxonomy_version(wb) -> str:
     return (wb.properties.keywords or "").strip()
 
 
-def _lignes_corrigees(path):
+def _lignes_corrigees(path, lignes_relues=None):
     """Cœur commun à load_corrections (rend l'humain) et load_pairs (rend IA + humain) :
     parcourt les lignes effectivement corrigées par Baptiste (au moins une colonne *_ok
     remplie ; `notes` seule ne compte pas, cf. A4) et reconstruit la classification IA et la
@@ -232,10 +239,10 @@ def _lignes_corrigees(path):
     # fait quelques dizaines de lignes : le charger entièrement ne coûte rien.
     with open(path, "rb") as f:
         contenu = io.BytesIO(f.read())
-    return _lire_paires(load_workbook(contenu), path)
+    return _lire_paires(load_workbook(contenu), path, lignes_relues)
 
 
-def _lire_paires(wb, path):
+def _lire_paires(wb, path, lignes_relues=None):
     ws = wb["Validation"] if "Validation" in wb.sheetnames else wb.active
     version = _lire_taxonomy_version(wb)
     if not version:
@@ -258,7 +265,7 @@ def _lire_paires(wb, path):
             tropes_valides |= {_normalise_cle(t) for t in tv}
             decors_valides |= {_normalise_cle(d) for d in dv}
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
+    for n_ligne, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
         if row is None or not any(row):
             continue
         tropes_ok = row[idx["tropes_ok"]]
@@ -266,8 +273,14 @@ def _lire_paires(wb, path):
         est_roman_ok = row[idx["est_roman_ok"]]
         # `notes` NE COMPTE PAS comme un avis : une note « pas sûr » ne doit pas fabriquer
         # une étiquette humaine — seules les colonnes *_ok sont un avis (cf. docstring).
+        # Blanc sur une ligne DÉCLARÉE relue = accord validé (le relecteur l'a lue et n'a
+        # rien trouvé à redire). Hors déclaration, un blanc reste ambigu et est ignoré :
+        # le compter par défaut gonflerait le taux sans qu'aucune lecture ait eu lieu.
+        tacite = False
         if not (_rempli(tropes_ok) or _rempli(decor_ok) or _rempli(est_roman_ok)):
-            continue                    # rien de corrigé -> pas un avis, on ignore la ligne
+            if not (lignes_relues and n_ligne <= lignes_relues):
+                continue                # rien de corrigé, rien de déclaré -> pas un avis
+            tacite = True
 
         asin = row[idx["asin"]]
         statut_ia = row[idx["statut_ia"]] if "statut_ia" in idx else None
@@ -336,6 +349,7 @@ def _lire_paires(wb, path):
             tropes=tropes,
             decor=decor,
             fautes_saisie=fautes,
+            valide_tacitement=tacite,
             est_roman=est_roman,
         )
         yield humain, ia
@@ -348,9 +362,10 @@ def load_corrections(path) -> list[TropeClassification]:
     return [humain for humain, _ in _lignes_corrigees(path)]
 
 
-def load_pairs(path) -> list[tuple[TropeClassification | None, TropeClassification]]:
+def load_pairs(path, lignes_relues: int | None = None
+               ) -> list[tuple[TropeClassification | None, TropeClassification]]:
     """Le seul chemin de mesure du protocole M4 : relit les colonnes *_ia ET *_ok de la même
     feuille et rend les paires (IA, humain) prêtes pour `agreement_report`. Sans lui,
     `agreement_report` n'a aucun appelant hors tests — produire le rapport nécessiterait de
     re-classifier, ce qui n'est pas déterministe."""
-    return [(ia, humain) for humain, ia in _lignes_corrigees(path)]
+    return [(ia, humain) for humain, ia in _lignes_corrigees(path, lignes_relues)]

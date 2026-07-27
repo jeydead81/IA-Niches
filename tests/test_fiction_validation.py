@@ -335,3 +335,36 @@ def test_le_classeur_est_relache_apres_lecture(tmp_path):
     load_pairs(p)
     export_validation(livres, ia, "cosy_mystery", p)   # réécriture : verrou => échec
     p.unlink()                                          # suppression : verrou => échec
+
+
+def test_validation_tacite_doit_etre_DECLAREE(tmp_path):
+    """Baptiste a relu les 50 livres et n'a rien corrigé : son accord est une vraie
+    information, mais une case vide reste ambiguë (« validé » ou « pas regardé » ?).
+    Compter les blancs par défaut gonflerait le taux (bug A3/A4). On exige donc une
+    DÉCLARATION explicite du nombre de lignes relues — le défaut reste strict."""
+    livres = [EnrichedBook(asin=f"A{i}", title="T", blurb="b") for i in range(3)]
+    ia = [TropeClassification(asin=f"A{i}", taxonomy_version="fr_v1",
+                              tropes=["metier_gourmand"]) for i in range(3)]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+
+    assert load_pairs(p) == []                      # défaut : aucun avis, comportement strict
+
+    paires = load_pairs(p, lignes_relues=3)         # déclaration explicite
+    assert len(paires) == 3
+    for i_, h in paires:
+        assert h.tropes == i_.tropes                # blanc relu = accord validé
+    r = agreement_report(paires)
+    assert r.taux == 1.0 and r.porte_franchie is True
+    assert r.n_valides_tacitement == 3              # provenance de l'accord, visible
+
+
+def test_validation_tacite_ne_couvre_que_les_lignes_declarees(tmp_path):
+    """« J'ai relu la plus grosse partie » : les lignes au-delà de la déclaration ne
+    comptent pas — on ne mesure pas ce qui n'a pas été regardé."""
+    livres = [EnrichedBook(asin=f"A{i}", title="T", blurb="b") for i in range(5)]
+    ia = [TropeClassification(asin=f"A{i}", taxonomy_version="fr_v1",
+                              tropes=["metier_gourmand"]) for i in range(5)]
+    p = tmp_path / "v.xlsx"
+    export_validation(livres, ia, "cosy_mystery", p)
+    assert len(load_pairs(p, lignes_relues=2)) == 2

@@ -21,6 +21,8 @@ sys.path.insert(0, str(_ROOT / "01-scripts"))
 from dotenv import load_dotenv  # noqa: E402
 load_dotenv(_ROOT / ".env")
 from scout_master import run_scout  # noqa: E402
+from fiction_master import run_fiction_scout  # noqa: E402
+from fiction_taxonomy import load_taxonomy  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from models import ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402

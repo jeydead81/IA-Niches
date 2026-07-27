@@ -244,6 +244,11 @@ class TropeClassification(BaseModel):
     confidence: float = 0.0
     est_roman: bool = True          # False = jeu, coloriage, cahier… -> hors scoring
     hors_sujet: str = ""            # pourquoi, quand est_roman est False
+    # Étiquette humaine obtenue par VALIDATION TACITE : le relecteur a déclaré avoir lu la
+    # ligne et ne l'a pas corrigée. C'est un accord réel, mais établi autrement qu'une
+    # correction explicite — la provenance doit rester visible dans le rapport, sinon on ne
+    # distingue plus « relu et validé » de « jamais regardé » (le piège A3/A4).
+    valide_tacitement: bool = False
     # Saisie humaine (xlsx de validation) qui ne matche AUCUNE clé de la taxonomie même
     # après normalisation : une FAUTE DE SAISIE à corriger, distincte de `other` (qui, lui,
     # signale une vraie observation hors taxo côté IA et fait évoluer la taxonomie).
