@@ -93,7 +93,7 @@ class DataForSEOProvider:
     def search(self, keyword: str, depth: int = 100, books_only: bool = True,
                search_param: str | None = None,
                post_json=None, get_json=None, poll_interval: float = 8,
-               max_polls: int = 16) -> SearchResult:
+               max_polls: int = 40) -> SearchResult:
         """Poste une tâche puis attend le résultat (poll). HTTP injectable pour les tests.
         search_param explicite (ex. contrainte de browse node "rh=n:...") prime sur
         books_only ; sans lui, books_only=True restreint au rayon Livres (i=stripbooks)."""
@@ -121,7 +121,12 @@ class DataForSEOProvider:
             t = (get_json(f"{_BASE}/task_get/advanced/{tid}").get("tasks") or [{}])[0]
             if t.get("status_code") == 20000 and t.get("result"):
                 return map_dataforseo_result(t["result"][0])
-        raise TimeoutError(f"résultat DataForSEO non prêt (id={tid})")
+        # Budget aligné sur celui du chemin ASIN (40 polls) : à 16 polls (128 s), un simple
+        # ralentissement de la file DataForSEO effaçait un run entier — mesuré en live, 3
+        # SERP sur 3 expirées. Le message dit le budget écoulé pour distinguer « file lente »
+        # d'une vraie erreur de requête.
+        raise TimeoutError(f"résultat DataForSEO non prêt après {max_polls * poll_interval:.0f} s "
+                           f"(id={tid}) — file DataForSEO probablement saturée")
 
     def product_raw_batch(self, asins, post_json=None, get_json=None,
                           poll_interval: float = 8, max_polls: int = 40) -> dict:

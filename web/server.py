@@ -75,6 +75,65 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@app.get("/api/fiction/sous-genres")
+def fiction_sous_genres():
+    """Peuple le sélecteur fiction de l'UI depuis la taxonomie (source de vérité unique) —
+    jamais une liste dupliquée en dur côté JS, qui se périmerait à la moindre taxo v2."""
+    sgs = load_taxonomy().get("sous_genres", {})
+    return [{"cle": cle, "label": sg.get("label", cle)} for cle, sg in sorted(sgs.items())]
+
+
+@app.get("/api/fiction")
+def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
+    """Lance le scout fiction dans un thread, streame en SSE — même contrat que /api/scout
+    (progress / result / cost / error / done)."""
+    # Validation AVANT de lancer quoi que ce soit : un sous-genre inconnu (ou absent) doit
+    # rendre une 400 explicite, jamais la KeyError 500 que lèverait fiction_taxonomy.sous_genre().
+    sgs = load_taxonomy().get("sous_genres", {})
+    if sous_genre not in sgs:
+        raise HTTPException(status_code=400,
+                            detail=f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
+
+    q: "queue.Queue" = queue.Queue()
+
+    def progress(msg: str) -> None:
+        q.put(("progress", msg))
+
+    def worker() -> None:
+        cost = CostTracker()
+        try:
+            rapports = run_fiction_scout(sous_genre, n_niches=n_niches, rayon=rayon,
+                                         progress=progress, cost=cost)
+            payload = []
+            for r in rapports:
+                d = r.model_dump()
+                # autocomplete_score est une @property (non sérialisée par model_dump) :
+                # None tant que la sonde n'a rien mesuré — ne JAMAIS la laisser retomber à
+                # 0 par omission, un utilisateur lirait ça comme un verdict (CLAUDE.md §10).
+                d["autocomplete_score"] = r.autocomplete_score
+                payload.append(d)
+            q.put(("result", payload))
+            q.put(("cost", cost.breakdown()))
+        except Exception as e:  # noqa: BLE001
+            q.put(("error", f"{type(e).__name__}: {e}"))
+        finally:
+            q.put(("done", None))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def stream():
+        yield _sse("progress", "Démarrage du scout fiction…")
+        while True:
+            kind, payload = q.get()
+            if kind == "done":
+                yield _sse("done", {})
+                break
+            yield _sse(kind, payload)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 def _content_disposition(name: str) -> str:
     """En-tête Content-Disposition sûr : nom ASCII (fallback) + filename* RFC 5987 (UTF-8).
     Garantit un en-tête encodable en latin-1 (exigence Starlette) même avec « œ », accents, etc."""

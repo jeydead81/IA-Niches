@@ -185,3 +185,16 @@ def test_echo_asin_hors_lot_retombe_sur_la_position():
                                  poll_interval=0)
     assert out["A1"] is not None
     assert "XX-INCONNU" not in out
+
+
+def test_le_budget_de_poll_serp_vaut_celui_du_chemin_asin():
+    """Le SERP n'a aucune raison d'avoir un budget d'attente PLUS COURT que le batch ASIN.
+    Mesuré en live : la file DataForSEO a dépassé 128 s (16 polls) et les 3 SERP d'un run
+    ont expiré, alors que le chemin ASIN (40 polls) tenait. Un ralentissement passager de
+    DataForSEO effaçait donc un run entier — côté fiction ET côté non-fiction."""
+    import inspect
+
+    budget_serp = inspect.signature(DataForSEOProvider.search).parameters["max_polls"].default
+    budget_asin = (inspect.signature(DataForSEOProvider.product_raw_batch)
+                   .parameters["max_polls"].default)
+    assert budget_serp >= budget_asin
