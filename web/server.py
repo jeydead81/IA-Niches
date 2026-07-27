@@ -168,8 +168,13 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
 # quand ensuite — y compris après une déconnexion complète du client d'origine.
 
 def _run_scout_job(params: dict, progress, cost) -> list:
-    results = run_scout(seed=params.get("seed") or None, n_ideas=params.get("n_ideas", 12),
-                        n_search=params.get("n_search", 6), progress=progress, cost=cost)
+    # `ideas`/`search` sont les noms de l'endpoint SSE historique : les accepter aussi,
+    # sinon un client qui reprend ces noms voit son plafond silencieusement ignoré et paie
+    # les défauts (6 recherches au lieu de 2 demandées). Divergence constatée en live.
+    n_ideas = params.get("n_ideas", params.get("ideas", 12))
+    n_search = params.get("n_search", params.get("search", 6))
+    results = run_scout(seed=params.get("seed") or None, n_ideas=n_ideas,
+                        n_search=n_search, progress=progress, cost=cost)
     return [r.model_dump() for r in results]
 
 
@@ -255,6 +260,14 @@ def get_job(job_id: str):
 @app.get("/api/jobs")
 def list_jobs(user_id: str = "local", limit: int = 20):
     return [j.model_dump() for j in JobStore(_JOBS_DB).list_jobs(user_id=user_id, limit=limit)]
+
+
+@app.get("/api/usage")
+def usage(user_id: str = "local"):
+    """Consommation du mois glissant. Un plafond qui bloque sans que l'utilisateur ait pu
+    voir où il en était serait vécu comme une panne, pas comme une limite."""
+    r = UsageMeter(_USAGE_DB).resume(user_id)
+    return r.model_dump() if hasattr(r, "model_dump") else dict(r)
 
 
 @app.get("/api/jobs/{job_id}/stream")

@@ -185,3 +185,31 @@ def test_job_stream_id_inconnu_rend_erreur_puis_done(tmp_path, monkeypatch):
     events = _parse_sse(r.text)
     kinds = [e for e, _ in events]
     assert kinds == ["error", "done"]
+
+
+def test_les_noms_de_parametres_de_l_endpoint_sse_sont_acceptes(monkeypatch, tmp_path):
+    """L'endpoint SSE historique prend `ideas`/`search` ; le job attendait `n_ideas`/
+    `n_search`. Un client qui envoyait `search=2` voyait son plafond IGNORÉ et payait 6
+    recherches au lieu de 2 — une divergence de nommage qui coûte de l'argent en silence.
+    Constaté sur un vrai run."""
+    from cost_tracker import CostTracker
+    _, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    vus = {}
+
+    def faux_run_scout(**kw):
+        vus.update(kw)
+        return []
+
+    monkeypatch.setattr(server, "run_scout", faux_run_scout)
+    server._run_scout_job({"seed": "x", "ideas": 6, "search": 2}, lambda m: None, CostTracker())
+    assert vus["n_ideas"] == 6 and vus["n_search"] == 2
+
+
+def test_endpoint_usage_expose_la_consommation(monkeypatch, tmp_path):
+    """L'utilisateur doit pouvoir voir ce qu'il a consommé — sinon le plafond le bloque
+    sans qu'il ait jamais pu s'en approcher en conscience."""
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    r = client.get("/api/usage")
+    assert r.status_code == 200
+    d = r.json()
+    assert "n_analyses" in d and "cout_usd" in d
