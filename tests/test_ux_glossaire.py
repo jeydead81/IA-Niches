@@ -29,3 +29,17 @@ def test_scores_en_virgule_decimale_francaise():
     """0,96 et non 0.96 : l'utilisateur cible est français. Un formateur décimal dédié,
     aligné sur le style déjà en place pour fmt()/fmtEur() (toLocaleString('fr-FR', ...))."""
     assert "fmtDec" in HTML, "un formateur décimal fr-FR dédié aux scores est attendu"
+
+
+def test_chaque_fiche_dit_une_conclusion_actionnable():
+    """La matrice sort une valeur technique (`porteur_encombre`) ; l'utilisateur doit lire
+    une conclusion, mot pour mot (plan U3). `non_mesurable` n'est pas un mauvais résultat,
+    c'est une absence de résultat — la phrase doit le dire explicitement."""
+    titres = ("Pépite", "Porteur mais encombré", "Mur installé", "Désert",
+              "Sans intérêt", "Non mesuré")
+    for titre in titres:
+        assert titre in HTML, f"titre manquant : {titre}"
+    conseils = ("À creuser en priorité", "Gardez le sous-genre", "angle très différent",
+                "Risqué", "Passez à autre chose", "absence de résultat")
+    for conseil in conseils:
+        assert conseil.lower() in HTML.lower(), f"conseil manquant : {conseil}"

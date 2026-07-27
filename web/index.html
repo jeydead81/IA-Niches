@@ -149,6 +149,18 @@
   .fic-sep{color:var(--text-muted)}
   .dm{font-family:var(--mono);font-weight:700;font-size:12.5px;padding:5px 12px;border-radius:8px;white-space:nowrap}
   .dm.g{background:var(--green-bg);color:#166534} .dm.a{background:var(--amber-bg);color:#92400E} .dm.r{background:var(--red-bg);color:#991B1B}
+  /* grade neutre 'n' (non_mesurable, Task U3) : gris, jamais rouge — sinon l'utilisateur
+     lit « mauvais résultat » là où c'est une ABSENCE de résultat (piège n°2 du plan). */
+  .dm.n{background:var(--muted);color:var(--text-muted)}
+
+  /* Conclusion actionnable (Task U3) : la matrice sort une valeur technique
+     (porteur_encombre) mais l'auteur doit lire une phrase qui dit quoi faire. */
+  .fic-concl{font-size:13.5px;line-height:1.5;margin:0 0 12px;padding:10px 14px;
+    border-radius:9px;border-left:3px solid}
+  .fic-concl.g{background:var(--green-bg);border-color:var(--green);color:#14532D}
+  .fic-concl.a{background:var(--amber-bg);border-color:var(--amber);color:#78350F}
+  .fic-concl.r{background:var(--red-bg);border-color:var(--red);color:#7F1D1D}
+  .fic-concl.n{background:var(--muted);border-color:var(--text-muted);color:var(--text)}
 
   /* saturation_trio mise en avant : LE différenciateur produit, pas une métrique parmi
      d'autres — boîte à part, couleur qui tranche encombré/libre. */
@@ -548,8 +560,25 @@ function addStepFic(msg){
   stepsFic.appendChild(li); stepsFic.scrollTop=stepsFic.scrollHeight;
 }
 
-const DM_LABEL={pepite:['Pépite','g'], porteur_encombre:['Porteur encombré','a'],
-  mur_installe:['Mur installé','r'], desert:['Désert','a'], mort:['Mort','r']};
+// Conclusions U3 — TEXTES REPRIS MOT POUR MOT du plan (docs/superpowers/plans/
+// 2026-07-21-ux-lisibilite.md, tableau U3). `non_mesurable` porte le grade neutre 'n'
+// (gris), DISTINCT du rouge de "mort"/"mur_installe" : ce n'est pas un mauvais résultat,
+// c'est une absence de résultat (piège n°2 du plan — même distinction que le commentaire
+// jumeau dans fiction_scoring.py::_demand_matrix, « JAMAIS mort »).
+const DM_CONCLUSION = {
+  pepite: ['🟢','Pépite','g',
+    `Ça se vend, il reste de la place, et personne ne raconte encore tout à fait ça. À creuser en priorité.`],
+  porteur_encombre: ['🟠','Porteur mais encombré','a',
+    `Ça se vend et il reste de la place, mais beaucoup de livres promettent déjà la même chose. Gardez le sous-genre, changez de thème ou de décor.`],
+  mur_installe: ['🔴','Mur installé','r',
+    `Ça se vend, mais les places sont tenues par des livres bien installés. Difficile d'entrer sans un angle très différent.`],
+  desert: ['🟠','Désert','a',
+    `Il reste de la place, mais rien ne prouve que ces livres se vendent. Risqué.`],
+  mort: ['🔴','Sans intérêt','r',
+    `Peu de ventes et peu de place. Passez à autre chose.`],
+  non_mesurable: ['⚪','Non mesuré','n',
+    `Impossible de conclure : le rayon était vide ou tous les livres ont été écartés. Reformulez la requête ou changez de rayon. <strong>Ce n'est pas un mauvais résultat, c'est une absence de résultat.</strong>`],
+};
 const fmtPct = n => Math.round((n??0)*100)+'%';
 const fmtEur = n => n==null ? '—' : Number(n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 
@@ -582,7 +611,8 @@ function renderFic(rows){
   gridFic.innerHTML='';
   rcountFic.textContent = rows.length ? `${rows.length} trio(s) analysé(s) en profondeur` : 'aucun trio';
   rows.forEach(r=>{
-    const [dmLabel, dmGrade] = DM_LABEL[r.demand_matrix] || [r.demand_matrix || '—', 'a'];
+    const [dmEmoji, dmTitre, dmGrade, dmTexte] = DM_CONCLUSION[r.demand_matrix]
+      || ['⚪', r.demand_matrix || '—', 'n', ''];
     // Grille d'habillage (Task U2) : profondeur/ouverture normales, saturation INVERSÉE
     // (seul score où haut = mauvais — cf. niveau3Inverse, piège n°1 du plan).
     const [satLabel, satGrade] = niveau3Inverse(r.saturation_trio);
@@ -605,8 +635,9 @@ function renderFic(rows){
           <span class="fic-sep">×</span>${tropesHtml}
           <span class="fic-sep">·</span><span class="chip">${esc(n.decor||'—')}</span>
         </div>
-        <span class="dm ${dmGrade}">${esc(dmLabel)}</span>
+        <span class="dm ${dmGrade}">${dmEmoji} ${esc(dmTitre)}</span>
       </div>
+      <p class="fic-concl ${dmGrade}">${dmTexte}</p>
       <div class="fic-sat ${satCss}">
         <span class="sval">${fmtDec(r.saturation_trio)}</span>
         <span class="stext"><strong>Saturation du trio</strong>${glossBtn('Saturation du trio')}<span class="verdict ${satGrade}">${esc(satLabel)}</span> — combien de livres promettent déjà exactement ce trio</span>
