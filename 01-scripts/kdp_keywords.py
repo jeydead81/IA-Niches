@@ -86,3 +86,139 @@ def nettoyer_candidats(candidats, titre: str = "") -> tuple[list[str], list[tupl
         gardes.append(k)
 
     return gardes, rejets
+
+
+SYSTEM_PROMPT = """\
+Tu es SPÉCIALISTE du référencement Amazon KDP en français. Tu produis les mots-clés \
+« backend » — les 7 champs cachés qu'un auteur remplit au moment de publier, et qui \
+décident de la découvrabilité du livre.
+
+CE QUE TU PRODUIS : des EXPRESSIONS telles qu'un lecteur les tape réellement dans la barre \
+de recherche Amazon, pas des étiquettes de catalogue. 3 à 5 mots. Longue traîne : \
+« enquête pâtissière village breton » vaut mieux que « policier », qui est injouable.
+
+INTERDITS (conditions KDP, ou déjà indexé par Amazon donc gaspillé) : les mots « livre », \
+« ebook », « kindle », « broché », « gratuit », « meilleur », « nouveau », toute mention \
+d'année, tout nom d'auteur ou de marque, tout superlatif subjectif.
+
+NE REPRENDS PAS les mots du titre ni du sous-titre : Amazon les indexe déjà, les redonner \
+gâche un des sept emplacements.
+
+50 CARACTÈRES MAXIMUM par expression — au-delà Amazon tronque sans prévenir.
+
+Propose 22 expressions, variées : certaines sur le thème, d'autres sur le public visé, \
+d'autres sur la situation de lecture ou le ressort d'intrigue attendu.
+"""
+
+CANDIDATS_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "candidats": {
+            "type": "array",
+            "items": {"type": "string",
+                      "description": "une expression telle qu'un lecteur la taperait"},
+        }
+    },
+    "required": ["candidats"],
+}
+
+
+def build_user_prompt(scored: ScoredNiche, titre: str = "") -> str:
+    lignes = [f"NICHE : {scored.niche}"]
+    if scored.requete_amazon:
+        lignes.append(f"Requête Amazon principale : {scored.requete_amazon}")
+    if scored.categorie:
+        lignes.append(f"Catégorie : {scored.categorie}")
+    if scored.satellite_keywords:
+        lignes.append("Requêtes satellites déjà repérées : "
+                      + ", ".join(scored.satellite_keywords))
+    if titre:
+        lignes.append(f"TITRE PRÉVU (n'en reprends pas les mots) : {titre}")
+    lignes.append("\nPropose les expressions via l'outil proposer_mots_cles.")
+    return "\n".join(lignes)
+
+
+MOTS_AMORCE = 3
+
+
+def amorce(expression: str) -> str:
+    """Les MOTS_AMORCE premiers mots — c'est CE qu'on sonde, pas l'expression entière.
+
+    L'autocomplete d'Amazon est PRÉFIXE-based : mesuré au spike M3, une expression longue
+    et précise ne remonte rien (« cosy mystery boulangerie bretagne » -> 0) alors que son
+    amorce est une vraie voie de recherche. Or les mots-clés backend sont par nature de la
+    longue traîne : sonder l'expression complète garantissait 0 confirmation sur 7,
+    constaté en live. On vérifie donc que l'amorce est cherchée — pas que la phrase
+    exacte l'est, ce qu'aucun outil ne peut établir depuis l'autocomplete."""
+    mots = (expression or "").split()
+    return " ".join(mots[:MOTS_AMORCE])
+
+
+def _default_client():
+    load_dotenv()
+    import anthropic
+    return anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+
+def _default_sonde(prefixe: str) -> list[str]:
+    from amazon_autocomplete import fetch_suggestions
+    return fetch_suggestions(prefixe)
+
+
+def generer_mots_cles(scored: ScoredNiche, titre: str = "", client=None, sonde=None,
+                      model: str | None = None, on_usage=None) -> MotsClesKDP:
+    """7 mots-clés backend, dont les confirmés par Amazon en priorité.
+
+    La sonde autocomplete est GRATUITE : on ne se contente donc pas de faire confiance au
+    modèle, on vérifie que chaque expression est réellement complétée par Amazon. Un
+    mot-clé qu'Amazon ne suggère pas est un mot-clé que personne ne tape."""
+    client = client or _default_client()
+    sonde = sonde or _default_sonde
+    model = model or DEFAULT_MODEL
+
+    resp = client.messages.create(
+        model=model,
+        max_tokens=1500,
+        system=SYSTEM_PROMPT,
+        tools=[{
+            "name": "proposer_mots_cles",
+            "description": "Renvoie les expressions candidates pour les 7 emplacements KDP.",
+            "input_schema": CANDIDATS_INPUT_SCHEMA,
+        }],
+        tool_choice={"type": "tool", "name": "proposer_mots_cles"},
+        messages=[{"role": "user", "content": build_user_prompt(scored, titre)}],
+    )
+    if on_usage is not None and getattr(resp, "usage", None) is not None:
+        on_usage(getattr(resp.usage, "input_tokens", 0),
+                 getattr(resp.usage, "output_tokens", 0), model)
+
+    bruts: list[str] = []
+    for block in resp.content:
+        if getattr(block, "type", None) == "tool_use":
+            bruts.extend((block.input or {}).get("candidats") or [])
+
+    gardes, rejets = nettoyer_candidats(bruts, titre)
+
+    # Sonde gratuite : un échec réseau ne doit pas ressembler à « aucun mot ne marche ».
+    confirmes: list[str] = []
+    sonde_ko = False
+    for k in gardes:
+        try:
+            suggestions = sonde(amorce(k)) or []
+        except Exception:  # noqa: BLE001 — sonde indisponible : on dégrade, on ne perd rien
+            sonde_ko = True
+            break
+        if suggestions:
+            confirmes.append(k)
+
+    if sonde_ko:
+        confirmes = []
+    # Les confirmés d'abord : ce sont les seuls dont on SAIT qu'ils sont tapés.
+    ordonnes = confirmes + [k for k in gardes if k not in confirmes]
+    return MotsClesKDP(
+        emplacements=ordonnes[:N_EMPLACEMENTS],
+        a_verifier=ordonnes[N_EMPLACEMENTS:],
+        confirmes_par_amazon=confirmes,
+        rejetes=[{"mot": m, "motif": motif} for m, motif in rejets],
+        sonde_indisponible=sonde_ko,
+    )
