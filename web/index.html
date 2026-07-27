@@ -153,9 +153,14 @@
   /* saturation_trio mise en avant : LE différenciateur produit, pas une métrique parmi
      d'autres — boîte à part, couleur qui tranche encombré/libre. */
   .fic-sat{display:flex;align-items:center;gap:14px;border-radius:10px;padding:11px 16px;margin-bottom:12px;border:1.5px solid}
+  /* haut = mauvais ici (seul score inversé, cf. niveau3Inverse) : "high" reste rouge, "low"
+     reste vert, "mid" (bande 0,3-0,6) est ambre — même palette g/a/r que le reste de l'app. */
   .fic-sat.high{background:var(--red-bg);border-color:var(--red)}
   .fic-sat.high .sval{color:#991B1B}
   .fic-sat.high .stext{color:#7F1D1D}
+  .fic-sat.mid{background:var(--amber-bg);border-color:var(--amber)}
+  .fic-sat.mid .sval{color:#92400E}
+  .fic-sat.mid .stext{color:#78350F}
   .fic-sat.low{background:var(--green-bg);border-color:var(--green)}
   .fic-sat.low .sval{color:#166534}
   .fic-sat.low .stext{color:#14532D}
@@ -364,6 +369,42 @@ function glossBtn(term){
 const grade = s => s>=7.5?'g':s>=6?'a':'r';
 const verdict = s => s>=7.5?'Prioritaire':s>=6?'Intéressant':'Faible';
 const fmt = n => n==null?'—':Number(n).toLocaleString('fr-FR');
+// Formateur décimal fr-FR partagé pour tout score affiché (0,96 et non 0.96, Task U2) —
+// même principe que fmtEur() plus bas : toLocaleString gère l'arrondi ET la virgule en
+// un seul appel, pas besoin de toFixed() en amont.
+const fmtDec = (n, d=2) => n==null ? '—'
+  : Number(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
+// Coûts « en clair » (Task U2) : 0,15 $ plutôt que 0.1532. TAUX_USD_EUR est une
+// approximation FIXE (pas d'appel réseau ici) — juste un ordre de grandeur en euros,
+// pas un cours de change live.
+const TAUX_USD_EUR = 0.92;
+const fmtUsd = n => n==null ? '—' : fmtDec(n) + ' $';
+// Une seule fonction pour les deux barres de coût (nf + fiction) : même format, pas de
+// divergence si l'une des deux est corrigée sans l'autre.
+function formatCost(c){
+  return `Coût de ce run : ~${fmtUsd(c.usd)} (~${fmtDec(c.usd*TAUX_USD_EUR)} €) `
+    +`(DataForSEO ${fmtUsd(c.dataforseo_usd)} · LLM ${fmtUsd(c.llm_usd)} · `
+    +`${c.dataforseo_calls} appels)`;
+}
+
+// Seuils d'habillage alignés sur SEUILS de fiction_scoring.py (docs/superpowers/plans/
+// 2026-07-21-ux-lisibilite.md, Task U2) : profondeur/ouverture ≥ 0,6 forte · 0,3-0,6
+// moyenne · < 0,3 faible. PIÈGE : la saturation est le SEUL score où haut = mauvais —
+// l'inverser (vert quand élevé) serait un contresens exact. Une fonction dédiée et
+// nommée explicitement `inverse` évite qu'un futur ajout réutilise `niveau3()` par
+// réflexe pour la saturation et retombe dans le piège.
+function niveau3(v){
+  if(v==null) return ['non mesuré','a'];
+  if(v>=0.6) return ['forte','g'];
+  if(v>=0.3) return ['moyenne','a'];
+  return ['faible','r'];
+}
+function niveau3Inverse(v){
+  if(v==null) return ['non mesuré','a'];
+  if(v>=0.6) return ['déjà très couvert','r'];
+  if(v>=0.3) return ['moyennement couvert','a'];
+  return ['peu couvert','g'];
+}
 
 function addStep(msg){
   document.querySelectorAll('.steps li.cur').forEach(li=>{li.classList.remove('cur');li.querySelector('.dot').innerHTML=ICON_CHECK;});
@@ -421,10 +462,10 @@ function render(rows){
     const gap = r.criteres_bsr_ok ? `<span class="badge41">${ICON_CHECK}§4.1</span>` : '';
     const tr=document.createElement('tr'); tr.className='row';
     tr.innerHTML=`
-      <td><span class="score"><span class="pill ${g}">${r.global_score.toFixed(1)}</span><span class="verdict ${g}">${verdict(r.global_score)}</span></span></td>
+      <td><span class="score"><span class="pill ${g}">${fmtDec(r.global_score,1)}</span><span class="verdict ${g}">${verdict(r.global_score)}</span></span></td>
       <td><div class="niche-name">${esc(r.niche)}</div><div class="cat">${esc(r.categorie)}</div></td>
-      <td class="num">${r.demande.toFixed(1)}</td>
-      <td class="num">${r.penetration.toFixed(1)}</td>
+      <td class="num">${fmtDec(r.demande,1)}</td>
+      <td class="num">${fmtDec(r.penetration,1)}</td>
       <td><span style="font-family:var(--mono)">${fmt(r.bsr_best)}</span> <span class="mut">/ ${fmt(r.bsr_top5_avg)}</span>${gap}</td>
       <td class="num">${fmt(r.n_concurrents_cibles)}</td>
       <td class="num mut">${fmt(r.n_sponsored)}</td>
@@ -463,9 +504,7 @@ form.addEventListener('submit',e=>{
     const c=JSON.parse(ev.data);
     const el=$('#cost');
     el.hidden=false;
-    el.textContent=`Coût de ce run : ~$${c.usd.toFixed(4)} `
-      +`(DataForSEO $${c.dataforseo_usd.toFixed(4)} · LLM $${c.llm_usd.toFixed(4)} · `
-      +`${c.dataforseo_calls} appels)`;
+    el.textContent=formatCost(c);
   });
   es.addEventListener('error',ev=>{ if(ev.data){errbox.textContent='Erreur : '+JSON.parse(ev.data);errbox.classList.add('on');} });
   es.addEventListener('done',()=>{
@@ -544,13 +583,18 @@ function renderFic(rows){
   rcountFic.textContent = rows.length ? `${rows.length} trio(s) analysé(s) en profondeur` : 'aucun trio';
   rows.forEach(r=>{
     const [dmLabel, dmGrade] = DM_LABEL[r.demand_matrix] || [r.demand_matrix || '—', 'a'];
-    const satHigh = r.saturation_trio >= 0.6;
+    // Grille d'habillage (Task U2) : profondeur/ouverture normales, saturation INVERSÉE
+    // (seul score où haut = mauvais — cf. niveau3Inverse, piège n°1 du plan).
+    const [satLabel, satGrade] = niveau3Inverse(r.saturation_trio);
+    const satCss = satGrade==='r' ? 'high' : satGrade==='g' ? 'low' : 'mid';
+    const [depthLabel, depthGrade] = niveau3(r.depth_score);
+    const [openLabel, openGrade] = niveau3(r.openness_score);
     const n = r.niche || {};
     const tropesHtml = (n.tropes||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('') || '<span class="mut">—</span>';
     const acLabel = esc(autocompleteLabel(r));
     const acVal = r.autocomplete_score==null
       ? `<span class="mval mut">non mesuré</span>`
-      : `<span class="mval">${r.autocomplete_score.toFixed(1)} <span class="mut">(${acLabel})</span></span>`;
+      : `<span class="mval">${fmtDec(r.autocomplete_score,1)} <span class="mut">(${acLabel})</span></span>`;
     const [pmin,pmed,pmax] = (r.price_band && r.price_band.length===3) ? r.price_band : [null,null,null];
     const card=document.createElement('div'); card.className='panel fic-card';
     card.innerHTML=`
@@ -563,13 +607,13 @@ function renderFic(rows){
         </div>
         <span class="dm ${dmGrade}">${esc(dmLabel)}</span>
       </div>
-      <div class="fic-sat ${satHigh?'high':'low'}">
-        <span class="sval">${r.saturation_trio.toFixed(2)}</span>
-        <span class="stext"><strong>Saturation du trio</strong>${glossBtn('Saturation du trio')}combien de livres promettent déjà exactement ce trio — ${satHigh?'déjà largement couvert':'encore de la place'}</span>
+      <div class="fic-sat ${satCss}">
+        <span class="sval">${fmtDec(r.saturation_trio)}</span>
+        <span class="stext"><strong>Saturation du trio</strong>${glossBtn('Saturation du trio')}<span class="verdict ${satGrade}">${esc(satLabel)}</span> — combien de livres promettent déjà exactement ce trio</span>
       </div>
       <div class="fic-metrics">
-        <div class="metric"><span class="mlabel">Profondeur${glossBtn('Profondeur')}</span><span class="mval">${r.depth_score.toFixed(2)}</span></div>
-        <div class="metric"><span class="mlabel">Ouverture${glossBtn('Ouverture')}</span><span class="mval">${r.openness_score.toFixed(2)}</span></div>
+        <div class="metric"><span class="mlabel">Profondeur${glossBtn('Profondeur')}</span><span class="mval"><span class="verdict ${depthGrade}">${esc(depthLabel)}</span> <span class="mut">(${fmtDec(r.depth_score)})</span></span></div>
+        <div class="metric"><span class="mlabel">Ouverture${glossBtn('Ouverture')}</span><span class="mval"><span class="verdict ${openGrade}">${esc(openLabel)}</span> <span class="mut">(${fmtDec(r.openness_score)})</span></span></div>
         <div class="metric"><span class="mlabel">Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
         <div class="metric"><span class="mlabel">Prix min/méd/max</span><span class="mval">${fmtEur(pmin)} / ${fmtEur(pmed)} / ${fmtEur(pmax)}</span></div>
         <div class="metric"><span class="mlabel">Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
@@ -599,9 +643,7 @@ formFic.addEventListener('submit', e=>{
     const c=JSON.parse(ev.data);
     const el=$('#cost-fic');
     el.hidden=false;
-    el.textContent=`Coût de ce run : ~$${c.usd.toFixed(4)} `
-      +`(DataForSEO $${c.dataforseo_usd.toFixed(4)} · LLM $${c.llm_usd.toFixed(4)} · `
-      +`${c.dataforseo_calls} appels)`;
+    el.textContent=formatCost(c);
   });
   esFic.addEventListener('error',ev=>{ if(ev.data){errboxFic.textContent='Erreur : '+JSON.parse(ev.data);errboxFic.classList.add('on');} });
   esFic.addEventListener('done',()=>{

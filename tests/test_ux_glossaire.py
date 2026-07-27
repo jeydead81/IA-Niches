@@ -14,3 +14,18 @@ def test_chaque_terme_technique_a_son_explication():
         assert terme in HTML
     for extrait in ("Plus le nombre est", "promettent", "se vendent", "reste-t-il"):
         assert extrait.lower() in HTML.lower(), f"explication manquante : {extrait}"
+
+
+def test_saturation_habillage_inverse_et_seuils_alignes():
+    """Piège n°1 du plan : la saturation est le SEUL score où haut = mauvais. L'habiller
+    comme les autres (vert quand élevé) serait un contresens exactement inverse de la
+    réalité. Les mots d'habillage (profondeur/ouverture forte-moyenne-faible, saturation
+    déjà très couvert / peu couvert) doivent tous apparaître."""
+    for mot in ("forte", "moyenne", "faible", "déjà très couvert", "peu couvert"):
+        assert mot.lower() in HTML.lower(), f"habillage manquant : {mot}"
+
+
+def test_scores_en_virgule_decimale_francaise():
+    """0,96 et non 0.96 : l'utilisateur cible est français. Un formateur décimal dédié,
+    aligné sur le style déjà en place pour fmt()/fmtEur() (toLocaleString('fr-FR', ...))."""
+    assert "fmtDec" in HTML, "un formateur décimal fr-FR dédié aux scores est attendu"
