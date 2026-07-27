@@ -25,6 +25,7 @@ load_dotenv(_ROOT / ".env")
 from scout_master import run_scout  # noqa: E402
 from fiction_master import run_fiction_scout  # noqa: E402
 from niche_verdict import generate_verdict  # noqa: E402
+from kdp_keywords import generer_mots_cles  # noqa: E402
 from fiction_taxonomy import load_taxonomy  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from models import ScoredNiche  # noqa: E402
@@ -328,6 +329,23 @@ async def api_verdict(request: Request):
     verdict = generate_verdict(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     UsageMeter(_USAGE_DB).enregistrer("local", "verdict", cost.total_usd(), n_analyses=0)
     return {**verdict.model_dump(), "_cout": cost.breakdown()}
+
+
+@app.post("/api/kdp-keywords")
+async def api_kdp_keywords(request: Request):
+    """Les 7 mots-clés backend KDP d'une niche, à la demande (sans état, ~0,006 $).
+
+    Les candidats sont confirmés gratuitement par l'autocomplete Amazon : le coût imputé
+    ne couvre que l'appel LLM, la vérification ne coûte rien."""
+    try:
+        scored = ScoredNiche.model_validate(await request.json())
+    except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
+        raise HTTPException(status_code=400, detail="niche invalide")
+    cost = CostTracker()
+    mots = generer_mots_cles(scored, titre=scored.niche,
+                             on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+    UsageMeter(_USAGE_DB).enregistrer("local", "kdp_keywords", cost.total_usd(), n_analyses=0)
+    return {**mots.model_dump(), "_cout": cost.breakdown()}
 
 
 @app.post("/api/pdf")

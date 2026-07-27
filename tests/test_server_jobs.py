@@ -232,3 +232,23 @@ def test_verdict_sur_charge_invalide_rend_400(monkeypatch, tmp_path):
     client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
     r = client.post("/api/verdict", json={"global_score": "pas un nombre"})
     assert r.status_code == 400
+
+
+def test_endpoint_mots_cles_kdp(monkeypatch, tmp_path):
+    """Même contrat que /api/verdict : sans état, la niche arrive entière dans le body."""
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    from models import MotsClesKDP
+
+    monkeypatch.setattr(server, "generer_mots_cles",
+                        lambda sc, **kw: MotsClesKDP(emplacements=["enquête village breton"],
+                                                     confirmes_par_amazon=["enquête village breton"]))
+    r = client.post("/api/kdp-keywords", json={"niche": "cosy mystery", "global_score": 7.0})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["emplacements"] == ["enquête village breton"]
+    assert d["confirmes_par_amazon"] == ["enquête village breton"]
+
+
+def test_endpoint_mots_cles_kdp_body_invalide_rend_400(monkeypatch, tmp_path):
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    assert client.post("/api/kdp-keywords", json={"global_score": "pas un nombre"}).status_code == 400
