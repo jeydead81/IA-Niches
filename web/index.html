@@ -217,6 +217,27 @@
 
   footer{margin-top:34px;text-align:center;color:#94A3B8;font-size:12px}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  /* Consommation du mois (Task U4) — un plafond qui bloque sans qu'on ait pu voir où on
+     en était se vit comme une panne. Poussé à droite dans le header, discret mais visible. */
+  .usage-bar{margin-left:auto;text-align:right;font-size:12px;color:var(--text-muted);flex:none}
+  .usage-bar strong{color:var(--heading);font-weight:600}
+
+  /* Panneau d'aide repliable (Task U4), natif <details> : navigable au clavier et lisible
+     par un lecteur d'écran sans JS. Ouvert par défaut (attribut `open`) ; si l'utilisateur
+     le referme, JS mémorise son choix (localStorage) pour ne pas le réimposer à chaque
+     visite — mais on ne force jamais sa fermeture au premier chargement. */
+  .help-panel{margin-bottom:16px;padding:16px 20px}
+  .help-panel summary{cursor:pointer;font-weight:600;color:var(--heading);font-size:14.5px;
+    list-style:none;display:flex;align-items:center;gap:8px}
+  .help-panel summary::-webkit-details-marker{display:none}
+  .help-panel summary::before{content:'▸';display:inline-block;color:var(--secondary);
+    transition:transform .15s;font-size:12px}
+  .help-panel[open] summary::before{transform:rotate(90deg)}
+  .help-body{margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--text)}
+  .help-body p{margin:0 0 10px}
+  .help-body p:last-child{margin-bottom:0}
+  .help-body strong{color:var(--heading)}
 </style>
 </head>
 <body>
@@ -230,7 +251,27 @@
       <h1>IA-Niches</h1>
       <p>Explorateur de niches KDP — l'IA propose, Amazon valide (demande, concurrence, BSR réel)</p>
     </div>
+    <div class="usage-bar" id="usage-bar" hidden></div>
   </header>
+
+  <details class="panel help-panel" id="help-panel" open>
+    <summary>Comment lire ces résultats ?</summary>
+    <div class="help-body">
+      <p><strong>À quoi sert l'outil</strong> — il repère des niches de livres qui se
+      vendent déjà sur Amazon.fr, avant que vous n'écriviez une ligne. L'IA propose des
+      idées, mais c'est Amazon qui tranche : les chiffres affichés viennent de vraies
+      fiches produit, pas d'une estimation.</p>
+      <p><strong>Ce qu'est un bon résultat</strong> — un score global élevé (vert), un BSR
+      sous 10 000 chez au moins un concurrent (preuve que ça se vend), et de la place
+      encore libre (peu de concurrents vraiment installés sur le sujet). Un résultat en
+      rouge n'est pas une erreur de l'outil : c'est un signal clair pour passer à la
+      niche suivante.</p>
+      <p><strong>Ordre de lecture des colonnes</strong> — en non-fiction : d'abord le
+      Score (vert = à regarder en priorité), puis le BSR (plus petit = mieux), puis la
+      Pénétration (élevée = facile à percer). En fiction : d'abord le badge de conclusion
+      (🟢🟠🔴⚪), puis la Saturation du trio, puis Profondeur et Ouverture.</p>
+    </div>
+  </details>
 
   <div class="tabs" role="tablist">
     <button type="button" class="tab active" id="tab-nf" role="tab" aria-selected="true">Non-fiction</button>
@@ -313,7 +354,7 @@
           <span id="run-fic-label">Lancer le scout fiction</span>
         </button>
       </form>
-      <p class="hint">Un trio = sous-genre × tropes × décor. La file ASIN est payée UNE fois pour tous les trios (~4-5 min quel que soit leur nombre).</p>
+      <p class="hint">Un trio = sous-genre × tropes × décor. La file ASIN est payée UNE fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page, le travail continue et vous le retrouverez ici.</p>
     </div>
 
     <div class="panel progress" id="progress-fic">
@@ -736,6 +777,31 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !glossTip.hidden) hideGloss(); });
 window.addEventListener('resize', ()=>{ if(!glossTip.hidden && glossOpenBtn) positionGloss(glossOpenBtn); });
+
+// ================= Panneau d'aide + consommation (Task U4) =================
+// Le panneau est OUVERT par défaut (attribut `open` dans le HTML) : on ne force jamais sa
+// fermeture au premier chargement. S'il a déjà été replié une fois, on respecte ce choix
+// aux visites suivantes — localStorage peut échouer (navigation privée) : ça ne doit
+// jamais empêcher le panneau de fonctionner, juste sa mémorisation.
+(function initHelpPanel(){
+  const panel = $('#help-panel');
+  if(!panel) return;
+  const KEY = 'ia-niches-aide-repliee';
+  try{ if(localStorage.getItem(KEY)==='1') panel.open = false; }catch(e){}
+  panel.addEventListener('toggle', ()=>{
+    try{ localStorage.setItem(KEY, panel.open ? '0' : '1'); }catch(e){}
+  });
+})();
+
+// Consommation du mois (Task U4) : un plafond qui bloque sans qu'on ait pu voir où on en
+// était se vit comme une panne. Échec silencieux si l'API ne répond pas — l'absence
+// d'affichage ne doit jamais bloquer le reste de la page.
+fetch('/api/usage').then(r=>r.json()).then(u=>{
+  const el = $('#usage-bar');
+  if(!el) return;
+  el.hidden = false;
+  el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s) · <strong>${fmtUsd(u.cout_usd)}</strong>`;
+}).catch(()=>{});
 </script>
 </body>
 </html>

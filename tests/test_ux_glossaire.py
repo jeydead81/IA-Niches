@@ -43,3 +43,23 @@ def test_chaque_fiche_dit_une_conclusion_actionnable():
                 "Risqué", "Passez à autre chose", "absence de résultat")
     for conseil in conseils:
         assert conseil.lower() in HTML.lower(), f"conseil manquant : {conseil}"
+
+
+def test_duree_reelle_annoncee():
+    """Sans ça, 10-15 minutes d'attente (mesuré à 869 s) passent pour un plantage."""
+    phrase = ("Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page, "
+              "le travail continue et vous le retrouverez ici.")
+    assert phrase in HTML
+
+
+def test_panneau_aide_repliable_present():
+    """Panneau repliable, ouvert la première fois : à quoi sert l'outil, ce qu'est un bon
+    résultat, l'ordre de lecture des colonnes."""
+    assert "<details" in HTML, "un élément repliable natif (<details>) est attendu"
+    for extrait in ("à quoi sert", "bon résultat", "ordre de lecture"):
+        assert extrait.lower() in HTML.lower(), f"contenu d'aide manquant : {extrait}"
+
+
+def test_consommation_mensuelle_affichee():
+    """Un plafond qui bloque sans qu'on ait pu voir où on en était se vit comme une panne."""
+    assert "/api/usage" in HTML
