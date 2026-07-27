@@ -24,6 +24,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(_ROOT / ".env")
 from scout_master import run_scout  # noqa: E402
 from fiction_master import run_fiction_scout  # noqa: E402
+from niche_verdict import generate_verdict  # noqa: E402
 from fiction_taxonomy import load_taxonomy  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from models import ScoredNiche  # noqa: E402
@@ -311,6 +312,22 @@ def _content_disposition(name: str) -> str:
     ascii_name = ascii_name[:40] or "niche"
     utf8 = quote((base[:60] or "niche") + ".pdf")
     return f"attachment; filename=\"{ascii_name}.pdf\"; filename*=UTF-8''{utf8}"
+
+
+@app.post("/api/verdict")
+async def api_verdict(request: Request):
+    """Analyse éditoriale d'UNE niche, à la demande (sans état : la niche arrive entière
+    dans le body). Mesuré à 0,0283 $ pièce : les générer d'avance pour le top-3 pesait
+    78 % du coût d'un run, pour des analyses que l'utilisateur ne lisait pas. On ne paie
+    donc que la niche sur laquelle il clique."""
+    try:
+        scored = ScoredNiche.model_validate(await request.json())
+    except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
+        raise HTTPException(status_code=400, detail="niche invalide")
+    cost = CostTracker()
+    verdict = generate_verdict(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+    UsageMeter(_USAGE_DB).enregistrer("local", "verdict", cost.total_usd(), n_analyses=0)
+    return {**verdict.model_dump(), "_cout": cost.breakdown()}
 
 
 @app.post("/api/pdf")

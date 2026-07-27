@@ -213,3 +213,22 @@ def test_endpoint_usage_expose_la_consommation(monkeypatch, tmp_path):
     assert r.status_code == 200
     d = r.json()
     assert "n_analyses" in d and "cout_usd" in d
+
+
+def test_verdict_a_la_demande(monkeypatch, tmp_path):
+    """Le verdict n'est plus payé pendant le run (78 % du coût pour des analyses que
+    l'utilisateur ne lit pas). Il se demande niche par niche, sur celle qui l'intéresse."""
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    from models import NicheVerdict
+
+    monkeypatch.setattr(server, "generate_verdict",
+                        lambda sc, search=None, **kw: NicheVerdict(verdict="Go", confiance=8))
+    r = client.post("/api/verdict", json={"niche": "stoïcisme", "global_score": 7.4})
+    assert r.status_code == 200 and r.json()["verdict"] == "Go"
+
+
+def test_verdict_sur_charge_invalide_rend_400(monkeypatch, tmp_path):
+    """Une niche malformée doit rendre une 400 explicite, jamais une 500 opaque."""
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    r = client.post("/api/verdict", json={"global_score": "pas un nombre"})
+    assert r.status_code == 400
