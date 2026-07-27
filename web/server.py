@@ -5,10 +5,12 @@ Lancer :  uvicorn server:app --reload   (depuis le dossier web/)
    ou     python web/server.py
 """
 import json
+import os
 import queue
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -26,9 +28,32 @@ from fiction_taxonomy import load_taxonomy  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from models import ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
+from jobs import JobStore  # noqa: E402
+from usage import UsageMeter  # noqa: E402
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
+
+# Chemins des magasins asynchrones (plan SaaS S2/S3). De simples constantes Path : la
+# construction du JobStore/UsageMeter (et donc la création du fichier) est différée à
+# l'intérieur de chaque endpoint — jamais à l'import du module, sinon importer server.py
+# en test écrirait déjà des fichiers réels dans le dépôt (cf. cache.py, même principe :
+# connexion/instance par appel, jamais une instance partagée figée à l'import).
+_JOBS_DB = _ROOT / "99-logs" / "jobs.db"
+_USAGE_DB = _ROOT / "99-logs" / "usage.db"
+
+
+def _plafond_analyses_mensuel() -> int | None:
+    """Plafond mensuel glissant PAR utilisateur — garde-fou contre la queue de distribution
+    (l'utilisateur à 500 analyses), pas une grille tarifaire. Défaut prudent : pas de
+    plafond configuré -> illimité (mais journalisé, cf. usage.py)."""
+    raw = os.getenv("PLAFOND_ANALYSES_MENSUEL")
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
 
 
 @app.get("/")
@@ -129,6 +154,137 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
                 yield _sse("done", {})
                 break
             yield _sse(kind, payload)
+
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ── Travaux asynchrones (plan SaaS S4) ──────────────────────────────────────────────────
+# LE point de ce bloc : /api/scout et /api/fiction ci-dessus streament la progression dans
+# une queue.Queue qui ne vit QUE le temps de la requête HTTP — rien n'est persisté nulle
+# part, donc un client qui se déconnecte perd toute trace exploitable du run (résultat ET
+# coût). Ici le run est écrit dans le magasin de travaux (SQLite, jobs.db) à chaque étape :
+# POST rend un id tout de suite, le thread continue seul, GET peut être interrogé n'importe
+# quand ensuite — y compris après une déconnexion complète du client d'origine.
+
+def _run_scout_job(params: dict, progress, cost) -> list:
+    results = run_scout(seed=params.get("seed") or None, n_ideas=params.get("n_ideas", 12),
+                        n_search=params.get("n_search", 6), progress=progress, cost=cost)
+    return [r.model_dump() for r in results]
+
+
+def _run_fiction_job(params: dict, progress, cost) -> list:
+    sous_genre = params.get("sous_genre", "")
+    sgs = load_taxonomy().get("sous_genres", {})
+    if sous_genre not in sgs:
+        # Échoue AVANT tout appel payant : capté par le worker comme un échec de job
+        # normal (coût nul imputé), jamais une 500 opaque.
+        raise ValueError(f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
+    rapports = run_fiction_scout(sous_genre, n_niches=params.get("n_niches", 8),
+                                 rayon=params.get("rayon", "kindle"),
+                                 progress=progress, cost=cost)
+    payload = []
+    for r in rapports:
+        d = r.model_dump()
+        d["autocomplete_score"] = r.autocomplete_score       # cf. /api/fiction : property non sérialisée
+        payload.append(d)
+    return payload
+
+
+_JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}
+
+
+@app.post("/api/jobs", status_code=202)
+async def post_job(request: Request):
+    """Lance un travail asynchrone : le client reçoit un id IMMÉDIATEMENT (jamais 15 min
+    d'attente HTTP bloquante). Le thread du job est détaché de CETTE requête : il persiste
+    sa progression/son résultat/son coût dans le magasin, pas dans une queue en mémoire liée
+    à la connexion — fermer l'onglet ne l'arrête pas et ne perd pas l'argent déjà dépensé."""
+    body = await request.json()
+    type_ = body.get("type")
+    runner = _JOB_RUNNERS.get(type_)
+    if runner is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"type de job inconnu : « {type_} » (dispo : {sorted(_JOB_RUNNERS)})")
+    user_id = body.get("user_id") or "local"
+
+    # Le plafond est vérifié AVANT de dépenser (§4 du plan SaaS), jamais après coup.
+    usage = UsageMeter(_USAGE_DB, plafond_analyses=_plafond_analyses_mensuel())
+    if not usage.autorise(user_id, n_analyses=1):
+        raise HTTPException(
+            status_code=429,
+            detail=f"plafond mensuel atteint pour l'utilisateur « {user_id} »")
+
+    params = {k: v for k, v in body.items() if k not in ("type", "user_id")}
+    store = JobStore(_JOBS_DB)
+    job_id = store.create(type_, params, user_id=user_id)
+
+    def worker() -> None:
+        # Connexion/instance par appel (même pattern que cache.py) : sûr en concurrence,
+        # ce thread ne partage aucun objet Python avec la requête qui l'a lancé.
+        job_store = JobStore(_JOBS_DB)
+        job_store.start(job_id)
+        cost = CostTracker()
+
+        def progress(msg: str) -> None:
+            job_store.append_progress(job_id, msg)
+
+        try:
+            resultat = runner(params, progress, cost)
+            b = cost.breakdown()
+            job_store.finish(job_id, resultat, b)
+            UsageMeter(_USAGE_DB).enregistrer(user_id, type_, b["usd"], n_analyses=1)
+        except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
+            b = cost.breakdown()
+            job_store.fail(job_id, f"{type(e).__name__}: {e}", cout=b)
+            UsageMeter(_USAGE_DB).enregistrer(user_id, type_, b["usd"], n_analyses=1)
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"id": job_id}
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str):
+    job = JobStore(_JOBS_DB).get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job inconnu")
+    return job.model_dump()
+
+
+@app.get("/api/jobs")
+def list_jobs(user_id: str = "local", limit: int = 20):
+    return [j.model_dump() for j in JobStore(_JOBS_DB).list_jobs(user_id=user_id, limit=limit)]
+
+
+@app.get("/api/jobs/{job_id}/stream")
+def stream_job(job_id: str):
+    """SSE branché sur la progression du magasin — RECONNECTABLE : contrairement à
+    /api/scout et /api/fiction (queue en mémoire propre à une connexion), l'état lu ici
+    vient du magasin persistant, donc une reconnexion peut relire la progression à tout
+    moment, y compris longtemps après la requête POST d'origine."""
+    def stream():
+        store = JobStore(_JOBS_DB)
+        envoyes = 0
+        while True:
+            job = store.get(job_id)
+            if job is None:
+                yield _sse("error", "job inconnu")
+                yield _sse("done", {})
+                return
+            for msg in job.progression[envoyes:]:
+                yield _sse("progress", msg)
+            envoyes = len(job.progression)
+            if job.statut == "termine":
+                yield _sse("result", job.resultat)
+                yield _sse("cost", job.cout)
+                yield _sse("done", {})
+                return
+            if job.statut == "echec":
+                yield _sse("error", job.erreur)
+                yield _sse("done", {})
+                return
+            time.sleep(0.3)
 
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
