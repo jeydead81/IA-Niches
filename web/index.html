@@ -181,6 +181,23 @@
     border:1.5px solid var(--border);border-radius:10px;padding:11px 12px;outline:none}
   select:focus{border-color:var(--secondary);box-shadow:0 0 0 3px rgba(59,130,246,.18)}
 
+  /* Glossaire (Task U1) : un « ? » à côté de chaque terme technique, survolable ET
+     cliquable (tablette = pas de survol). Une seule bulle partagée en position:fixed —
+     ainsi elle échappe à tout ancêtre overflow:auto (le tableau notamment) et ne se fait
+     jamais couper par un bord d'écran (cf. positionGloss, clampé en JS). */
+  .lbl-gloss{display:inline-flex;align-items:center;gap:4px}
+  .gloss{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+    border-radius:50%;border:1.3px solid var(--text-muted);background:#fff;color:var(--text-muted);
+    font-family:var(--sans);font-weight:700;font-size:10.5px;line-height:1;cursor:pointer;
+    padding:0;flex:none;margin-left:2px;transition:background .15s,color .15s,border-color .15s}
+  .gloss:hover,.gloss[aria-expanded=true]{background:var(--secondary);border-color:var(--secondary);color:#fff}
+  .gloss:focus-visible{outline:2px solid var(--secondary);outline-offset:2px}
+  .gloss-tip{position:fixed;max-width:min(280px,calc(100vw - 24px));background:#0F172A;color:#F1F5F9;
+    font-size:12.5px;line-height:1.45;padding:10px 12px;border-radius:8px;
+    box-shadow:0 8px 24px rgba(15,23,42,.32);z-index:1000}
+  .gloss-tip strong{display:block;margin-bottom:3px;color:#93C5FD;font-size:11px;
+    text-transform:uppercase;letter-spacing:.4px}
+
   footer{margin-top:34px;text-align:center;color:#94A3B8;font-size:12px}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -239,7 +256,10 @@
         <table>
           <thead><tr>
             <th>Score</th><th>Niche</th><th class="num">Demande</th><th class="num">Pénétration</th>
-            <th>BSR (meilleur / moy. 5)</th><th class="num">Concurrents</th><th class="num">Sponso écartés</th><th></th>
+            <th>BSR <button type="button" class="gloss" data-term="BSR" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que BSR ? (aide)">?</button> (meilleur / moy. 5)</th>
+            <th class="num">Concurrents</th>
+            <th class="num">Sponso écartés <button type="button" class="gloss" data-term="Sponso écartés" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Sponso écartés ? (aide)">?</button></th>
+            <th></th>
           </tr></thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -261,14 +281,14 @@
           <select id="fic-sous-genre"><option value="">Chargement…</option></select>
         </div>
         <div class="field">
-          <label for="fic-rayon">Rayon</label>
+          <span class="lbl-gloss"><label for="fic-rayon">Rayon</label><button type="button" class="gloss" data-term="Rayon" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Rayon ? (aide)">?</button></span>
           <select id="fic-rayon">
             <option value="kindle">Kindle</option>
             <option value="papier">Papier</option>
           </select>
         </div>
         <div class="field">
-          <label for="fic-n">Trios</label>
+          <span class="lbl-gloss"><label for="fic-n">Trios</label><button type="button" class="gloss" data-term="Trio" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Trio ? (aide)">?</button></span>
           <input type="number" id="fic-n" value="8" min="3" max="15" />
         </div>
         <button class="run" id="run-fic" type="submit">
@@ -301,6 +321,10 @@
   <footer>IA-Niches · moteur local · données Amazon.fr</footer>
 </div>
 
+<!-- Bulle du glossaire (Task U1), unique et partagée, en dehors de tout conteneur à
+     overflow pour ne jamais être rognée. -->
+<div id="gloss-tip" class="gloss-tip" role="tooltip" hidden></div>
+
 <script>
 const $ = s => document.querySelector(s);
 const form=$('#form'), runBtn=$('#run'), runLabel=$('#run-label');
@@ -313,6 +337,30 @@ const ICON_DOT='<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy=
 const ICON_CHEV='<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
 
 const esc = t => String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Glossaire (Task U1) — textes repris MOT POUR MOT du plan UX (docs/superpowers/plans/
+// 2026-07-21-ux-lisibilite.md, tableau U1). Ne pas reformuler : rédigés pour un auteur
+// non technique, chaque changement de mot doit repasser par ce même plan.
+const GLOSSAIRE = {
+  'BSR': `Classement des ventes Amazon. Plus le nombre est <strong>petit</strong>, plus le livre se vend. Sous 10 000 : très bon. Au-delà de 100 000 : faible.`,
+  'Rayon': `L'endroit d'Amazon où le livre est classé : la boutique Kindle ou les livres papier. Les classements des deux ne se comparent pas.`,
+  'Trio': `La recette d'un roman : un sous-genre + un ou deux thèmes + un décor. Exemple : cosy mystery + enquêtrice amatrice + village breton.`,
+  'Trope': `Un ressort d'intrigue que le lecteur attend et recherche. Exemple : « ennemis devenus amants », « mariage arrangé ».`,
+  'Profondeur': `Est-ce que les livres de ce rayon <strong>se vendent</strong> ? Proche de 1 : oui, franchement. Proche de 0 : non.`,
+  'Ouverture': `Reste-t-il de la <strong>place</strong> ? Proche de 1 : oui. Proche de 0 : les places sont tenues par des livres bien installés.`,
+  'Saturation du trio': `Part des livres qui promettent <strong>déjà la même chose que vous</strong>. 0,7 = 7 livres sur 10 : mieux vaut changer d'angle.`,
+  'Part séries': `Proportion de livres qui font partie d'une série. Élevée = un tome unique sera désavantagé.`,
+  'Sonde autocomplete': `Est-ce que les lecteurs tapent vraiment ces mots dans la recherche Amazon ?`,
+  'Sponso écartés': `Livres sponsorisés (publicité) retirés du calcul : ils fausseraient la mesure de la concurrence.`,
+};
+
+// Un seul petit gabarit pour poser un « ? » à côté de n'importe quel terme, utilisé aussi
+// bien dans le HTML statique que dans les template strings des cartes générées en JS.
+function glossBtn(term){
+  return `<button type="button" class="gloss" data-term="${esc(term)}" aria-haspopup="true" `
+    +`aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que ${esc(term)} ? (aide)">?</button>`;
+}
+
 const grade = s => s>=7.5?'g':s>=6?'a':'r';
 const verdict = s => s>=7.5?'Prioritaire':s>=6?'Intéressant':'Faible';
 const fmt = n => n==null?'—':Number(n).toLocaleString('fr-FR');
@@ -506,6 +554,7 @@ function renderFic(rows){
     const [pmin,pmed,pmax] = (r.price_band && r.price_band.length===3) ? r.price_band : [null,null,null];
     const card=document.createElement('div'); card.className='panel fic-card';
     card.innerHTML=`
+      <p class="dl">Trio${glossBtn('Trio')} : sous-genre × trope${glossBtn('Trope')} × décor</p>
       <div class="fic-head">
         <div class="fic-trio">
           <span class="fic-sg">${esc(n.sous_genre||'—')}</span>
@@ -516,14 +565,14 @@ function renderFic(rows){
       </div>
       <div class="fic-sat ${satHigh?'high':'low'}">
         <span class="sval">${r.saturation_trio.toFixed(2)}</span>
-        <span class="stext"><strong>Saturation du trio</strong>combien de livres promettent déjà exactement ce trio — ${satHigh?'déjà largement couvert':'encore de la place'}</span>
+        <span class="stext"><strong>Saturation du trio</strong>${glossBtn('Saturation du trio')}combien de livres promettent déjà exactement ce trio — ${satHigh?'déjà largement couvert':'encore de la place'}</span>
       </div>
       <div class="fic-metrics">
-        <div class="metric"><span class="mlabel">Profondeur</span><span class="mval">${r.depth_score.toFixed(2)}</span></div>
-        <div class="metric"><span class="mlabel">Ouverture</span><span class="mval">${r.openness_score.toFixed(2)}</span></div>
-        <div class="metric"><span class="mlabel">Part séries</span><span class="mval">${fmtPct(r.series_share)}</span></div>
+        <div class="metric"><span class="mlabel">Profondeur${glossBtn('Profondeur')}</span><span class="mval">${r.depth_score.toFixed(2)}</span></div>
+        <div class="metric"><span class="mlabel">Ouverture${glossBtn('Ouverture')}</span><span class="mval">${r.openness_score.toFixed(2)}</span></div>
+        <div class="metric"><span class="mlabel">Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
         <div class="metric"><span class="mlabel">Prix min/méd/max</span><span class="mval">${fmtEur(pmin)} / ${fmtEur(pmed)} / ${fmtEur(pmax)}</span></div>
-        <div class="metric"><span class="mlabel">Sonde autocomplete</span>${acVal}</div>
+        <div class="metric"><span class="mlabel">Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
       </div>
       <div class="fic-verdict">${verdictBlockFic(r.verdict)}</div>`;
     gridFic.appendChild(card);
@@ -562,6 +611,58 @@ formFic.addEventListener('submit', e=>{
     if(!gridFic.children.length && !errboxFic.classList.contains('on')){ emptyFic.style.display='block'; }
   });
 });
+
+// ================= Glossaire (Task U1) =================
+// Bulle UNIQUE partagée par tous les boutons « ? », en position:fixed (jamais rognée par
+// le tableau à overflow-x:auto) et repositionnée à chaque ouverture pour rester dans
+// l'écran (point de vigilance n°4 du plan). Survol ET clic/tap fonctionnent tous les deux
+// (un lecteur sur tablette ne survole rien) ; clic = « épinglé » jusqu'à Échap ou un clic
+// ailleurs, pour laisser le temps de lire sans que la souris n'ait à rester immobile.
+const glossTip = $('#gloss-tip');
+let glossOpenBtn = null, glossPinned = false;
+
+function positionGloss(btn){
+  const r = btn.getBoundingClientRect();
+  const tr = glossTip.getBoundingClientRect();
+  const margin = 8;
+  let left = r.left + r.width/2 - tr.width/2;
+  left = Math.max(margin, Math.min(left, window.innerWidth - tr.width - margin));
+  let top = r.bottom + 8;
+  if(top + tr.height > window.innerHeight - margin) top = r.top - tr.height - 8;
+  if(top < margin) top = margin;
+  glossTip.style.left = left+'px';
+  glossTip.style.top = top+'px';
+}
+function showGloss(btn){
+  const text = GLOSSAIRE[btn.dataset.term];
+  if(!text) return;
+  glossTip.innerHTML = `<strong>${esc(btn.dataset.term)}</strong>${text}`;
+  glossTip.hidden = false;
+  glossOpenBtn = btn;
+  btn.setAttribute('aria-expanded','true');
+  positionGloss(btn);
+}
+function hideGloss(){
+  glossTip.hidden = true;
+  if(glossOpenBtn) glossOpenBtn.setAttribute('aria-expanded','false');
+  glossOpenBtn = null;
+  glossPinned = false;
+}
+document.addEventListener('mouseover', e=>{ const b=e.target.closest('.gloss'); if(b) showGloss(b); });
+document.addEventListener('mouseout', e=>{ const b=e.target.closest('.gloss'); if(b && !glossPinned) hideGloss(); });
+document.addEventListener('focusin', e=>{ const b=e.target.closest('.gloss'); if(b) showGloss(b); });
+document.addEventListener('focusout', e=>{ const b=e.target.closest('.gloss'); if(b && !glossPinned) hideGloss(); });
+document.addEventListener('click', e=>{
+  const b=e.target.closest('.gloss');
+  if(b){
+    e.stopPropagation();
+    if(glossOpenBtn===b && glossPinned){ hideGloss(); } else { showGloss(b); glossPinned=true; }
+    return;
+  }
+  if(!glossTip.hidden) hideGloss();
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !glossTip.hidden) hideGloss(); });
+window.addEventListener('resize', ()=>{ if(!glossTip.hidden && glossOpenBtn) positionGloss(glossOpenBtn); });
 </script>
 </body>
 </html>
