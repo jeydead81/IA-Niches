@@ -151,3 +151,46 @@ def test_rayon_ampute_est_signale_pas_lu_comme_desert():
     shelf = _shelf_profond().model_copy(update={"n_echecs": 9})
     r = build_report(_niche(), shelf, _classif_trio_absent(), _sig())
     assert "incomplet" in r.verdict.lower()
+
+
+def _sh(livres, **kw):
+    n = FictionNiche(sous_genre="dark_romance", tropes=["mafia"], rayon="kindle", query="q")
+    return n, FictionShelf(niche=n, search_param="x", books=livres,
+                           asins_demandes=len(livres), **kw)
+
+
+def _sig_ok():
+    return AutocompleteSignal(niche_query="q", score=0.5, mesure=True)
+
+
+def test_rayon_vide_nest_PAS_une_niche_morte():
+    """Vu en live : un trio dont la SERP ne rend rien sortait `matrice=mort`, exactement
+    comme un rayon plein de livres qui se vendent mal. « Mort » dit à l'utilisateur
+    d'écarter la niche ; ici RIEN n'a été mesuré. Confondre les deux fait renoncer à une
+    niche peut-être excellente (CLAUDE.md §10)."""
+    n, sh = _sh([])
+    r = build_report(n, sh, {}, _sig_ok())
+    assert r.demand_matrix != "mort"
+    assert "vide" in r.verdict.lower() or "aucun" in r.verdict.lower()
+
+
+def test_tous_les_livres_exclus_est_signale_avec_le_motif():
+    """8 livres au rayon mais 0 scorable (gratuits / hors rayon) : il faut dire combien ont
+    été écartés et pourquoi, pas rendre un zéro muet."""
+    livres = [EnrichedBook(asin=f"A{i}", title="T", bsr=500, bsr_rayon="Boutique Kindle",
+                           bsr_gratuit=True, serp_position=i + 1) for i in range(8)]
+    n, sh = _sh(livres)
+    r = build_report(n, sh, {}, _sig_ok())
+    assert r.demand_matrix != "mort"
+    assert "0/8" in r.verdict or "8" in r.verdict
+    assert "scorable" in r.verdict.lower()
+
+
+def test_une_vraie_niche_morte_reste_morte():
+    """Non-régression : un rayon RÉELLEMENT mesuré et faible doit toujours sortir « mort »."""
+    livres = [EnrichedBook(asin=f"A{i}", title="T", bsr=400000, bsr_rayon="Boutique Kindle",
+                           price=3.99, reviews_count=2000, serp_position=i + 1)
+              for i in range(8)]
+    n, sh = _sh(livres)
+    r = build_report(n, sh, {}, _sig_ok())
+    assert r.demand_matrix == "mort"

@@ -155,7 +155,17 @@ def price_band(livres: list[EnrichedBook]) -> list[float]:
     return [prix[0], statistics.median(prix), prix[-1]]
 
 
-def _demand_matrix(depth: float, openness: float, saturation: float) -> str:
+def _demand_matrix(depth: float, openness: float, saturation: float,
+                   n_scorables: int = 1) -> str:
+    """Aucun livre scorable -> `non_mesurable`, JAMAIS « mort » : les deux se ressemblent
+    dans les chiffres (tout à zéro) mais disent le contraire à l'utilisateur — l'un
+    l'invite à écarter la niche, l'autre à re-mesurer."""
+    if n_scorables == 0:
+        return "non_mesurable"
+    return _matrix_mesuree(depth, openness, saturation)
+
+
+def _matrix_mesuree(depth: float, openness: float, saturation: float) -> str:
     """La matrice croise profondeur (y a-t-il de l'argent ?) et ouverture (reste-t-il de
     la place ?). La saturation du trio n'arbitre QUE le cas haute/haute — profond ET
     ouvert peut être une pépite ou un sujet déjà couvert par tout le monde, et seule la
@@ -182,6 +192,17 @@ def _verdict(shelf: FictionShelf, ok: list[EnrichedBook],
     (mesurée SEULEMENT sur les livres classés)."""
     bits = [f"{matrix} — depth={depth:.2f}, openness={openness:.2f}, "
             f"saturation_trio={saturation:.2f}."]
+    # Zéro livre scorable = RIEN n'a été mesuré. Sans ce signalement, ce cas rendait
+    # « mort » exactement comme un rayon plein de livres qui se vendent mal — et « mort »
+    # dit à l'utilisateur d'écarter la niche. Vu en live sur « romance captif huis clos ».
+    if not ok:
+        if not shelf.books:
+            bits.append("Rayon VIDE : la SERP n'a rendu aucun livre — niche NON MESURÉE, "
+                        "surtout pas une niche morte. Vérifier la requête ou le rayon.")
+        else:
+            bits.append(f"AUCUN livre scorable sur {len(shelf.books)} au rayon : tous "
+                        f"écartés (titre gratuit, non-roman, ou rang d'un autre rayon) — "
+                        f"niche NON MESURÉE, pas une niche morte.")
     if shelf.n_echecs > 0:
         bits.append(f"Rayon INCOMPLET : {shelf.n_echecs}/{shelf.asins_demandes} ASIN non "
                     f"enrichis — ne pas lire comme un désert.")
@@ -207,7 +228,7 @@ def build_report(niche: FictionNiche, shelf: FictionShelf,
     depth = depth_score(ok)
     openness = openness_score(ok)
     saturation = saturation_trio(niche, ok, classifications)
-    matrix = _demand_matrix(depth, openness, saturation)
+    matrix = _demand_matrix(depth, openness, saturation, len(ok))
     verdict = _verdict(shelf, ok, classifications, matrix, depth, openness, saturation, signal)
     return FictionNicheReport(
         niche=niche,
