@@ -116,6 +116,20 @@ class NicheValidation(BaseModel):
     validated: bool = False                 # True si Amazon auto-complète au moins une requête
 
 
+class MotsClesKDP(BaseModel):
+    """Les 7 emplacements de mots-clés backend KDP, plus ce qui n'y est pas entré.
+
+    `rejetes` porte le MOTIF de chaque écart : un mot-clé retiré en silence est une
+    décision que l'auteur ne peut ni comprendre ni contester (CLAUDE.md §10)."""
+    emplacements: list[str] = Field(default_factory=list)          # <= 7, <= 50 caractères
+    a_verifier: list[str] = Field(default_factory=list)            # volume à confirmer à la main
+    confirmes_par_amazon: list[str] = Field(default_factory=list)  # sondés avec succès (gratuit)
+    rejetes: list[dict] = Field(default_factory=list)              # [{"mot":…, "motif":…}]
+    # True = autocomplete injoignable : rien n'est CONFIRMÉ, les emplacements restent des
+    # paris. Sans ce drapeau, une sonde en panne se lirait comme « aucun mot ne marche ».
+    sonde_indisponible: bool = False
+
+
 class FictionNiche(BaseModel):
     """Un trio fiction : sous-genre × trope(s) × décor, sur un marketplace et un rayon."""
     sous_genre: str
