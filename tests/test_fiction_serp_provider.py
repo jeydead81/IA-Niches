@@ -1,4 +1,5 @@
-from fiction_serp_provider import fetch_fiction_shelf, search_param_for_niche
+from fiction_serp_provider import (enrich_asins, fetch_fiction_shelf, fetch_shelf_asins,
+                                   search_param_for_niche)
 from models import FictionNiche, SearchResult, SearchItem, EnrichedBook
 from cost_tracker import CostTracker
 
@@ -148,3 +149,30 @@ def test_fetch_shelf_n_top_20_reste_possible():
     shelf = fetch_fiction_shelf(_niche(), provider=_ProvLarge(), n_top=20, cost=cost, cache=None)
     assert shelf.asins_demandes == 20
     assert len(shelf.books) == 20
+
+
+# --- M6-1 : scission SERP / enrichissement (fetch_fiction_shelf = composition des deux) ---
+
+def test_serp_half_rend_les_asins_sans_enrichir():
+    """La moitié SERP est rapide et sans file d'attente : c'est elle qu'on veut appeler
+    N fois avant de payer UNE seule fois la file ASIN."""
+    prov = _Prov()
+    sp, asins = fetch_shelf_asins(_niche(), provider=prov, n_top=12, cost=CostTracker())
+    assert sp == "rh=n:205566725031"
+    assert asins == ["A1", "A2"]
+    assert prov.seen.get("asins") is None          # aucun enrichissement déclenché
+
+
+def test_enrich_half_batche_et_cache():
+    prov = _Prov()
+    cost = CostTracker()
+    out = enrich_asins(["A1", "A2"], provider=prov, cache=None, cost=cost)
+    assert set(out) == {"A1", "A2"} and prov.seen["asins"] == ["A1", "A2"]
+    assert cost.breakdown()["dataforseo_calls"] == 2
+
+
+def test_fetch_fiction_shelf_reste_la_composition_des_deux():
+    """Contrat M2 inchangé — les appelants existants ne bougent pas."""
+    shelf = fetch_fiction_shelf(_niche(), provider=_Prov(), n_top=12, cost=CostTracker())
+    assert [b.asin for b in shelf.books] == ["A1", "A2"]
+    assert shelf.books[0].serp_position == 1 and shelf.asins_demandes == 2
