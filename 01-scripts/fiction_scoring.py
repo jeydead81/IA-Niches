@@ -157,16 +157,18 @@ def price_band(livres: list[EnrichedBook]) -> list[float]:
 
 def _demand_matrix(depth: float, openness: float, saturation: float) -> str:
     """La matrice croise profondeur (y a-t-il de l'argent ?) et ouverture (reste-t-il de
-    la place ?), la saturation du trio n'arbitrant QUE le cas haute/haute (pépite vs sujet
-    déjà couvert par tout le monde) — jamais l'autocomplete, qui ne gate jamais seul."""
+    la place ?). La saturation du trio n'arbitre QUE le cas haute/haute — profond ET
+    ouvert peut être une pépite ou un sujet déjà couvert par tout le monde, et seule la
+    lecture des blurbs (donc `saturation_trio`) tranche. L'autocomplete n'apparaît nulle
+    part ici : le spike M0 §V3 est formel, il ne gate jamais seul."""
     depth_haute = depth >= SEUILS["depth_haute"]
     openness_haute = openness >= SEUILS["openness_haute"]
     saturation_haute = saturation >= SEUILS["saturation_haute"]
     if depth_haute and openness_haute:
         return "porteur_encombre" if saturation_haute else "pepite"
-    if depth_haute:
+    if depth_haute:                     # openness basse -> peu de place malgré l'argent
         return "mur_installe"
-    if openness_haute:
+    if openness_haute:                  # depth basse -> de la place mais pas d'argent prouvé
         return "desert"
     return "mort"
 
@@ -176,7 +178,8 @@ def _verdict(shelf: FictionShelf, ok: list[EnrichedBook],
             openness: float, saturation: float, signal: AutocompleteSignal) -> str:
     """Verdict court et tranché qui signale explicitement (CLAUDE.md §10 + spike M0 §V3) :
     un rayon incomplet (jamais lu comme un désert), un sous-genre fantôme sur
-    l'autocomplete, une part de livres non classés, et le périmètre réel de la saturation."""
+    l'autocomplete, une part de livres non classés, et le périmètre réel de la saturation
+    (mesurée SEULEMENT sur les livres classés)."""
     bits = [f"{matrix} — depth={depth:.2f}, openness={openness:.2f}, "
             f"saturation_trio={saturation:.2f}."]
     if shelf.n_echecs > 0:
@@ -196,7 +199,7 @@ def build_report(niche: FictionNiche, shelf: FictionShelf,
                  classifications: dict[str, TropeClassification], signal: AutocompleteSignal,
                  version: str = "fr_v1", cost=None) -> FictionNicheReport:
     """Assemble le `FictionNicheReport` : applique les trois exclusions (`livres_scorables`)
-    AVANT tout calcul de métrique, porte l'AutocompleteSignal ENTIER (jamais son seul
+    AVANT tout calcul de métrique, porte l'`AutocompleteSignal` ENTIER (jamais son seul
     float — dette réglée le 2026-07-20, sinon `mesure`/`sous_genre_cherche` se perdent et
     0.0 redevient indiscernable d'un « absent » mesuré), et ne laisse JAMAIS l'autocomplete
     arbitrer `demand_matrix`."""
@@ -220,3 +223,5 @@ def build_report(niche: FictionNiche, shelf: FictionShelf,
         verdict=verdict,
         cost_run=cost.total_usd() if cost is not None else 0.0,
     )
+
+

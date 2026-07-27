@@ -1,6 +1,7 @@
 from fiction_scoring import (SEUILS, livres_scorables, depth_score, openness_score,
-                             saturation_trio, series_share, price_band)
-from models import EnrichedBook, FictionNiche, TropeClassification
+                             saturation_trio, series_share, price_band, build_report)
+from models import (AutocompleteSignal, EnrichedBook, FictionNiche, FictionShelf,
+                    TropeClassification)
 
 
 def _livre(asin, bsr, rayon="Boutique Kindle", gratuit=False, prix=3.99, avis=20,
@@ -69,3 +70,84 @@ def test_series_share_et_price_band():
 def test_les_seuils_sont_exposes_et_documentes():
     """Repères marché, pas vérités : un produit vendu devra les exposer."""
     assert SEUILS["bsr_kindle_excellent"] < SEUILS["bsr_kindle_correct"]
+
+
+# --- Helpers M5-2 : rayon "profond" calé sur le thriller psy mesuré en live (voir plan
+# M5 « Faits mesurés » : BSR top 5 1960/2168/7422/14924/47262 -> rayon actif). Sert de
+# base commune à build_report() : seule la classification change entre pépite et
+# porteur_encombre, ce qui prouve que c'est bien saturation_trio qui arbitre.
+
+def _niche():
+    return FictionNiche(sous_genre="thriller_psychologique",
+                        tropes=["manipulation_conjugale", "secret_de_famille"],
+                        rayon="kindle", query="thriller psychologique manipulation")
+
+
+def _shelf_profond():
+    bsrs = [1960, 2168, 7422, 14924, 47262]
+    livres = [_livre(f"P{i}", b, pos=i + 1) for i, b in enumerate(bsrs)]
+    return FictionShelf(niche=_niche(), search_param="rh=n:205566731031", books=livres,
+                        asins_demandes=5, n_echecs=0)
+
+
+def _classif_trio_absent():
+    """Les 5 livres du rayon sont classés mais AUCUN ne porte le trio visé (trope hors
+    sujet) -> saturation basse malgré un rayon profond et ouvert."""
+    return {f"P{i}": TropeClassification(asin=f"P{i}", taxonomy_version="fr_v1",
+                                         tropes=["voisin_inquietant"])
+           for i in range(5)}
+
+
+def _classif_trio_partout():
+    """Les 5 livres portent déjà le trio entier -> saturation haute : le même rayon,
+    profond et ouvert, devient un sujet encombré plutôt qu'une pépite."""
+    return {f"P{i}": TropeClassification(asin=f"P{i}", taxonomy_version="fr_v1",
+                                         tropes=["manipulation_conjugale", "secret_de_famille"])
+           for i in range(5)}
+
+
+def _sig():
+    return AutocompleteSignal(niche_query="thriller psychologique manipulation", score=0.5,
+                              mesure=True, sous_genre_cherche=True)
+
+
+def test_matrice_pepite_vs_porteur_encombre():
+    """Même rayon profond et ouvert : c'est la saturation du trio — donc la LECTURE DES
+    BLURBS — qui distingue une pépite d'un sujet déjà traité par tout le monde."""
+    r1 = build_report(_niche(), _shelf_profond(), _classif_trio_absent(), _sig())
+    r2 = build_report(_niche(), _shelf_profond(), _classif_trio_partout(), _sig())
+    assert r1.demand_matrix == "pepite"
+    assert r2.demand_matrix == "porteur_encombre"
+
+
+def test_autocomplete_ne_gate_jamais_seul():
+    """Spike M0 §V3 : un 0 sur un trio cosy est NORMAL (le rayon se navigue). Le verdict
+    ne doit pas basculer sur ce seul signal."""
+    muet = AutocompleteSignal(niche_query="q", score=0.0, mesure=True,
+                              sous_genre_cherche=True)
+    parlant = AutocompleteSignal(niche_query="q", score=1.0, mesure=True)
+    a = build_report(_niche(), _shelf_profond(), _classif_trio_absent(), muet)
+    b = build_report(_niche(), _shelf_profond(), _classif_trio_absent(), parlant)
+    assert a.demand_matrix == b.demand_matrix == "pepite"
+
+
+def test_sonde_non_mesuree_ne_compte_pas_comme_zero():
+    """mesure=False : le rapport ne doit pas rendre une note (cf. dette M3 réglée)."""
+    r = build_report(_niche(), _shelf_profond(), _classif_trio_absent(),
+                     AutocompleteSignal(niche_query="q"))
+    assert r.autocomplete_score is None
+
+
+def test_sous_genre_fantome_est_une_alerte():
+    """Le sous-genre lui-même n'est pas cherché -> le signalement remonte dans le verdict."""
+    fantome = AutocompleteSignal(niche_query="q", score=0.0, mesure=True,
+                                 sous_genre_cherche=False)
+    r = build_report(_niche(), _shelf_profond(), _classif_trio_absent(), fantome)
+    assert "sous-genre" in r.verdict.lower()
+
+
+def test_rayon_ampute_est_signale_pas_lu_comme_desert():
+    """FictionShelf.n_echecs > 0 : un rayon incomplet ne doit pas passer pour vide (§10)."""
+    shelf = _shelf_profond().model_copy(update={"n_echecs": 9})
+    r = build_report(_niche(), shelf, _classif_trio_absent(), _sig())
+    assert "incomplet" in r.verdict.lower()
