@@ -32,6 +32,7 @@ from models import ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from jobs import JobStore  # noqa: E402
 from usage import UsageMeter  # noqa: E402
+from history import NicheHistory  # noqa: E402
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
@@ -43,6 +44,7 @@ _HERE = Path(__file__).resolve().parent
 # connexion/instance par appel, jamais une instance partagée figée à l'import).
 _JOBS_DB = _ROOT / "99-logs" / "jobs.db"
 _USAGE_DB = _ROOT / "99-logs" / "usage.db"
+_HISTORY_DB = _ROOT / "99-logs" / "history.db"
 
 
 def _plafond_analyses_mensuel() -> int | None:
@@ -67,6 +69,27 @@ def _sse(event: str, data) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _consigner_scout(results, user_id: str = "local") -> None:
+    """Consigne chaque niche pour l'historique. Sans enregistrement AUTOMATIQUE, la
+    fonction n'existerait que sur le papier : personne n'appellera `enregistrer()` à la
+    main après chaque run."""
+    h = NicheHistory(_HISTORY_DB)
+    for r in results:
+        h.enregistrer(user_id, "scout", r.niche, {
+            "global_score": r.global_score, "bsr_best": r.bsr_best,
+            "bsr_top5_avg": r.bsr_top5_avg, "n_concurrents_cibles": r.n_concurrents_cibles,
+        })
+
+
+def _consigner_fiction(rapports, user_id: str = "local") -> None:
+    h = NicheHistory(_HISTORY_DB)
+    for r in rapports:
+        h.enregistrer(user_id, "fiction", r.niche.query, {
+            "depth_score": r.depth_score, "openness_score": r.openness_score,
+            "saturation_trio": r.saturation_trio, "series_share": r.series_share,
+        })
+
+
 @app.get("/api/scout")
 def scout(seed: str = "", ideas: int = 10, search: int = 4):
     """Lance le scout dans un thread et streame la progression + le résultat en SSE."""
@@ -80,6 +103,7 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
         try:
             results = run_scout(seed=(seed or None), n_ideas=ideas, n_search=search,
                                 progress=progress, cost=cost)
+            _consigner_scout(results)
             q.put(("result", [r.model_dump() for r in results]))
             q.put(("cost", cost.breakdown()))
         except Exception as e:  # noqa: BLE001
@@ -139,6 +163,7 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
                 # 0 par omission, un utilisateur lirait ça comme un verdict (CLAUDE.md §10).
                 d["autocomplete_score"] = r.autocomplete_score
                 payload.append(d)
+            _consigner_fiction(rapports)
             q.put(("result", payload))
             q.put(("cost", cost.breakdown()))
         except Exception as e:  # noqa: BLE001
@@ -329,6 +354,20 @@ async def api_verdict(request: Request):
     verdict = generate_verdict(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     UsageMeter(_USAGE_DB).enregistrer("local", "verdict", cost.total_usd(), n_analyses=0)
     return {**verdict.model_dump(), "_cout": cost.breakdown()}
+
+
+@app.get("/api/history")
+def history(niche: str = "", user_id: str = "local"):
+    """Historique d'une niche et lecture de son évolution.
+
+    Une niche vue une seule fois rend `delta: null` avec un 200 : « pas encore de recul »
+    est une réponse, pas un échec — une 404 pousserait l'interface à afficher une erreur
+    là où il n'y a qu'une absence de comparaison possible."""
+    h = NicheHistory(_HISTORY_DB)
+    d = h.delta(user_id, niche)
+    return {"niche": niche,
+            "passages": h.historique(user_id, niche),
+            "delta": d.model_dump() if d else None}
 
 
 @app.post("/api/kdp-keywords")
