@@ -126,6 +126,32 @@
   .btn-pdf{font-family:var(--sans);font-weight:600;font-size:12.5px;color:#fff;cursor:pointer;
     background:var(--primary);border:none;border-radius:8px;padding:7px 14px;margin-top:8px}
   .btn-pdf:hover{background:var(--primary-600)}
+  .btn-kdp{background:#fff;color:var(--primary);border:1px solid var(--primary)}
+  .btn-kdp:hover{background:#EFF6FF}
+
+  /* Mots-clés KDP — 7 emplacements copiables UN PAR UN : l'auteur les colle dans les
+     7 champs distincts du formulaire KDP, un bloc unique l'obligerait à découper. */
+  .kdpbox{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:10px}
+  .kdprow{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px dashed var(--border)}
+  .kdprow:last-of-type{border-bottom:none}
+  .kdpnum{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);width:16px;flex:none}
+  .kdpkw{flex:1;font-size:13px;color:var(--heading)}
+  .kdplen{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);flex:none}
+  .kdptag{font-size:11px;font-weight:600;border-radius:99px;padding:2px 8px;flex:none;white-space:nowrap}
+  .kdptag.ok{background:var(--green-bg);color:#166534}
+  .kdptag.tv{background:var(--amber-bg);color:#92400E}
+  .btn-copy{font-family:var(--sans);font-size:11.5px;color:var(--text-muted);cursor:pointer;flex:none;
+    background:var(--muted);border:1px solid var(--border);border-radius:6px;padding:3px 9px}
+  .btn-copy:hover{background:#E2E8F0;color:var(--heading)}
+  .kdpnote{font-size:12.5px;color:#92400E;background:var(--amber-bg);border-radius:8px;padding:7px 10px;margin:8px 0 0}
+  .kdpfold{margin-top:9px}
+  .kdpfold summary{font-size:12.5px;color:var(--text-muted);cursor:pointer}
+  .kdpfold li{font-size:12.5px;color:var(--text-muted);margin:3px 0}
+
+  /* Historique : ce qui a bougé depuis le passage précédent sur la même niche. */
+  .histbox{font-size:12.5px;color:var(--text-muted);margin-top:9px;padding:8px 10px;
+    background:var(--muted);border-radius:8px}
+  .histbox strong{color:var(--heading)}
 
   .empty,.errbox{padding:44px 20px;text-align:center;color:var(--text-muted)}
   .empty svg{width:40px;height:40px;color:#CBD5E1;margin-bottom:10px}
@@ -492,7 +518,105 @@ function verdictBlock(r){
       <p class="vfacteur"><strong>Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
       ${angleHtml}
       <button type="button" class="btn-pdf">Télécharger le PDF</button>
+      <button type="button" class="btn-pdf btn-kdp">Mots-clés KDP</button>
+      <div class="kdpslot"></div>
     </div>`;
+}
+
+// ── Les 7 mots-clés backend KDP ────────────────────────────────────────────────────
+// Chaque expression est copiable SEULE : KDP offre sept champs distincts. On affiche la
+// longueur consommée (limite dure de 50 caractères) et le statut de vérification, parce
+// que le point du module est justement qu'on ne devine pas le volume — on vérifie
+// gratuitement qu'Amazon complète l'expression.
+async function loadKdp(niche, slot, btn){
+  btn.disabled = true; btn.textContent = 'Recherche en cours…';
+  slot.innerHTML = '';
+  try{
+    const r = await fetch('/api/kdp-keywords', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(niche)});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    slot.innerHTML = kdpBlock(await r.json());
+    slot.querySelectorAll('.btn-copy').forEach(b=>{
+      b.addEventListener('click', ev=>{
+        ev.stopPropagation();
+        navigator.clipboard.writeText(b.dataset.kw).then(()=>{
+          b.textContent='Copié'; setTimeout(()=>{b.textContent='Copier';}, 1400);
+        });
+      });
+    });
+    btn.textContent = 'Mots-clés KDP';
+  }catch(e){
+    slot.innerHTML = `<p class="kdpnote">Les mots-clés n'ont pas pu être générés (${esc(String(e.message||e))}).</p>`;
+    btn.textContent = 'Réessayer';
+  }
+  btn.disabled = false;
+}
+
+function kdpBlock(k){
+  const confirmes = new Set(k.confirmes_par_amazon || []);
+  const lignes = (k.emplacements || []).map((kw, i) => {
+    // « Confirmé par Amazon » = l'amorce de l'expression est réellement complétée par la
+    // barre de recherche. « À vérifier » n'est PAS un rejet : un emplacement KDP laissé
+    // vide est une perte sèche, donc on remplit les sept.
+    const ok = confirmes.has(kw);
+    const tag = ok ? '<span class="kdptag ok">confirmé par Amazon</span>'
+                   : '<span class="kdptag tv">à vérifier</span>';
+    return `<div class="kdprow">
+        <span class="kdpnum">${i+1}.</span>
+        <span class="kdpkw">${esc(kw)}</span>
+        <span class="kdplen">${kw.length}/50</span>
+        ${tag}
+        <button type="button" class="btn-copy" data-kw="${esc(kw)}">Copier</button>
+      </div>`;
+  }).join('') || '<p class="mut">Aucune expression retenue.</p>';
+
+  // Une panne de la sonde doit se lire comme une panne. Sans ce message, « 0 confirmé »
+  // se lirait « aucun de tes mots-clés n'est cherché » — contresens total, l'auteur
+  // jetterait de bons mots-clés.
+  const panne = k.sonde_indisponible
+    ? `<p class="kdpnote">L'autocomplete Amazon n'a pas répondu : ces expressions
+        n'ont pas pu être vérifiées. Elles restent utilisables, mais leur confirmation
+        est inconnue — ce n'est pas un « aucun ne marche ».</p>` : '';
+
+  const av = (k.a_verifier || []).length
+    ? `<details class="kdpfold"><summary>${k.a_verifier.length} expression(s) en réserve
+        — à vérifier à la main sur Amazon</summary><ul>${
+        k.a_verifier.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></details>` : '';
+
+  // §10 : un mot-clé écarté en silence est une décision invisible.
+  const rj = (k.rejetes || []).length
+    ? `<details class="kdpfold"><summary>${k.rejetes.length} expression(s) écartée(s)
+        — et le motif de chacune</summary><ul>${
+        k.rejetes.map(x=>`<li><strong>${esc(x.mot)}</strong> — ${esc(x.motif)}</li>`).join('')
+      }</ul></details>` : '';
+
+  return `<div class="kdpbox">
+      <p class="dl">Les 7 emplacements backend KDP — à coller un par un</p>
+      ${lignes}${panne}${av}${rj}
+    </div>`;
+}
+
+// ── Historique : ce qui a bougé depuis le passage précédent ─────────────────────────
+async function loadHistorique(niche, slot){
+  try{
+    const r = await fetch('/api/history?niche=' + encodeURIComponent(niche));
+    if(!r.ok) return;
+    const h = await r.json();
+    // Une niche vue une seule fois n'a pas d'évolution : le dire, plutôt qu'afficher
+    // une erreur ou un delta nul qui se lirait « stable ».
+    if(!h.delta){
+      slot.innerHTML = `<div class="histbox"><strong>Premier passage sur cette niche.</strong>
+        Relancez dans quelques semaines : c'est la comparaison entre deux runs qui montre
+        si la niche s'ouvre ou se referme.</div>`;
+      return;
+    }
+    // On affiche `lecture` (le français), pas `variations` (le delta brut) : « +0,23 »
+    // ne fait pas agir, « la niche s'est densifiée » si.
+    // Le nombre de jours est déjà porté par `lecture` (« En 45 jour(s) : … ») : le
+    // répéter dans l'en-tête ferait lire deux fois la même information.
+    slot.innerHTML = `<div class="histbox"><strong>Évolution
+      (${h.delta.n_passages} passages) :</strong> ${esc(h.delta.lecture)}</div>`;
+  }catch(e){ /* l'historique est un plus : son absence ne casse pas la fiche */ }
 }
 
 async function downloadPdf(niche) {
@@ -527,13 +651,26 @@ function render(rows){
     const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
     const asins=(r.top_asins||[]).map(a=>`<a class="asin" href="https://www.amazon.fr/dp/${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>`).join('')||'<span class="mut">—</span>';
     det.innerHTML=`<td colspan="8"><div class="inner">
+        <div class="histslot"></div>
         ${verdictBlock(r)}
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
         <p class="dl">Top livres concurrents (ASIN → fiche)</p><div class="asins">${asins}</div>
       </div></td>`;
-    tr.addEventListener('click',()=>{tr.classList.toggle('open');det.classList.toggle('open');});
+    let histCharge=false;
+    tr.addEventListener('click',()=>{
+      tr.classList.toggle('open');det.classList.toggle('open');
+      // Chargé à l'ouverture seulement : inutile d'interroger l'historique de dix niches
+      // que l'utilisateur ne dépliera jamais.
+      if(det.classList.contains('open') && !histCharge){
+        histCharge=true; loadHistorique(r.niche, det.querySelector('.histslot'));
+      }
+    });
     const pdfBtn=det.querySelector('.btn-pdf');
     if(pdfBtn) pdfBtn.addEventListener('click',ev=>{ev.stopPropagation();downloadPdf(r);});
+    const kdpBtn=det.querySelector('.btn-kdp');
+    if(kdpBtn) kdpBtn.addEventListener('click',ev=>{
+      ev.stopPropagation(); loadKdp(r, det.querySelector('.kdpslot'), kdpBtn);
+    });
     tbody.appendChild(tr); tbody.appendChild(det);
   });
   empty.style.display='none'; results.classList.add('on');
