@@ -2,6 +2,8 @@
 
 C'est la seule fonction du produit qui répond à « est-ce que ça bouge ? ». Sans elle,
 chaque run est un cliché isolé : impossible de voir qu'une niche se referme."""
+import time
+
 from history import NicheHistory, cle_niche
 
 
@@ -108,3 +110,54 @@ def test_une_niche_vue_une_seule_fois_nest_pas_une_erreur(tmp_path, monkeypatch)
     client, _ = _client_hist(monkeypatch, tmp_path, "h2.db")
     r = client.get("/api/history", params={"niche": "jamais vue"})
     assert r.status_code == 200 and r.json()["delta"] is None
+
+
+# ── Le chemin asynchrone doit consigner l'historique lui aussi ──────────────────────
+
+def _attendre(client, job_id, timeout=3.0):
+    fin = time.time() + timeout
+    while time.time() < fin:
+        if client.get(f"/api/jobs/{job_id}").json()["statut"] in ("termine", "echec"):
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"job {job_id} non terminé")
+
+
+def test_un_job_asynchrone_consigne_l_historique(tmp_path, monkeypatch):
+    """DÉFAUT TROUVÉ EN REVUE : seuls les endpoints SSE consignaient. Or `POST /api/jobs`
+    est le chemin RECOMMANDÉ (il survit à la fermeture de l'onglet, vérifie le plafond et
+    impute l'usage) — un utilisateur qui suit la recommandation n'aurait jamais eu de
+    delta, et l'historique serait resté vide sans qu'aucun test ne s'en aperçoive."""
+    client, server = _client_hist(monkeypatch, tmp_path, "hj.db")
+    from models import ScoredNiche
+    monkeypatch.setattr(server, "run_scout",
+                        lambda **kw: [ScoredNiche(niche="tarot de marseille",
+                                                  requete_amazon="tarot",
+                                                  categorie="ésotérisme",
+                                                  global_score=7.1, bsr_best=900)])
+
+    job_id = client.post("/api/jobs", json={"type": "scout", "seed": "tarot"}).json()["id"]
+    _attendre(client, job_id)
+
+    h = client.get("/api/history", params={"niche": "Tarot de Marseille"}).json()
+    assert h["passages"], "un run asynchrone doit laisser une trace dans l'historique"
+    assert h["passages"][0]["metriques"]["global_score"] == 7.1
+
+
+def test_le_job_consigne_sous_l_utilisateur_du_job(tmp_path, monkeypatch):
+    """L'historique est cloisonné par utilisateur (à la différence du cache, partagé) :
+    consigner sous « local » un run lancé par un autre compte mélangerait les historiques
+    dès l'arrivée des comptes."""
+    client, server = _client_hist(monkeypatch, tmp_path, "hu.db")
+    from models import ScoredNiche
+    monkeypatch.setattr(server, "run_scout",
+                        lambda **kw: [ScoredNiche(niche="tarot", global_score=7.1)])
+
+    job_id = client.post("/api/jobs",
+                         json={"type": "scout", "user_id": "baptiste"}).json()["id"]
+    _attendre(client, job_id)
+
+    assert client.get("/api/history",
+                      params={"niche": "tarot", "user_id": "baptiste"}).json()["passages"]
+    assert not client.get("/api/history",
+                          params={"niche": "tarot"}).json()["passages"]

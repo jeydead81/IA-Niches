@@ -194,7 +194,7 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
 # POST rend un id tout de suite, le thread continue seul, GET peut être interrogé n'importe
 # quand ensuite — y compris après une déconnexion complète du client d'origine.
 
-def _run_scout_job(params: dict, progress, cost) -> list:
+def _run_scout_job(params: dict, progress, cost, user_id: str = "local") -> list:
     # `ideas`/`search` sont les noms de l'endpoint SSE historique : les accepter aussi,
     # sinon un client qui reprend ces noms voit son plafond silencieusement ignoré et paie
     # les défauts (6 recherches au lieu de 2 demandées). Divergence constatée en live.
@@ -202,10 +202,11 @@ def _run_scout_job(params: dict, progress, cost) -> list:
     n_search = params.get("n_search", params.get("search", 6))
     results = run_scout(seed=params.get("seed") or None, n_ideas=n_ideas,
                         n_search=n_search, progress=progress, cost=cost)
+    _consigner_scout(results, user_id)
     return [r.model_dump() for r in results]
 
 
-def _run_fiction_job(params: dict, progress, cost) -> list:
+def _run_fiction_job(params: dict, progress, cost, user_id: str = "local") -> list:
     sous_genre = params.get("sous_genre", "")
     sgs = load_taxonomy().get("sous_genres", {})
     if sous_genre not in sgs:
@@ -220,9 +221,14 @@ def _run_fiction_job(params: dict, progress, cost) -> list:
         d = r.model_dump()
         d["autocomplete_score"] = r.autocomplete_score       # cf. /api/fiction : property non sérialisée
         payload.append(d)
+    _consigner_fiction(rapports, user_id)
     return payload
 
 
+# Les deux runners reçoivent le user_id ET consignent l'historique : le chemin asynchrone
+# est celui qu'on RECOMMANDE (il survit à la fermeture de l'onglet et vérifie le plafond),
+# donc c'est précisément lui qui doit alimenter l'historique. Le laisser muet — l'état
+# initial, trouvé en revue — vidait la fonction de sa substance pour l'usage nominal.
 _JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}
 
 
@@ -263,7 +269,7 @@ async def post_job(request: Request):
             job_store.append_progress(job_id, msg)
 
         try:
-            resultat = runner(params, progress, cost)
+            resultat = runner(params, progress, cost, user_id)
             b = cost.breakdown()
             job_store.finish(job_id, resultat, b)
             UsageMeter(_USAGE_DB).enregistrer(user_id, type_, b["usd"], n_analyses=1)
