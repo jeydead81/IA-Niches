@@ -75,6 +75,12 @@ def _consigner_scout(results, user_id: str = "local") -> None:
     main après chaque run."""
     h = NicheHistory(_HISTORY_DB)
     for r in results:
+        # Une niche dont la SERP a échoué porte des zéros non mesurés. Les consigner
+        # injecterait un point faux dans la série : le passage suivant, mesuré celui-là,
+        # produirait un delta spectaculaire et mensonger (« la niche s'est densifiée »)
+        # alors que seule la panne a cessé. Un point qu'on sait faux est pire qu'un trou.
+        if not r.concurrence_mesuree:
+            continue
         h.enregistrer(user_id, "scout", r.niche, {
             "global_score": r.global_score, "bsr_best": r.bsr_best,
             "bsr_top5_avg": r.bsr_top5_avg, "n_concurrents_cibles": r.n_concurrents_cibles,
@@ -411,4 +417,11 @@ async def api_pdf(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # HOST et PORT par variable d'environnement : un port figé à 8000 empêche de lancer
+    # deux instances et bloque tout hébergement (les plateformes imposent leur PORT).
+    # Défauts inchangés pour l'usage local : 127.0.0.1:8000.
+    try:
+        port = int(os.getenv("PORT", "8000"))
+    except ValueError:
+        port = 8000
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"), port=port)

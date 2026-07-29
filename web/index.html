@@ -153,6 +153,12 @@
     background:var(--muted);border-radius:8px}
   .histbox strong{color:var(--heading)}
 
+  /* Niche dont la SERP a échoué : ni verte ni rouge — grise, parce qu'on ne sait pas. */
+  .pill.n{background:var(--muted);color:var(--text-muted)}
+  .verdict.n{color:var(--text-muted)}
+  .nmbox{font-size:12.5px;color:#92400E;background:var(--amber-bg);border:1px solid #FCD34D;
+    border-radius:8px;padding:9px 11px;margin:0 0 12px}
+
   .empty,.errbox{padding:44px 20px;text-align:center;color:var(--text-muted)}
   .empty svg{width:40px;height:40px;color:#CBD5E1;margin-bottom:10px}
   .errbox{color:#991B1B;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--radius);margin-top:18px;display:none}
@@ -447,6 +453,11 @@ function glossBtn(term){
 
 const grade = s => s>=7.5?'g':s>=6?'a':'r';
 const verdict = s => s>=7.5?'Prioritaire':s>=6?'Intéressant':'Faible';
+// Une niche dont la SERP a échoué (solde DataForSEO épuisé, file en panne) porte des
+// compteurs de concurrence à zéro faute de MESURE, pas parce que le rayon est vide. La
+// pastille ne doit donc pas se déduire du score seul : afficher « Intéressant » sur une
+// niche jamais confrontée à sa concurrence enverrait l'auteur publier à l'aveugle.
+const nonMesuree = r => r.concurrence_mesuree === false;
 const fmt = n => n==null?'—':Number(n).toLocaleString('fr-FR');
 // Formateur décimal fr-FR partagé pour tout score affiché (0,96 et non 0.96, Task U2) —
 // même principe que fmtEur() plus bas : toLocaleString gère l'arrondi ET la virgule en
@@ -635,11 +646,12 @@ function render(rows){
   tbody.innerHTML='';
   rcount.textContent = rows.length ? `${rows.length} niche(s) analysée(s) en profondeur` : 'aucune niche validée';
   rows.forEach((r,i)=>{
-    const g=grade(r.global_score);
+    const nm = nonMesuree(r);
+    const g = nm ? 'n' : grade(r.global_score);
     const gap = r.criteres_bsr_ok ? `<span class="badge41">${ICON_CHECK}§4.1</span>` : '';
     const tr=document.createElement('tr'); tr.className='row';
     tr.innerHTML=`
-      <td><span class="score"><span class="pill ${g}">${fmtDec(r.global_score,1)}</span><span class="verdict ${g}">${verdict(r.global_score)}</span></span></td>
+      <td><span class="score"><span class="pill ${g}">${nm?'—':fmtDec(r.global_score,1)}</span><span class="verdict ${g}">${nm?'Non mesurée':verdict(r.global_score)}</span></span></td>
       <td><div class="niche-name">${esc(r.niche)}</div><div class="cat">${esc(r.categorie)}</div></td>
       <td class="num">${fmtDec(r.demande,1)}</td>
       <td class="num">${fmtDec(r.penetration,1)}</td>
@@ -650,7 +662,13 @@ function render(rows){
     const det=document.createElement('tr'); det.className='detail';
     const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
     const asins=(r.top_asins||[]).map(a=>`<a class="asin" href="https://www.amazon.fr/dp/${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>`).join('')||'<span class="mut">—</span>';
+    const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
+        La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
+        et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
+        Le score n'est pas exploitable — à relancer. Cause la plus fréquente : solde
+        DataForSEO épuisé.</p>` : '';
     det.innerHTML=`<td colspan="8"><div class="inner">
+        ${alerteNm}
         <div class="histslot"></div>
         ${verdictBlock(r)}
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>

@@ -60,3 +60,12 @@ def test_l_evolution_est_lue_en_francais_pas_en_delta_brut():
     assert "delta.lecture" in HTML
     assert "delta.variations" not in HTML, "le delta brut ne doit pas remonter à l'écran"
     assert "n_passages" in HTML
+
+
+def test_une_niche_non_mesuree_est_signalee_dans_l_interface():
+    """L'UI recalcule son badge depuis `global_score` seul : sans garde, une niche dont la
+    SERP a échoué s'afficherait « Intéressant » comme une autre. C'est la faute cardinale
+    du produit — une absence de mesure présentée comme un verdict de marché."""
+    assert "concurrence_mesuree" in HTML
+    for extrait in ("non mesurée", "relancer"):
+        assert extrait.lower() in HTML.lower(), f"mention manquante : {extrait}"

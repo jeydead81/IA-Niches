@@ -100,6 +100,11 @@ class ScoredNiche(BaseModel):
     bsr_top5_avg: int | None = None
     bsr_worst_top10: int | None = None
     criteres_bsr_ok: bool = False
+    # False = la SERP n'a pas répondu (solde épuisé, file en panne) : les compteurs de
+    # concurrence valent 0 parce que RIEN n'a été mesuré, pas parce que le rayon est vide.
+    # Défaut pessimiste, comme AutocompleteSignal.mesure : un champ jamais renseigné doit
+    # se lire « non mesuré », jamais « mesuré à zéro ».
+    concurrence_mesuree: bool = False
     top_asins: list[str] = Field(default_factory=list)
     verdict: NicheVerdict | None = None    # rempli pour le top-N (gate coût)
 

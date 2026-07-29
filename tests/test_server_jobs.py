@@ -40,7 +40,12 @@ def _client_with_isolated_dbs(monkeypatch, tmp_path):
     return TestClient(server.app), server
 
 
-def _attendre_job(client, job_id: str, timeout: float = 2.0) -> dict:
+def _attendre_job(client, job_id: str, timeout: float = 10.0) -> dict:
+    """Budget volontairement large : ce helper sonde toutes les 20 ms et rend la main dès
+    que le job est fini, donc un plafond généreux ne ralentit RIEN quand la machine va
+    bien. À 2 s, il produisait un échec intermittent sous charge — le thread du job est
+    détaché, sa vitesse ne dépend pas du test. Un test rouge une fois sur dix érode plus
+    la confiance dans la suite qu'il ne protège de quoi que ce soit."""
     fin = _time.time() + timeout
     job = None
     while _time.time() < fin:

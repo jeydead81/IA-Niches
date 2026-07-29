@@ -134,7 +134,8 @@ def test_un_job_asynchrone_consigne_l_historique(tmp_path, monkeypatch):
                         lambda **kw: [ScoredNiche(niche="tarot de marseille",
                                                   requete_amazon="tarot",
                                                   categorie="ésotérisme",
-                                                  global_score=7.1, bsr_best=900)])
+                                                  global_score=7.1, bsr_best=900,
+                                                  concurrence_mesuree=True)])
 
     job_id = client.post("/api/jobs", json={"type": "scout", "seed": "tarot"}).json()["id"]
     _attendre(client, job_id)
@@ -151,7 +152,8 @@ def test_le_job_consigne_sous_l_utilisateur_du_job(tmp_path, monkeypatch):
     client, server = _client_hist(monkeypatch, tmp_path, "hu.db")
     from models import ScoredNiche
     monkeypatch.setattr(server, "run_scout",
-                        lambda **kw: [ScoredNiche(niche="tarot", global_score=7.1)])
+                        lambda **kw: [ScoredNiche(niche="tarot", global_score=7.1,
+                                                  concurrence_mesuree=True)])
 
     job_id = client.post("/api/jobs",
                          json={"type": "scout", "user_id": "baptiste"}).json()["id"]
@@ -161,3 +163,22 @@ def test_le_job_consigne_sous_l_utilisateur_du_job(tmp_path, monkeypatch):
                       params={"niche": "tarot", "user_id": "baptiste"}).json()["passages"]
     assert not client.get("/api/history",
                           params={"niche": "tarot"}).json()["passages"]
+
+
+def test_une_niche_non_mesuree_n_entre_pas_dans_l_historique(tmp_path, monkeypatch):
+    """Consigner une niche dont la SERP a échoué injecterait des zéros non mesurés dans
+    la série : le passage suivant, mesuré celui-là, produirait un delta spectaculaire et
+    faux (« la niche s'est densifiée ») alors que seule la panne a cessé. Un point qu'on
+    sait faux est pire qu'un point manquant."""
+    client, server = _client_hist(monkeypatch, tmp_path, "hnm.db")
+    from models import ScoredNiche
+    monkeypatch.setattr(server, "run_scout", lambda **kw: [
+        ScoredNiche(niche="mesuree", global_score=7.0, concurrence_mesuree=True),
+        ScoredNiche(niche="non mesuree", global_score=6.1, concurrence_mesuree=False),
+    ])
+
+    job_id = client.post("/api/jobs", json={"type": "scout"}).json()["id"]
+    _attendre(client, job_id)
+
+    assert client.get("/api/history", params={"niche": "mesuree"}).json()["passages"]
+    assert not client.get("/api/history", params={"niche": "non mesuree"}).json()["passages"]

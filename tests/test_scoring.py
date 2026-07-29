@@ -56,3 +56,36 @@ def test_bsr_stats_top3_place_a_prendre():
 def test_bsr_stats_top3_no_place():
     s = bsr_stats([2279, 4000, 9000])          # aucun >50k
     assert s["crit1"] and s["crit2"] and not s["crit3"] and not s["ok"]
+
+
+# ── Absence de mesure ≠ verdict de marché (le pire défaut possible du produit) ──────
+
+def test_une_niche_sans_concurrence_mesuree_ne_passe_pas_pour_penetrable():
+    """DÉFAUT TROUVÉ EN REVUE. Quand la SERP échoue (solde DataForSEO épuisé, file en
+    panne), `search` vaut None : zéro concurrent est alors compté, ce qui déclenchait le
+    bonus « moins de 10 concurrents » (+2 en pénétration). Une niche dont RIEN n'a été
+    mesuré ressortait à 6,88 « Intéressant » — le zéro de mesure lu comme « la place est
+    libre ». C'est la faute cardinale du produit : présenter une absence de mesure comme
+    un verdict de marché. Le moteur fiction a `non_mesurable` depuis M6 ; le non-fiction
+    n'avait rien."""
+    v = NicheValidation(niche="stoicisme applique", requete_amazon="stoicisme",
+                        categorie="dev perso", demand_score=7, validated=True)
+    r = score_niche(v, None, [])
+    assert r.concurrence_mesuree is False
+    assert "mesur" in r.priorite.lower(), (
+        "le verdict doit DIRE que la concurrence n'a pas été mesurée")
+    # Le bonus « peu de concurrents » ne doit pas naître d'une absence de données.
+    mesuree_vide = score_niche(v, SearchResult(keyword="stoicisme"), [])
+    assert r.penetration < mesuree_vide.penetration, (
+        "un rayon non mesuré ne doit jamais mieux scorer qu'un rayon mesuré vide")
+
+
+def test_un_rayon_mesure_et_reellement_vide_reste_une_bonne_nouvelle():
+    """L'inverse du piège : une SERP qui répond et ne montre aucun concurrent ciblé est
+    une VRAIE place à prendre. Il ne faut pas punir la mesure sous prétexte de corriger
+    l'absence de mesure."""
+    v = NicheValidation(niche="niche rare", requete_amazon="niche rare",
+                        categorie="dev perso", demand_score=6, validated=True)
+    r = score_niche(v, SearchResult(keyword="niche rare"), [])
+    assert r.concurrence_mesuree is True
+    assert "mesur" not in r.priorite.lower()

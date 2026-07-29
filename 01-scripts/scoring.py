@@ -68,24 +68,36 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
         demande = _clamp(demande + 1)
 
     # ── AXE 2 — Pénétration (haut = facile à pénétrer) ──
+    # `search is None` = la SERP n'a PAS répondu (échec attrapé dans scout_master, typiquement
+    # un solde DataForSEO épuisé ou la file en panne). Les compteurs valent alors 0 faute de
+    # mesure, et non parce que le rayon est vide. Sans le garde ci-dessous, `n_cibles == 0`
+    # déclenchait le bonus « moins de 10 concurrents » (+2) : une niche dont RIEN n'avait été
+    # mesuré ressortait à 6,88 « Intéressant », le zéro de mesure lu comme « place à prendre ».
+    # C'est la faute cardinale du produit (cf. `non_mesurable` côté fiction) : ne jamais
+    # présenter une absence de mesure comme un verdict de marché.
+    mesuree = search is not None
     penetration = 5.0
-    if n_cibles > 50:
-        penetration -= 2
-    elif n_cibles > 30:
-        penetration -= 1
-    elif n_cibles < 10:
-        penetration += 2
+    if mesuree:
+        if n_cibles > 50:
+            penetration -= 2
+        elif n_cibles > 30:
+            penetration -= 1
+        elif n_cibles < 10:
+            penetration += 2
+        if len(sponsored) >= 3:
+            penetration += 0.5                   # bcp de sponso => concurrence organique + faible
     if stats["crit3"]:
-        penetration += 1.5                       # "place à prendre"
-    if len(sponsored) >= 3:
-        penetration += 0.5                       # bcp de sponso => concurrence organique + faible
+        penetration += 1.5                       # "place à prendre" — repose sur le BSR, pas la SERP
     penetration = _clamp(penetration)
 
     # ── AXE 3 — Compatibilité livre (l'ideator garantit déjà le format livre) ──
     compatibilite = 8.0
 
     glob = round(demande * 0.4 + penetration * 0.4 + compatibilite * 0.2, 2)
-    verdict = ("🟢 À analyser en priorité" if glob >= 7.5
+    # Le verdict DIT l'absence de mesure au lieu de la traduire en note : « Intéressant »
+    # sur une niche jamais confrontée à sa concurrence enverrait l'auteur publier à l'aveugle.
+    verdict = ("⚪ Concurrence non mesurée — à relancer" if not mesuree
+               else "🟢 À analyser en priorité" if glob >= 7.5
                else "🟡 Intéressant" if glob >= 6.0 else "🔴 Faible")
 
     return ScoredNiche(
@@ -98,5 +110,6 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
         avg_rating=avg_rating, total_reviews=total_reviews,
         bsr_best=stats["best"], bsr_top5_avg=stats["top5_avg"],
         bsr_worst_top10=stats["worst_top10"], criteres_bsr_ok=stats["ok"],
+        concurrence_mesuree=mesuree,
         top_asins=[o.asin for o in organic[:5] if o.asin],
     )
