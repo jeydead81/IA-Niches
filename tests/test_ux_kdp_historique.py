@@ -69,3 +69,32 @@ def test_une_niche_non_mesuree_est_signalee_dans_l_interface():
     assert "concurrence_mesuree" in HTML
     for extrait in ("non mesurée", "relancer"):
         assert extrait.lower() in HTML.lower(), f"mention manquante : {extrait}"
+
+
+# ── Écran de connexion ──────────────────────────────────────────────────────────────
+
+def test_l_interface_a_un_ecran_de_connexion():
+    """Sans écran de connexion, l'application est inutilisable depuis que tous les
+    endpoints exigent une session : l'utilisateur ne verrait que des erreurs."""
+    for chemin in ("/api/auth/moi", "/api/auth/connexion", "/api/auth/inscription",
+                   "/api/auth/deconnexion"):
+        assert chemin in HTML, f"appel manquant : {chemin}"
+
+
+def test_le_mot_de_passe_est_masque_et_la_longueur_minimale_annoncee():
+    """Annoncer la règle AVANT la saisie évite un refus incompréhensible au moment de
+    valider — le serveur exige 10 caractères."""
+    assert 'type="password"' in HTML
+    assert "10 caractères" in HTML
+
+
+def test_l_interface_dit_que_le_premier_compte_reprend_les_donnees_locales():
+    """La reprise est silencieuse côté serveur ; ne pas la dire laisserait Baptiste croire
+    que son historique a été perdu."""
+    assert "donnees_locales_reprises" in HTML or "donnees_locales" in HTML
+
+
+def test_l_utilisateur_connecte_est_visible_et_peut_se_deconnecter():
+    """Sur un poste partagé, ne pas voir sous quel compte on travaille fait publier des
+    analyses au mauvais endroit."""
+    assert "Se déconnecter" in HTML or "Déconnexion" in HTML

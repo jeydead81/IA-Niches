@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
 # rend le moteur (01-scripts) importable + charge les secrets quel que soit le cwd
@@ -33,6 +33,8 @@ from positioning_pdf import build_positioning_pdf  # noqa: E402
 from jobs import JobStore  # noqa: E402
 from usage import UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
+from auth import (EmailDejaPris, EmailInvalide, MotDePasseFaible,  # noqa: E402
+                  SESSION_TTL_S, UserStore)
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
@@ -45,6 +47,9 @@ _HERE = Path(__file__).resolve().parent
 _JOBS_DB = _ROOT / "99-logs" / "jobs.db"
 _USAGE_DB = _ROOT / "99-logs" / "usage.db"
 _HISTORY_DB = _ROOT / "99-logs" / "history.db"
+_USERS_DB = _ROOT / "99-logs" / "comptes.db"
+
+COOKIE_SESSION = "ia_niches_session"
 
 
 def _plafond_analyses_mensuel() -> int | None:
@@ -60,6 +65,108 @@ def _plafond_analyses_mensuel() -> int | None:
         return None
 
 
+def _cookie_securise() -> bool:
+    """`Secure` interdit au navigateur d'envoyer le cookie en clair sur HTTP. Impossible à
+    activer par défaut : en local le serveur est en http://127.0.0.1 et le cookie ne
+    partirait jamais — l'utilisateur ne pourrait plus se connecter du tout. C'est donc un
+    réglage EXPLICITE, à mettre à 1 le jour du déploiement derrière HTTPS."""
+    return os.getenv("COOKIE_SECURE", "0").strip().lower() in ("1", "true", "yes", "oui")
+
+
+def _poser_session(reponse: Response, jeton: str) -> None:
+    """httponly : hors de portée de tout JavaScript, donc involable par injection de script.
+    samesite=lax : le cookie ne part pas sur une requête POST venue d'un autre site, ce qui
+    ferme la falsification de requête (CSRF) sans avoir à gérer un jeton anti-CSRF séparé."""
+    reponse.set_cookie(COOKIE_SESSION, jeton, max_age=int(SESSION_TTL_S), httponly=True,
+                       samesite="lax", secure=_cookie_securise(), path="/")
+
+
+def utilisateur_courant(request: Request) -> str:
+    """LA source unique du `user_id`. Il vient EXCLUSIVEMENT du cookie de session.
+
+    Avant l'authentification, plusieurs endpoints acceptaient un `user_id` fourni par le
+    client (corps de `POST /api/jobs`, paramètre de requête de `/api/usage`, `/api/jobs`
+    et `/api/history`). C'était une faille et pas un détail : le plafond mensuel étant
+    vérifié sur ce `user_id`, il suffisait d'en envoyer un neuf à chaque appel pour
+    dépenser sans aucune limite, et de deviner celui d'un autre pour lire son historique.
+    Ne JAMAIS réintroduire un paramètre `user_id` sur un endpoint."""
+    uid = UserStore(_USERS_DB).session_valide(request.cookies.get(COOKIE_SESSION, ""))
+    if uid is None:
+        raise HTTPException(status_code=401, detail="authentification requise")
+    return uid
+
+
+def _adopter_donnees_locales(user_id: str) -> None:
+    """Réattribue au PREMIER compte créé les données accumulées sous `user_id="local"`
+    avant l'authentification.
+
+    Sans cela, mettre l'authentification en service ferait perdre à Baptiste son
+    antériorité — or l'antériorité est exactement ce que l'historique sert à mesurer : une
+    niche vue une seule fois ne rend aucun delta. Réservé au premier compte : au second,
+    ce serait faire hériter chaque nouveau client de l'historique du précédent."""
+    import sqlite3
+    for chemin, table in ((_HISTORY_DB, "passages"), (_USAGE_DB, "usage"),
+                          (_JOBS_DB, "jobs")):
+        if not Path(chemin).exists():
+            continue
+        try:
+            with sqlite3.connect(str(chemin), timeout=10) as cx:
+                cx.execute(f"UPDATE {table} SET user_id=? WHERE user_id='local'", (user_id,))
+        except sqlite3.Error:
+            # Une base absente ou d'un autre schéma ne doit pas faire échouer une
+            # inscription : la reprise est un confort, la création de compte est le service.
+            pass
+
+
+@app.post("/api/auth/inscription", status_code=201)
+async def api_inscription(request: Request, response: Response):
+    body = await request.json()
+    store = UserStore(_USERS_DB)
+    premier = store.n_comptes() == 0
+    try:
+        compte = store.creer_compte(body.get("email", ""), body.get("mot_de_passe", ""))
+    except EmailDejaPris as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except (EmailInvalide, MotDePasseFaible) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if premier:
+        _adopter_donnees_locales(compte.user_id)
+    _poser_session(response, store.creer_session(compte.user_id))
+    return {"user_id": compte.user_id, "email": compte.email,
+            "donnees_locales_reprises": premier}
+
+
+@app.post("/api/auth/connexion")
+async def api_connexion(request: Request, response: Response):
+    body = await request.json()
+    store = UserStore(_USERS_DB)
+    compte = store.verifier(body.get("email", ""), body.get("mot_de_passe", ""))
+    if compte is None:
+        # UN SEUL message pour les deux causes : distinguer « email inconnu » de « mot de
+        # passe faux » laisserait énumérer les clients avec une liste d'adresses.
+        raise HTTPException(status_code=401, detail="e-mail ou mot de passe incorrect")
+    _poser_session(response, store.creer_session(compte.user_id))
+    return {"user_id": compte.user_id, "email": compte.email}
+
+
+@app.post("/api/auth/deconnexion", status_code=204)
+def api_deconnexion(request: Request, response: Response) -> Response:
+    """Ferme la session côté serveur ET retire le cookie. Effacer le seul cookie ne
+    suffirait pas : le jeton resterait valide pour quiconque en aurait gardé copie."""
+    UserStore(_USERS_DB).fermer_session(request.cookies.get(COOKIE_SESSION, ""))
+    reponse = Response(status_code=204)
+    reponse.delete_cookie(COOKIE_SESSION, path="/")
+    return reponse
+
+
+@app.get("/api/auth/moi")
+def api_moi(user_id: str = Depends(utilisateur_courant)):
+    compte = UserStore(_USERS_DB).compte(user_id)
+    if compte is None:
+        raise HTTPException(status_code=401, detail="authentification requise")
+    return {"user_id": compte.user_id, "email": compte.email}
+
+
 @app.get("/")
 def index() -> HTMLResponse:
     return HTMLResponse((_HERE / "index.html").read_text(encoding="utf-8"))
@@ -69,7 +176,7 @@ def _sse(event: str, data) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _consigner_scout(results, user_id: str = "local") -> None:
+def _consigner_scout(results, user_id: str) -> None:
     """Consigne chaque niche pour l'historique. Sans enregistrement AUTOMATIQUE, la
     fonction n'existerait que sur le papier : personne n'appellera `enregistrer()` à la
     main après chaque run."""
@@ -87,7 +194,7 @@ def _consigner_scout(results, user_id: str = "local") -> None:
         })
 
 
-def _consigner_fiction(rapports, user_id: str = "local") -> None:
+def _consigner_fiction(rapports, user_id: str) -> None:
     h = NicheHistory(_HISTORY_DB)
     for r in rapports:
         h.enregistrer(user_id, "fiction", r.niche.query, {
@@ -97,7 +204,8 @@ def _consigner_fiction(rapports, user_id: str = "local") -> None:
 
 
 @app.get("/api/scout")
-def scout(seed: str = "", ideas: int = 10, search: int = 4):
+def scout(seed: str = "", ideas: int = 10, search: int = 4,
+          user_id: str = Depends(utilisateur_courant)):
     """Lance le scout dans un thread et streame la progression + le résultat en SSE."""
     q: "queue.Queue" = queue.Queue()
 
@@ -109,7 +217,7 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
         try:
             results = run_scout(seed=(seed or None), n_ideas=ideas, n_search=search,
                                 progress=progress, cost=cost)
-            _consigner_scout(results)
+            _consigner_scout(results, user_id)
             q.put(("result", [r.model_dump() for r in results]))
             q.put(("cost", cost.breakdown()))
         except Exception as e:  # noqa: BLE001
@@ -133,7 +241,7 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4):
 
 
 @app.get("/api/fiction/sous-genres")
-def fiction_sous_genres():
+def fiction_sous_genres(user_id: str = Depends(utilisateur_courant)):
     """Peuple le sélecteur fiction de l'UI depuis la taxonomie (source de vérité unique) —
     jamais une liste dupliquée en dur côté JS, qui se périmerait à la moindre taxo v2."""
     sgs = load_taxonomy().get("sous_genres", {})
@@ -141,7 +249,8 @@ def fiction_sous_genres():
 
 
 @app.get("/api/fiction")
-def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
+def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle",
+            user_id: str = Depends(utilisateur_courant)):
     """Lance le scout fiction dans un thread, streame en SSE — même contrat que /api/scout
     (progress / result / cost / error / done)."""
     # Validation AVANT de lancer quoi que ce soit : un sous-genre inconnu (ou absent) doit
@@ -169,7 +278,7 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
                 # 0 par omission, un utilisateur lirait ça comme un verdict (CLAUDE.md §10).
                 d["autocomplete_score"] = r.autocomplete_score
                 payload.append(d)
-            _consigner_fiction(rapports)
+            _consigner_fiction(rapports, user_id)
             q.put(("result", payload))
             q.put(("cost", cost.breakdown()))
         except Exception as e:  # noqa: BLE001
@@ -200,7 +309,7 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle"):
 # POST rend un id tout de suite, le thread continue seul, GET peut être interrogé n'importe
 # quand ensuite — y compris après une déconnexion complète du client d'origine.
 
-def _run_scout_job(params: dict, progress, cost, user_id: str = "local") -> list:
+def _run_scout_job(params: dict, progress, cost, user_id: str) -> list:
     # `ideas`/`search` sont les noms de l'endpoint SSE historique : les accepter aussi,
     # sinon un client qui reprend ces noms voit son plafond silencieusement ignoré et paie
     # les défauts (6 recherches au lieu de 2 demandées). Divergence constatée en live.
@@ -212,7 +321,7 @@ def _run_scout_job(params: dict, progress, cost, user_id: str = "local") -> list
     return [r.model_dump() for r in results]
 
 
-def _run_fiction_job(params: dict, progress, cost, user_id: str = "local") -> list:
+def _run_fiction_job(params: dict, progress, cost, user_id: str) -> list:
     sous_genre = params.get("sous_genre", "")
     sgs = load_taxonomy().get("sous_genres", {})
     if sous_genre not in sgs:
@@ -239,7 +348,7 @@ _JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}
 
 
 @app.post("/api/jobs", status_code=202)
-async def post_job(request: Request):
+async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)):
     """Lance un travail asynchrone : le client reçoit un id IMMÉDIATEMENT (jamais 15 min
     d'attente HTTP bloquante). Le thread du job est détaché de CETTE requête : il persiste
     sa progression/son résultat/son coût dans le magasin, pas dans une queue en mémoire liée
@@ -251,7 +360,10 @@ async def post_job(request: Request):
         raise HTTPException(
             status_code=400,
             detail=f"type de job inconnu : « {type_} » (dispo : {sorted(_JOB_RUNNERS)})")
-    user_id = body.get("user_id") or "local"
+    # Le user_id vient de la SESSION, jamais du corps de la requête. Lire body["user_id"]
+    # laissait n'importe quel client changer d'identité à chaque appel et contourner le
+    # plafond mensuel, vérifié juste en dessous. Une clé "user_id" envoyée par le client
+    # est désormais ignorée (elle est retirée de params comme avant, sans jamais être lue).
 
     # Le plafond est vérifié AVANT de dépenser (§4 du plan SaaS), jamais après coup.
     usage = UsageMeter(_USAGE_DB, plafond_analyses=_plafond_analyses_mensuel())
@@ -289,7 +401,7 @@ async def post_job(request: Request):
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str):
+def get_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
     job = JobStore(_JOBS_DB).get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job inconnu")
@@ -297,12 +409,12 @@ def get_job(job_id: str):
 
 
 @app.get("/api/jobs")
-def list_jobs(user_id: str = "local", limit: int = 20):
+def list_jobs(limit: int = 20, user_id: str = Depends(utilisateur_courant)):
     return [j.model_dump() for j in JobStore(_JOBS_DB).list_jobs(user_id=user_id, limit=limit)]
 
 
 @app.get("/api/usage")
-def usage(user_id: str = "local"):
+def usage(user_id: str = Depends(utilisateur_courant)):
     """Consommation du mois glissant. Un plafond qui bloque sans que l'utilisateur ait pu
     voir où il en était serait vécu comme une panne, pas comme une limite."""
     r = UsageMeter(_USAGE_DB).resume(user_id)
@@ -310,7 +422,7 @@ def usage(user_id: str = "local"):
 
 
 @app.get("/api/jobs/{job_id}/stream")
-def stream_job(job_id: str):
+def stream_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
     """SSE branché sur la progression du magasin — RECONNECTABLE : contrairement à
     /api/scout et /api/fiction (queue en mémoire propre à une connexion), l'état lu ici
     vient du magasin persistant, donc une reconnexion peut relire la progression à tout
@@ -353,7 +465,7 @@ def _content_disposition(name: str) -> str:
 
 
 @app.post("/api/verdict")
-async def api_verdict(request: Request):
+async def api_verdict(request: Request, user_id: str = Depends(utilisateur_courant)):
     """Analyse éditoriale d'UNE niche, à la demande (sans état : la niche arrive entière
     dans le body). Mesuré à 0,0283 $ pièce : les générer d'avance pour le top-3 pesait
     78 % du coût d'un run, pour des analyses que l'utilisateur ne lisait pas. On ne paie
@@ -364,12 +476,12 @@ async def api_verdict(request: Request):
         raise HTTPException(status_code=400, detail="niche invalide")
     cost = CostTracker()
     verdict = generate_verdict(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
-    UsageMeter(_USAGE_DB).enregistrer("local", "verdict", cost.total_usd(), n_analyses=0)
+    UsageMeter(_USAGE_DB).enregistrer(user_id, "verdict", cost.total_usd(), n_analyses=0)
     return {**verdict.model_dump(), "_cout": cost.breakdown()}
 
 
 @app.get("/api/history")
-def history(niche: str = "", user_id: str = "local"):
+def history(niche: str = "", user_id: str = Depends(utilisateur_courant)):
     """Historique d'une niche et lecture de son évolution.
 
     Une niche vue une seule fois rend `delta: null` avec un 200 : « pas encore de recul »
@@ -383,7 +495,7 @@ def history(niche: str = "", user_id: str = "local"):
 
 
 @app.post("/api/kdp-keywords")
-async def api_kdp_keywords(request: Request):
+async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_courant)):
     """Les 7 mots-clés backend KDP d'une niche, à la demande (sans état, ~0,006 $).
 
     Les candidats sont confirmés gratuitement par l'autocomplete Amazon : le coût imputé
@@ -395,12 +507,12 @@ async def api_kdp_keywords(request: Request):
     cost = CostTracker()
     mots = generer_mots_cles(scored, titre=scored.niche,
                              on_usage=lambda i, o, m: cost.add_llm(m, i, o))
-    UsageMeter(_USAGE_DB).enregistrer("local", "kdp_keywords", cost.total_usd(), n_analyses=0)
+    UsageMeter(_USAGE_DB).enregistrer(user_id, "kdp_keywords", cost.total_usd(), n_analyses=0)
     return {**mots.model_dump(), "_cout": cost.breakdown()}
 
 
 @app.post("/api/pdf")
-async def api_pdf(request: Request):
+async def api_pdf(request: Request, user_id: str = Depends(utilisateur_courant)):
     """Rend le one-pager PDF d'une niche à la volée (stateless : la niche est fournie
     en entier dans le body, aucune persistance côté serveur)."""
     try:

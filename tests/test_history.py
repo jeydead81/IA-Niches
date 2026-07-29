@@ -18,7 +18,7 @@ def test_un_seul_passage_ne_produit_AUCUNE_tendance(tmp_path):
     """Un point unique n'est pas une tendance. Inventer une évolution à partir d'une seule
     mesure serait exactement le travers qu'on combat partout ailleurs (§10)."""
     h = NicheHistory(tmp_path / "h.db")
-    h.enregistrer("local", "scout", "stoicisme", {"bsr_best": 194})
+    h.enregistrer("u1", "scout", "stoicisme", {"bsr_best": 194})
     assert h.delta("local", "stoicisme") is None
 
 
@@ -82,19 +82,22 @@ def _client_hist(monkeypatch, tmp_path, nom="h.db"):
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
     import server
-    monkeypatch.setattr(server, "_HISTORY_DB", tmp_path / nom)
-    monkeypatch.setattr(server, "_JOBS_DB", tmp_path / "j.db")
-    monkeypatch.setattr(server, "_USAGE_DB", tmp_path / "u.db")
-    return TestClient(server.app), server
+    from tests.conftest import isoler_bases, ouvrir_session
+    isoler_bases(monkeypatch, server, tmp_path)
+    monkeypatch.setattr(server, "_HISTORY_DB", tmp_path / nom)   # nom propre au test
+    client = TestClient(server.app)
+    # Les tests d'historique écrivent en base sous ce user_id, puis relisent par l'API.
+    server.USER_ID_TEST = ouvrir_session(client)
+    return client, server
 
 
 def test_le_serveur_expose_l_historique_et_sa_lecture(tmp_path, monkeypatch):
     """Sans endpoint, l'historique n'existerait que sur le papier : personne ne va lire
     une base SQLite à la main."""
-    client, _ = _client_hist(monkeypatch, tmp_path)
+    client, server = _client_hist(monkeypatch, tmp_path)
     h = NicheHistory(tmp_path / "h.db")
-    h.enregistrer("local", "scout", "stoicisme", {"bsr_best": 194})
-    h.enregistrer("local", "scout", "stoicisme", {"bsr_best": 52000})
+    h.enregistrer(server.USER_ID_TEST, "scout", "stoicisme", {"bsr_best": 194})
+    h.enregistrer(server.USER_ID_TEST, "scout", "stoicisme", {"bsr_best": 52000})
 
     r = client.get("/api/history", params={"niche": "Stoïcisme"})   # casse/accents différents
     assert r.status_code == 200
@@ -146,9 +149,9 @@ def test_un_job_asynchrone_consigne_l_historique(tmp_path, monkeypatch):
 
 
 def test_le_job_consigne_sous_l_utilisateur_du_job(tmp_path, monkeypatch):
-    """L'historique est cloisonné par utilisateur (à la différence du cache, partagé) :
-    consigner sous « local » un run lancé par un autre compte mélangerait les historiques
-    dès l'arrivée des comptes."""
+    """L'historique est cloisonné par utilisateur (à la différence du cache de scraping,
+    mutualisé par conception). Depuis l'authentification, l'identité du job vient de la
+    SESSION : un `user_id` glissé dans le corps de la requête doit rester sans effet."""
     client, server = _client_hist(monkeypatch, tmp_path, "hu.db")
     from models import ScoredNiche
     monkeypatch.setattr(server, "run_scout",
@@ -156,13 +159,14 @@ def test_le_job_consigne_sous_l_utilisateur_du_job(tmp_path, monkeypatch):
                                                   concurrence_mesuree=True)])
 
     job_id = client.post("/api/jobs",
-                         json={"type": "scout", "user_id": "baptiste"}).json()["id"]
+                         json={"type": "scout", "user_id": "usurpateur"}).json()["id"]
     _attendre(client, job_id)
 
-    assert client.get("/api/history",
-                      params={"niche": "tarot", "user_id": "baptiste"}).json()["passages"]
-    assert not client.get("/api/history",
-                          params={"niche": "tarot"}).json()["passages"]
+    # Consigné sous le compte de la session…
+    assert client.get("/api/history", params={"niche": "tarot"}).json()["passages"]
+    # …et rien sous l'identité soufflée par le client.
+    from history import NicheHistory as _NH
+    assert not _NH(tmp_path / "hu.db").historique("usurpateur", "tarot")
 
 
 def test_une_niche_non_mesuree_n_entre_pas_dans_l_historique(tmp_path, monkeypatch):

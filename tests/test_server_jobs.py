@@ -31,13 +31,16 @@ def _parse_sse(body: str) -> list[tuple[str, object]]:
 
 
 def _client_with_isolated_dbs(monkeypatch, tmp_path):
-    """jobs.db/usage.db en tmp_path — jamais les fichiers réels du dépôt en test."""
+    """Bases en tmp_path + session ouverte. Depuis l'authentification, un client sans
+    session reçoit 401 partout : tester ces endpoints suppose donc un compte."""
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
     import server
-    monkeypatch.setattr(server, "_JOBS_DB", tmp_path / "jobs.db")
-    monkeypatch.setattr(server, "_USAGE_DB", tmp_path / "usage.db")
-    return TestClient(server.app), server
+    from tests.conftest import isoler_bases, ouvrir_session
+    isoler_bases(monkeypatch, server, tmp_path)
+    client = TestClient(server.app)
+    ouvrir_session(client)
+    return client, server
 
 
 def _attendre_job(client, job_id: str, timeout: float = 10.0) -> dict:
@@ -91,6 +94,7 @@ def test_get_job_rend_la_progression_puis_le_resultat(tmp_path, monkeypatch):
                                            "saturation_trio=0.30.")]
 
     monkeypatch.setattr(server, "run_fiction_scout", fake_run)
+    moi = client.get("/api/auth/moi").json()["user_id"]
     r = client.post("/api/jobs",
                     json={"type": "fiction", "sous_genre": "cosy_mystery", "n_niches": 1})
     assert r.status_code == 202
@@ -101,26 +105,21 @@ def test_get_job_rend_la_progression_puis_le_resultat(tmp_path, monkeypatch):
     assert any("trio genere" in m for m in job["progression"])
     assert job["resultat"][0]["niche"]["query"] == "cosy mystery village"
     assert job["cout"]["llm_usd"] > 0
-    assert job["user_id"] == "local"
+    assert job["user_id"] == moi   # l'identité vient de la session, pas du client
 
 
 def test_job_refuse_quand_le_plafond_est_atteint(tmp_path, monkeypatch):
     """429 explicite avec le motif, pas un échec silencieux."""
-    pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
-    import server
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
     from usage import UsageMeter
 
-    jobs_db = tmp_path / "jobs.db"
-    usage_db = tmp_path / "usage.db"
-    monkeypatch.setattr(server, "_JOBS_DB", jobs_db)
-    monkeypatch.setattr(server, "_USAGE_DB", usage_db)
     monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "1")
-    # l'utilisateur "local" a déjà consommé son unique analyse autorisée ce mois-ci
-    UsageMeter(usage_db, plafond_analyses=1).enregistrer("local", "fiction", cout_usd=0.1,
-                                                         n_analyses=1)
+    # Le compte connecté a déjà consommé son unique analyse autorisée ce mois-ci. Le
+    # plafond porte sur l'identité de la SESSION : c'est ce qui le rend incontournable.
+    moi = client.get("/api/auth/moi").json()["user_id"]
+    UsageMeter(tmp_path / "usage.db", plafond_analyses=1).enregistrer(
+        moi, "fiction", cout_usd=0.1, n_analyses=1)
 
-    client = TestClient(server.app)
     r = client.post("/api/jobs", json={"type": "fiction", "sous_genre": "cosy_mystery"})
     assert r.status_code == 429 and "plafond" in r.json()["detail"].lower()
 
@@ -140,7 +139,7 @@ def test_get_job_inconnu_rend_404(tmp_path, monkeypatch):
 
 
 def test_liste_jobs_de_lutilisateur(tmp_path, monkeypatch):
-    """GET /api/jobs (liste) — user_id dès maintenant, défaut 'local'."""
+    """GET /api/jobs (liste) — cloisonnée par la session, sans paramètre user_id."""
     client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
 
     def fake_run(seed=None, n_ideas=12, n_search=6, progress=None, cost=None, **kw):
@@ -152,7 +151,7 @@ def test_liste_jobs_de_lutilisateur(tmp_path, monkeypatch):
     _attendre_job(client, r1.json()["id"])
     _attendre_job(client, r2.json()["id"])
 
-    r = client.get("/api/jobs?user_id=local")
+    r = client.get("/api/jobs")
     assert r.status_code == 200
     ids = [j["id"] for j in r.json()]
     assert r1.json()["id"] in ids and r2.json()["id"] in ids
@@ -206,7 +205,8 @@ def test_les_noms_de_parametres_de_l_endpoint_sse_sont_acceptes(monkeypatch, tmp
         return []
 
     monkeypatch.setattr(server, "run_scout", faux_run_scout)
-    server._run_scout_job({"seed": "x", "ideas": 6, "search": 2}, lambda m: None, CostTracker())
+    server._run_scout_job({"seed": "x", "ideas": 6, "search": 2}, lambda m: None,
+                          CostTracker(), "u1")
     assert vus["n_ideas"] == 6 and vus["n_search"] == 2
 
 

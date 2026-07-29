@@ -16,19 +16,27 @@ def test_content_disposition_latin1_safe_and_rfc5987():
         assert "filename*=UTF-8''" in cd and cd.startswith("attachment; filename=")
 
 
-def test_api_pdf_french_niche_returns_pdf():
+def _client(monkeypatch, tmp_path):
+    """Session ouverte : /api/pdf rend 401 sans compte depuis l'authentification."""
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
-    from server import app
-    r = TestClient(app).post("/api/pdf", json={"niche": "cœur & stoïcisme — édition", "verdict": None})
+    import server
+    from tests.conftest import isoler_bases, ouvrir_session
+    isoler_bases(monkeypatch, server, tmp_path)
+    client = TestClient(server.app)
+    ouvrir_session(client)
+    return client
+
+
+def test_api_pdf_french_niche_returns_pdf(tmp_path, monkeypatch):
+    r = _client(monkeypatch, tmp_path).post(
+        "/api/pdf", json={"niche": "cœur & stoïcisme — édition", "verdict": None})
     assert r.status_code == 200
     assert r.content[:5] == b"%PDF-"
     assert r.headers["content-type"] == "application/pdf"
 
 
-def test_api_pdf_bad_body_returns_400():
-    pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
-    from server import app
-    r = TestClient(app).post("/api/pdf", json={"pas": "une niche"})   # 'niche' requis manquant
+def test_api_pdf_bad_body_returns_400(tmp_path, monkeypatch):
+    r = _client(monkeypatch, tmp_path).post(
+        "/api/pdf", json={"pas": "une niche"})   # 'niche' requis manquant
     assert r.status_code == 400

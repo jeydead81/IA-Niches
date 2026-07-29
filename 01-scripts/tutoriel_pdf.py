@@ -87,10 +87,23 @@ ENV_VARS = [
      "Défaut claude-sonnet-5. NE PAS rétrograder le classifieur : Haiku 4.5 mesuré à "
      "42 % d'accord contre 80 % requis."),
     ("KDP_KEYWORDS_MODEL", "Defaut claude-sonnet-5. Les 7 mots-cles backend."),
+    ("COOKIE_SECURE", "0 par defaut (local, HTTP). A METTRE A 1 AU DEPLOIEMENT : sans "
+                      "lui le cookie de session voyage en clair. Impossible d'activer "
+                      "par defaut, le cookie ne partirait pas sur http://127.0.0.1."),
 ]
 
 ENDPOINTS = [
-    ("GET  /", "L'interface web (page unique)."),
+    ("GET  /", "L'interface web (page unique). SEUL endpoint servi sans session — sinon "
+               "le formulaire de connexion serait inatteignable."),
+    ("POST /api/auth/inscription", "Cree un compte (e-mail + mot de passe) et ouvre une "
+                                   "session. Le PREMIER compte cree reprend les donnees "
+                                   "accumulees sous user_id='local' avant l'authentification."),
+    ("POST /api/auth/connexion", "Ouvre une session. Un e-mail inconnu et un mot de passe "
+                                 "faux rendent le MEME message : sinon une liste d'adresses "
+                                 "revele qui est client."),
+    ("POST /api/auth/deconnexion", "Ferme cette session cote serveur et retire le cookie. "
+                                   "Les autres sessions du meme compte restent ouvertes."),
+    ("GET  /api/auth/moi", "Le compte de la session en cours."),
     ("GET  /api/scout", "Scout non-fiction en SSE. Meurt si le client se déconnecte."),
     ("GET  /api/fiction", "Scout fiction en SSE. Idem."),
     ("GET  /api/fiction/sous-genres", "Peuple le sélecteur depuis la taxonomie."),

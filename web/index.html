@@ -153,6 +153,40 @@
     background:var(--muted);border-radius:8px}
   .histbox strong{color:var(--heading)}
 
+  /* Écran de connexion. Il occulte TOUT le reste tant qu'aucune session n'est ouverte :
+     laisser l'application visible derrière ferait cliquer sur des boutons qui rendent 401. */
+  .auth-ecran{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;
+    padding:24px;z-index:50;overflow:auto}
+  .auth-ecran.on{display:grid}
+  .auth-carte{width:100%;max-width:400px;background:#fff;border:1px solid var(--border);
+    border-radius:var(--radius);padding:26px 26px 22px}
+  .auth-carte h2{font-size:19px;color:var(--heading);margin:0 0 4px}
+  .auth-carte .sous{font-size:13px;color:var(--text-muted);margin:0 0 18px}
+  .auth-carte label{display:block;font-size:12.5px;font-weight:600;color:var(--heading);
+    margin:12px 0 5px}
+  .auth-carte input{width:100%;font-family:var(--sans);font-size:14px;padding:9px 11px;
+    border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text)}
+  .auth-carte input:focus{outline:2px solid var(--primary);outline-offset:-1px}
+  .auth-aide{font-size:11.5px;color:var(--text-muted);margin:5px 0 0}
+  .auth-btn{width:100%;margin-top:18px;font-family:var(--sans);font-weight:600;font-size:14px;
+    color:#fff;background:var(--primary);border:none;border-radius:8px;padding:11px;cursor:pointer}
+  .auth-btn:hover{background:var(--primary-600)}
+  .auth-btn:disabled{opacity:.6;cursor:default}
+  .auth-bascule{margin-top:14px;text-align:center;font-size:12.5px;color:var(--text-muted)}
+  .auth-bascule button{font-family:var(--sans);font-size:12.5px;color:var(--primary);
+    background:none;border:none;cursor:pointer;text-decoration:underline;padding:0}
+  .auth-err{margin-top:14px;font-size:12.5px;color:#991B1B;background:var(--red-bg);
+    border:1px solid #FECACA;border-radius:8px;padding:8px 10px;display:none}
+  .auth-err.on{display:block}
+  .auth-ok{margin-top:14px;font-size:12.5px;color:#166534;background:var(--green-bg);
+    border:1px solid #BBF7D0;border-radius:8px;padding:8px 10px;display:none}
+  .auth-ok.on{display:block}
+  .compte-bar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-muted)}
+  .compte-bar button{font-family:var(--sans);font-size:12.5px;color:var(--text-muted);
+    background:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 10px;
+    cursor:pointer}
+  .compte-bar button:hover{background:#E2E8F0;color:var(--heading)}
+
   /* Niche dont la SERP a échoué : ni verte ni rouge — grise, parce qu'on ne sait pas. */
   .pill.n{background:var(--muted);color:var(--text-muted)}
   .verdict.n{color:var(--text-muted)}
@@ -273,6 +307,34 @@
 </style>
 </head>
 <body>
+
+<!-- Écran de connexion : affiché tant qu'aucune session n'est ouverte. Tous les endpoints
+     autres que « / » rendent 401 sans session, donc afficher l'application derrière
+     n'offrirait que des boutons qui échouent. -->
+<div class="auth-ecran" id="auth-ecran">
+  <form class="auth-carte" id="auth-form">
+    <h2 id="auth-titre">Connexion</h2>
+    <p class="sous" id="auth-sous">Vos analyses, votre historique et votre consommation sont
+      rattachés à votre compte.</p>
+
+    <label for="auth-email">Adresse e-mail</label>
+    <input type="email" id="auth-email" autocomplete="email" required />
+
+    <label for="auth-mdp">Mot de passe</label>
+    <input type="password" id="auth-mdp" autocomplete="current-password" required />
+    <p class="auth-aide" id="auth-aide-mdp" hidden>10 caractères minimum.</p>
+
+    <button type="submit" class="auth-btn" id="auth-btn">Se connecter</button>
+    <div class="auth-err" id="auth-err"></div>
+    <div class="auth-ok" id="auth-ok"></div>
+
+    <p class="auth-bascule">
+      <span id="auth-bascule-txt">Pas encore de compte ?</span>
+      <button type="button" id="auth-bascule">Créer un compte</button>
+    </p>
+  </form>
+</div>
+
 <div class="wrap">
   <header>
     <div class="logo" aria-hidden="true">
@@ -284,6 +346,10 @@
       <p>Explorateur de niches KDP — l'IA propose, Amazon valide (demande, concurrence, BSR réel)</p>
     </div>
     <div class="usage-bar" id="usage-bar" hidden></div>
+    <div class="compte-bar" id="compte-bar" hidden>
+      <span id="compte-email"></span>
+      <button type="button" id="btn-deconnexion">Se déconnecter</button>
+    </div>
   </header>
 
   <details class="panel help-panel" id="help-panel" open>
@@ -951,12 +1017,103 @@ window.addEventListener('resize', ()=>{ if(!glossTip.hidden && glossOpenBtn) pos
 // Consommation du mois (Task U4) : un plafond qui bloque sans qu'on ait pu voir où on en
 // était se vit comme une panne. Échec silencieux si l'API ne répond pas — l'absence
 // d'affichage ne doit jamais bloquer le reste de la page.
-fetch('/api/usage').then(r=>r.json()).then(u=>{
-  const el = $('#usage-bar');
-  if(!el) return;
-  el.hidden = false;
-  el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s) · <strong>${fmtUsd(u.cout_usd)}</strong>`;
-}).catch(()=>{});
+function chargerUsage(){
+  fetch('/api/usage').then(r=>r.ok?r.json():null).then(u=>{
+    const el = $('#usage-bar');
+    if(!el || !u) return;
+    el.hidden = false;
+    el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s) · <strong>${fmtUsd(u.cout_usd)}</strong>`;
+  }).catch(()=>{});
+}
+
+// ================= Comptes =================
+// Tous les endpoints autres que « / » exigent une session : sans écran de connexion,
+// l'utilisateur ne verrait que des erreurs. L'écran occulte l'application tant qu'aucune
+// session n'est ouverte, plutôt que de laisser cliquer sur des boutons qui rendent 401.
+(function initAuth(){
+  const ecran=$('#auth-ecran'), form=$('#auth-form'), titre=$('#auth-titre');
+  const email=$('#auth-email'), mdp=$('#auth-mdp'), btn=$('#auth-btn');
+  const err=$('#auth-err'), ok=$('#auth-ok'), aide=$('#auth-aide-mdp');
+  const bascule=$('#auth-bascule'), basculeTxt=$('#auth-bascule-txt'), sous=$('#auth-sous');
+  const barre=$('#compte-bar'), emailAffiche=$('#compte-email');
+  let inscription = false;
+
+  function message(el, texte){ el.textContent = texte; el.classList.toggle('on', !!texte); }
+
+  function rendre(){
+    titre.textContent = inscription ? 'Créer un compte' : 'Connexion';
+    btn.textContent   = inscription ? 'Créer mon compte' : 'Se connecter';
+    aide.hidden       = !inscription;
+    mdp.autocomplete  = inscription ? 'new-password' : 'current-password';
+    basculeTxt.textContent = inscription ? 'Vous avez déjà un compte ?' : 'Pas encore de compte ?';
+    bascule.textContent    = inscription ? 'Se connecter' : 'Créer un compte';
+    sous.textContent = inscription
+      ? "Vos analyses, votre historique et votre consommation seront rattachés à ce compte."
+      : "Vos analyses, votre historique et votre consommation sont rattachés à votre compte.";
+    message(err, ''); message(ok, '');
+  }
+
+  bascule.addEventListener('click', ()=>{ inscription = !inscription; rendre(); });
+
+  form.addEventListener('submit', async ev=>{
+    ev.preventDefault();
+    message(err, ''); message(ok, '');
+    btn.disabled = true;
+    try{
+      const r = await fetch(inscription ? '/api/auth/inscription' : '/api/auth/connexion', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({email: email.value.trim(), mot_de_passe: mdp.value})});
+      if(!r.ok){
+        const d = await r.json().catch(()=>({}));
+        message(err, d.detail || 'Connexion impossible.');
+        return;
+      }
+      const d = await r.json();
+      // La reprise des données locales est silencieuse côté serveur : ne pas la dire
+      // laisserait croire que l'historique accumulé avant les comptes a été perdu.
+      if(d.donnees_locales_reprises){
+        message(ok, "Compte créé. Votre historique et votre consommation antérieurs ont été "
+                  + "rattachés à ce compte.");
+        setTimeout(()=>entrer(d.email), 1600);
+      } else {
+        entrer(d.email);
+      }
+    }catch(e){
+      message(err, 'Le serveur ne répond pas.');
+    }finally{
+      btn.disabled = false;
+    }
+  });
+
+  function entrer(adresse){
+    ecran.classList.remove('on');
+    barre.hidden = false;
+    emailAffiche.textContent = adresse;
+    mdp.value = '';
+    chargerUsage();
+  }
+
+  function sortir(){
+    barre.hidden = true;
+    ecran.classList.add('on');
+    inscription = false;
+    rendre();
+    email.focus();
+  }
+
+  $('#btn-deconnexion').addEventListener('click', async ()=>{
+    // Déconnexion côté SERVEUR, pas seulement effacement du cookie : sinon le jeton
+    // resterait valide pour quiconque en aurait gardé copie.
+    await fetch('/api/auth/deconnexion', {method:'POST'}).catch(()=>{});
+    location.reload();
+  });
+
+  rendre();
+  fetch('/api/auth/moi').then(r=>{
+    if(r.ok) return r.json().then(c=>entrer(c.email));
+    sortir();
+  }).catch(()=>sortir());
+})();
 </script>
 </body>
 </html>

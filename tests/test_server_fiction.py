@@ -29,25 +29,33 @@ def _parse_sse(body: str) -> list[tuple[str, object]]:
     return events
 
 
-def test_endpoint_fiction_refuse_un_sous_genre_inconnu():
+def _client(monkeypatch, tmp_path):
+    """Session ouverte : depuis l'authentification, /api/fiction rend 401 sans compte."""
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+    import server
+    from tests.conftest import isoler_bases, ouvrir_session
+    isoler_bases(monkeypatch, server, tmp_path)
+    client = TestClient(server.app)
+    ouvrir_session(client)
+    return client, server
+
+
+def test_endpoint_fiction_refuse_un_sous_genre_inconnu(tmp_path, monkeypatch):
     """400 explicite plutôt qu'une KeyError 500 venue de la taxonomie."""
-    pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
-    from server import app
-    r = TestClient(app).get("/api/fiction?sous_genre=inexistant")
+    client, _ = _client(monkeypatch, tmp_path)
+    r = client.get("/api/fiction?sous_genre=inexistant")
     assert r.status_code == 400
 
 
-def test_endpoint_fiction_refuse_sous_genre_absent():
+def test_endpoint_fiction_refuse_sous_genre_absent(tmp_path, monkeypatch):
     """Paramètre manquant = même traitement propre, pas une 422 opaque."""
-    pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
-    from server import app
-    r = TestClient(app).get("/api/fiction")
+    client, _ = _client(monkeypatch, tmp_path)
+    r = client.get("/api/fiction")
     assert r.status_code == 400
 
 
-def test_endpoint_fiction_stream_sse(monkeypatch):
+def test_endpoint_fiction_stream_sse(tmp_path, monkeypatch):
     """Même contrat SSE que /api/scout : progress -> result -> cost -> done."""
     pytest.importorskip("httpx")
     from fastapi.testclient import TestClient
@@ -67,7 +75,11 @@ def test_endpoint_fiction_stream_sse(monkeypatch):
                                            "saturation_trio=0.30.")]
 
     monkeypatch.setattr(server, "run_fiction_scout", fake_run)
-    r = TestClient(server.app).get("/api/fiction?sous_genre=cosy_mystery&n_niches=1")
+    from tests.conftest import isoler_bases, ouvrir_session
+    isoler_bases(monkeypatch, server, tmp_path)
+    client = TestClient(server.app)
+    ouvrir_session(client)
+    r = client.get("/api/fiction?sous_genre=cosy_mystery&n_niches=1")
     assert r.status_code == 200
 
     events = _parse_sse(r.text)
@@ -89,13 +101,11 @@ def test_endpoint_fiction_stream_sse(monkeypatch):
     assert cost["llm_usd"] > 0
 
 
-def test_endpoint_fiction_sous_genres_liste_la_taxonomie():
+def test_endpoint_fiction_sous_genres_liste_la_taxonomie(tmp_path, monkeypatch):
     """Peuple le sélecteur fiction de l'UI à partir de la taxonomie (source de vérité
     unique) — jamais une liste dupliquée en dur côté JS."""
-    pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
-    from server import app
-    r = TestClient(app).get("/api/fiction/sous-genres")
+    client, _ = _client(monkeypatch, tmp_path)
+    r = client.get("/api/fiction/sous-genres")
     assert r.status_code == 200
     cles = [item["cle"] for item in r.json()]
     assert "cosy_mystery" in cles
