@@ -1,4 +1,4 @@
-"""fiction_master.py — run_fiction_scout : orchestrateur fiction en 5 phases.
+"""fiction_master.py — run_fiction_scout : orchestrateur fiction en 6 étapes.
 
 A. ideator            -> N trios                       (1 appel LLM)
 B. N x SERP           -> ASIN par niche                (rapide, pas de file)

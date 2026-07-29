@@ -133,3 +133,15 @@ def test_cache_de_classification_depend_du_modele_de_la_taxo_ET_du_prompt(tmp_pa
     assert c.get_classification("A1", "fr_v1", "claude-haiku-4-5") is None     # autre modèle
     assert c.get_classification("A2", "fr_v1", "claude-sonnet-5") is None      # autre livre
     assert len(_prompt_tag()) == 8                                            # empreinte courte
+
+
+def test_la_cle_de_classification_porte_aussi_une_empreinte_de_schema():
+    """Le piège du blurb, resté armé pour `clf:`. `book:`, `bsr:` et `search:` portent une
+    empreinte des champs de leur modèle ; `clf:` ne portait que la taxonomie, le modèle et
+    le prompt. Ajouter un champ à TropeClassification aurait donc servi 30 JOURS de
+    classifications amputées — exactement le bug qui a coûté 7 jours de fiches sans blurb
+    en M4, avec un TTL quatre fois plus long."""
+    from cache import Cache, _clf_schema_tag
+    cle = Cache._classification_key("B0TEST", "fr_v1", "claude-sonnet-5")
+    assert _clf_schema_tag() in cle, (
+        "la clé de classification doit porter l'empreinte des champs de TropeClassification")

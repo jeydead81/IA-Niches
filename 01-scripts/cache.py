@@ -67,6 +67,20 @@ def _search_schema_tag() -> str:
     return _fields_fingerprint(SearchResult)
 
 
+@lru_cache(maxsize=1)
+def _clf_schema_tag() -> str:
+    """Même empreinte, pour TropeClassification (clé `clf:`) — le dernier modèle mis en
+    cache qui restait sans garde-fou.
+
+    La clé portait déjà la taxonomie, le modèle et le prompt : tout ce qui change le
+    RAISONNEMENT. Il manquait ce qui change la FORME du résultat. Ajouter un champ à
+    TropeClassification aurait donc resservi des classifications amputées pendant
+    CLASSIFICATION_TTL_S, soit 30 jours — quatre fois plus longtemps que les 7 jours de
+    fiches sans blurb qui ont déjà piégé M4."""
+    from models import TropeClassification
+    return _fields_fingerprint(TropeClassification)
+
+
 class Cache:
     def __init__(self, path, now=None):
         self.path = str(path)
@@ -123,9 +137,11 @@ class Cache:
 
     @staticmethod
     def _classification_key(asin: str, version: str, model: str) -> str:
-        # taxonomie + modèle + prompt : les trois choses qui changent le résultat pour un
-        # même livre. En omettre une resservirait une étiquette produite autrement.
-        return f"clf:{version}:{model}:{_prompt_tag()}:{asin}"
+        # Taxonomie + modèle + prompt : ce qui change le RAISONNEMENT pour un même livre.
+        # Empreinte de schéma : ce qui change la FORME du résultat. Les quatre sont
+        # nécessaires — en omettre une resservirait soit une étiquette produite autrement,
+        # soit un objet amputé, et pendant 30 jours (CLASSIFICATION_TTL_S).
+        return f"clf:{version}:{model}:{_prompt_tag()}:{_clf_schema_tag()}:{asin}"
 
     def get_classification(self, asin: str, version: str,
                            model: str) -> TropeClassification | None:
