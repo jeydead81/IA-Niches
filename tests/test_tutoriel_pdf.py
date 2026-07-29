@@ -95,3 +95,42 @@ def test_les_deux_documents_ont_des_textes_DISTINCTS():
 def test_le_guide_dit_qu_on_peut_fermer_la_page():
     from tutoriel_pdf import U_ETAPES_FIC
     assert any("fermer la page" in e.lower() for e in U_ETAPES_FIC)
+
+
+def test_le_dossier_de_passation_couvre_TOUS_les_endpoints_reels():
+    """Ce PDF est remis au developpeur charge de l'implantation : s'il decrit 11 endpoints
+    sur 13, celui qui reprend le projet ignorera l'historique et les mots-cles KDP. Le test
+    lit web/server.py comme source de verite au lieu de figer une liste, sinon il se
+    perimerait exactement comme le document qu'il protege."""
+    import re
+    from pathlib import Path
+    from tutoriel_pdf import ENDPOINTS
+
+    # Le nom du parametre de chemin est cosmetique ({id} se lit mieux que {job_id} dans
+    # un document) : on compare la FORME de la route, pas le nom de sa variable.
+    norm = lambda c: re.sub(r"\{[^}]+\}", "{}", c)
+    src = (Path(__file__).resolve().parent.parent / "web" / "server.py").read_text("utf-8")
+    reels = {(m, norm(c)) for m, c in re.findall(r'@app\.(get|post)\("([^"]+)"', src)}
+    documentes = {(m.split()[0].lower(), norm(m.split()[1])) for m, _ in ENDPOINTS}
+    assert reels == documentes, f"manquants : {reels - documentes} ; en trop : {documentes - reels}"
+
+
+def test_le_dossier_de_passation_ne_cite_que_des_variables_encore_lues():
+    """ENV_VARS listait encore les REDDIT_*, disparues avec reddit_fr.py. Une variable
+    fantome dans la doc d'implantation fait perdre du temps a la configurer."""
+    import re
+    from pathlib import Path
+    from tutoriel_pdf import ENV_VARS
+
+    racine = Path(__file__).resolve().parent.parent
+    lues = set()
+    for f in list((racine / "01-scripts").glob("*.py")) + [racine / "web" / "server.py"]:
+        lues |= set(re.findall(r'getenv\("([A-Z_]+)"', f.read_text("utf-8")))
+    for nom, _ in ENV_VARS:
+        # « DATAFORSEO_LOGIN / _PASSWORD » est un raccourci de lecture : le second terme
+        # se recompose sur le prefixe du premier.
+        termes = [t.strip() for t in nom.split("/")]
+        prefixe = termes[0].split("_")[0]
+        for t in termes:
+            v = (prefixe + t) if t.startswith("_") else t
+            assert v in lues, f"{v} (« {nom} ») n'est lue nulle part dans le code"

@@ -66,6 +66,7 @@ COUTS = [
     ("PDF de positionnement", "0 $", "0 $", "local"),
     ("Consultation d'un job / historique", "0 $", "0 $", "lecture"),
     ("Set de validation du classifieur (50 livres)", "0,32 $", "-", "one-shot"),
+    ("Mots-cles backend KDP (1 niche)", "0,006 $", "0,006 $", "estime"),
 ]
 
 ENV_VARS = [
@@ -78,11 +79,14 @@ ENV_VARS = [
                             "moitié prix mais jusqu'à ~45 min."),
     ("PLAFOND_ANALYSES_MENSUEL", "Plafond glissant par utilisateur. Vide = illimité "
                                  "(mais l'usage reste journalisé)."),
-    ("IDEATOR_MODEL / VERDICT_MODEL", "Défaut claude-sonnet-5."),
+    ("IDEATOR_MODEL / VERDICT_MODEL", "Défaut claude-sonnet-5. Un identifiant sans le "
+                                      "préfixe 'claude-' est absent de la grille de "
+                                      "cost_tracker et donc facturé 0,00 $ : le coût "
+                                      "disparaît des rapports sans lever d'erreur."),
     ("FICTION_IDEATOR_MODEL / FICTION_CLASSIFIER_MODEL",
      "Défaut claude-sonnet-5. NE PAS rétrograder le classifieur : Haiku 4.5 mesuré à "
      "42 % d'accord contre 80 % requis."),
-    ("REDDIT_CLIENT_ID / _SECRET / _USER_AGENT", "Optionnel, sources de veille."),
+    ("KDP_KEYWORDS_MODEL", "Defaut claude-sonnet-5. Les 7 mots-cles backend."),
 ]
 
 ENDPOINTS = [
@@ -97,6 +101,12 @@ ENDPOINTS = [
     ("GET  /api/jobs", "Liste par utilisateur."),
     ("GET  /api/usage", "Consommation du mois glissant."),
     ("POST /api/verdict", "Analyse éditoriale d'UNE niche, à la demande (0,028 $)."),
+    ("GET  /api/history", "Passages sur une niche + lecture de son évolution. Une niche "
+                          "vue une seule fois rend delta:null avec un 200 — « pas encore "
+                          "de recul » est une réponse, pas un échec."),
+    ("POST /api/kdp-keywords", "Les 7 mots-clés backend KDP d'une niche (~0,006 $). Le LLM "
+                               "propose, le code applique les règles KDP, l'autocomplete "
+                               "confirme gratuitement."),
     ("POST /api/pdf", "One-pager de positionnement. Sans état, gratuit."),
 ]
 
