@@ -1,17 +1,27 @@
-pytrends==4.9.2
-praw==7.7.1
-feedparser==6.0.11
-requests==2.31.0
-pandas
-openpyxl==3.1.2
-python-dotenv==1.0.1
-beautifulsoup4==4.12.3
-lxml
+# Dépendances d'IA-Niches v2. Chaque ligne est importée quelque part : vérifié par grep
+# avant écriture. Six paquets de la v1 ont été retirés en même temps que les modules qui
+# les utilisaient (pytrends, praw, feedparser avec trends_fr/reddit_fr/news_fr) ou parce
+# qu'ils n'étaient importés nulle part (pandas, beautifulsoup4, lxml — le parsing des
+# fiches Amazon se fait en expressions régulières pures, cf. amazon_product.py).
 
-# v2
-pydantic>=2,<3
+# Réseau et configuration
+requests==2.31.0            # search_providers, autocomplete, scraping BSR
+python-dotenv==1.0.1        # chargement du .env
+
+# Modèles et validation
+pydantic>=2,<3              # tous les modèles de models.py
+
+# Moteur LLM
+anthropic>=0.100            # ideator, classifieur, verdict, mots-clés KDP
+
+# Interface web
+fastapi>=0.110              # backend
+uvicorn>=0.29               # serveur ASGI
+
+# Sorties
+fpdf2                       # PDF de positionnement + tutoriels
+openpyxl==3.1.2             # jeu de validation du classifieur (fiction_validation
+                            # ET trois fichiers de tests : ne pas retirer)
+
+# Tests
 pytest>=8
-anthropic>=0.100  # ideator LLM
-fastapi>=0.110    # UI web (backend)
-uvicorn>=0.29     # serveur ASGI
-fpdf2
