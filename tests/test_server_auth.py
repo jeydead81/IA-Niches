@@ -200,18 +200,25 @@ def test_deux_comptes_ne_voient_pas_l_historique_l_un_de_l_autre(tmp_path, monke
 
 # ── Reprise des données locales ─────────────────────────────────────────────────────
 
-def test_le_premier_compte_adopte_les_donnees_locales(tmp_path, monkeypatch):
-    """Baptiste a déjà un historique et un usage sous `user_id="local"`, accumulés avant
-    l'authentification. Le PREMIER compte créé les reprend — sinon la mise en service de
+def test_le_premier_compte_adopte_les_donnees_locales_s_il_le_demande(tmp_path, monkeypatch):
+    """Baptiste a un historique et un usage sous `user_id="local"`, accumulés avant
+    l'authentification. Le premier compte peut les reprendre — sinon la mise en service de
     l'authentification lui ferait perdre son antériorité, c'est-à-dire précisément ce que
-    l'historique sert à mesurer."""
+    l'historique sert à mesurer.
+
+    Mais la reprise est DEMANDÉE, pas automatique. La revue de sécurité a montré que sur une
+    instance exposée, le premier inscrit venu raflait sinon l'historique et la consommation
+    de Baptiste. Le drapeau est le consentement explicite du propriétaire des données."""
     client, server = _client(monkeypatch, tmp_path)
     from history import NicheHistory
     from usage import UsageMeter
     NicheHistory(tmp_path / "h.db").enregistrer("local", "scout", "ancienne", {"global_score": 7.0})
     UsageMeter(tmp_path / "u.db").enregistrer("local", "scout", 0.03, n_analyses=1)
 
-    _inscrire(client)
+    r = client.post("/api/auth/inscription",
+                    json={"email": "baptiste@example.com", "mot_de_passe": MDP,
+                          "reprendre_donnees_locales": True})
+    assert r.status_code == 201 and r.json()["donnees_locales_reprises"] is True
     assert client.get("/api/history", params={"niche": "ancienne"}).json()["passages"]
     assert client.get("/api/usage").json()["n_analyses"] == 1
 

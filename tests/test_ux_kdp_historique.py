@@ -83,9 +83,12 @@ def test_l_interface_a_un_ecran_de_connexion():
 
 def test_le_mot_de_passe_est_masque_et_la_longueur_minimale_annoncee():
     """Annoncer la règle AVANT la saisie évite un refus incompréhensible au moment de
-    valider — le serveur exige 10 caractères."""
+    valider. Le seuil doit suivre le serveur : il est passé de 10 à 12 après la revue de
+    sécurité, et une interface qui annonce encore 10 fait échouer une inscription valide
+    aux yeux de l'utilisateur."""
+    from auth import LONGUEUR_MIN_MOT_DE_PASSE
     assert 'type="password"' in HTML
-    assert "10 caractères" in HTML
+    assert f"{LONGUEUR_MIN_MOT_DE_PASSE} caractères" in HTML
 
 
 def test_l_interface_dit_que_le_premier_compte_reprend_les_donnees_locales():
@@ -98,3 +101,11 @@ def test_l_utilisateur_connecte_est_visible_et_peut_se_deconnecter():
     """Sur un poste partagé, ne pas voir sous quel compte on travaille fait publier des
     analyses au mauvais endroit."""
     assert "Se déconnecter" in HTML or "Déconnexion" in HTML
+
+
+def test_la_reprise_des_donnees_locales_est_une_case_a_cocher():
+    """Le serveur n'adopte plus les données « local » automatiquement : la revue de sécurité
+    a montré qu'un premier inscrit quelconque raflait sinon l'historique de Baptiste. Il faut
+    donc que l'interface propose ce consentement, sinon la reprise devient inaccessible."""
+    assert 'type="checkbox"' in HTML
+    assert "reprendre_donnees_locales" in HTML

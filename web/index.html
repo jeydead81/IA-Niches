@@ -168,6 +168,9 @@
     border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text)}
   .auth-carte input:focus{outline:2px solid var(--primary);outline-offset:-1px}
   .auth-aide{font-size:11.5px;color:var(--text-muted);margin:5px 0 0}
+  .auth-reprise{display:flex;gap:8px;align-items:flex-start;margin-top:14px;
+    font-size:11.5px;font-weight:400;color:var(--text-muted);cursor:pointer}
+  .auth-reprise input{width:auto;flex:none;margin-top:2px}
   .auth-btn{width:100%;margin-top:18px;font-family:var(--sans);font-weight:600;font-size:14px;
     color:#fff;background:var(--primary);border:none;border-radius:8px;padding:11px;cursor:pointer}
   .auth-btn:hover{background:var(--primary-600)}
@@ -322,7 +325,17 @@
 
     <label for="auth-mdp">Mot de passe</label>
     <input type="password" id="auth-mdp" autocomplete="current-password" required />
-    <p class="auth-aide" id="auth-aide-mdp" hidden>10 caractères minimum.</p>
+    <p class="auth-aide" id="auth-aide-mdp" hidden>12 caractères minimum. Les mots de passe les plus courants sont refusés.</p>
+
+    <!-- Reprise des analyses antérieures aux comptes. Le serveur ne l'applique PLUS
+         automatiquement : le premier inscrit venu raflait sinon l'historique et la
+         consommation accumulés en local (revue de sécurité). Sans effet s'il existe
+         déjà un compte. -->
+    <label class="auth-reprise" id="auth-reprise-bloc" hidden>
+      <input type="checkbox" id="auth-reprise" />
+      <span>Rattacher à ce compte les analyses effectuées avant la création des
+        comptes. À cocher uniquement s'il s'agit de votre propre installation.</span>
+    </label>
 
     <button type="submit" class="auth-btn" id="auth-btn">Se connecter</button>
     <div class="auth-err" id="auth-err"></div>
@@ -1035,6 +1048,7 @@ function chargerUsage(){
   const email=$('#auth-email'), mdp=$('#auth-mdp'), btn=$('#auth-btn');
   const err=$('#auth-err'), ok=$('#auth-ok'), aide=$('#auth-aide-mdp');
   const bascule=$('#auth-bascule'), basculeTxt=$('#auth-bascule-txt'), sous=$('#auth-sous');
+  const repriseBloc=$('#auth-reprise-bloc'), reprise=$('#auth-reprise');
   const barre=$('#compte-bar'), emailAffiche=$('#compte-email');
   let inscription = false;
 
@@ -1044,6 +1058,8 @@ function chargerUsage(){
     titre.textContent = inscription ? 'Créer un compte' : 'Connexion';
     btn.textContent   = inscription ? 'Créer mon compte' : 'Se connecter';
     aide.hidden       = !inscription;
+    repriseBloc.hidden = !inscription;
+    if(!inscription) reprise.checked = false;
     mdp.autocomplete  = inscription ? 'new-password' : 'current-password';
     basculeTxt.textContent = inscription ? 'Vous avez déjà un compte ?' : 'Pas encore de compte ?';
     bascule.textContent    = inscription ? 'Se connecter' : 'Créer un compte';
@@ -1062,7 +1078,8 @@ function chargerUsage(){
     try{
       const r = await fetch(inscription ? '/api/auth/inscription' : '/api/auth/connexion', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({email: email.value.trim(), mot_de_passe: mdp.value})});
+        body: JSON.stringify({email: email.value.trim(), mot_de_passe: mdp.value,
+                              reprendre_donnees_locales: inscription && reprise.checked})});
       if(!r.ok){
         const d = await r.json().catch(()=>({}));
         message(err, d.detail || 'Connexion impossible.');

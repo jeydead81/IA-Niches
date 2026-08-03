@@ -34,7 +34,7 @@ from jobs import JobStore  # noqa: E402
 from usage import UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
 from auth import (EmailDejaPris, EmailInvalide, MotDePasseFaible,  # noqa: E402
-                  SESSION_TTL_S, UserStore)
+                  SESSION_TTL_S, TropDeTentatives, UserStore)
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
@@ -50,6 +50,14 @@ _HISTORY_DB = _ROOT / "99-logs" / "history.db"
 _USERS_DB = _ROOT / "99-logs" / "comptes.db"
 
 COOKIE_SESSION = "ia_niches_session"
+
+# Bornes des paramètres de volume. Le plafond mensuel compte des ANALYSES, pas des
+# appels payants : sans ces bornes, une seule « analyse » avec search=9999 déclenche des
+# milliers de requêtes DataForSEO tout en ne consommant qu'une unité du plafond. Borner
+# le volume est donc la seule protection réelle du MONTANT (revue de sécurité 2026-08-03).
+MAX_IDEES = 30
+MAX_RECHERCHES = 12
+MAX_NICHES_FICTION = 20
 
 
 def _plafond_analyses_mensuel() -> int | None:
@@ -79,6 +87,85 @@ def _poser_session(reponse: Response, jeton: str) -> None:
     ferme la falsification de requête (CSRF) sans avoir à gérer un jeton anti-CSRF séparé."""
     reponse.set_cookie(COOKIE_SESSION, jeton, max_age=int(SESSION_TTL_S), httponly=True,
                        samesite="lax", secure=_cookie_securise(), path="/")
+
+
+def _borner(nom: str, valeur: int, maxi: int) -> int:
+    """Refuse plutôt que de rogner en silence : un utilisateur qui demande 9999 doit
+    savoir qu'il ne l'aura pas, sinon il croira avoir payé pour 9999."""
+    if not isinstance(valeur, int) or valeur < 1 or valeur > maxi:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nom} doit être un entier entre 1 et {maxi} (reçu : {valeur})")
+    return valeur
+
+
+def origine_sure(request: Request) -> None:
+    """Refuse les requêtes déclenchées depuis un AUTRE site.
+
+    `/api/scout` et `/api/fiction` sont des GET qui dépensent de l'argent réel. Or
+    SameSite=Lax laisse partir le cookie sur une navigation de premier niveau : une page
+    malveillante qui fait `window.open('http://127.0.0.1:8000/api/scout?...')` déclenche
+    donc un run facturé sur le compte de la victime. Le cookie seul ne suffit pas ici.
+
+    On s'appuie sur `Sec-Fetch-Site`, envoyé par tous les navigateurs actuels et NON
+    falsifiable par une page (c'est un en-tête interdit au script). Absent = client hors
+    navigateur (curl, tests) : on laisse passer, car un client hors navigateur ne subit
+    pas de CSRF — il n'a pas de cookie ambiant à voler."""
+    site = request.headers.get("sec-fetch-site", "").lower()
+    if site and site not in ("same-origin", "same-site", "none"):
+        raise HTTPException(status_code=403,
+                            detail="requête refusée : elle vient d'un autre site")
+    origine = request.headers.get("origin")
+    if origine:
+        from urllib.parse import urlparse
+        hote_origine = urlparse(origine).netloc.lower()
+        hote_requete = (request.headers.get("host") or "").lower()
+        if hote_origine and hote_requete and hote_origine != hote_requete:
+            raise HTTPException(status_code=403,
+                                detail="requête refusée : elle vient d'un autre site")
+
+
+def _verifier_plafond(user_id: str, n_analyses: int = 1) -> None:
+    """Vérifié AVANT de dépenser, sur TOUT chemin payant.
+
+    `UsageMeter.autorise` n'avait qu'un seul site d'appel — `POST /api/jobs` — que
+    l'interface n'emprunte jamais. Le plafond ne protégeait donc que le chemin que
+    personne n'utilise, pendant que les quatre endpoints réellement utilisés dépensaient
+    librement. Toute nouvelle dépense doit passer par ici."""
+    usage = UsageMeter(_USAGE_DB, plafond_analyses=_plafond_analyses_mensuel())
+    if not usage.autorise(user_id, n_analyses=n_analyses):
+        raise HTTPException(status_code=429, detail="plafond mensuel atteint")
+
+
+def _imputer(user_id: str, type_: str, cout_usd: float, n_analyses: int) -> None:
+    """Impute une dépense DÉJÀ faite. Appelé même en cas d'échec du run : l'argent est
+    parti, le compteur doit le dire."""
+    UsageMeter(_USAGE_DB).enregistrer(user_id, type_, cout_usd, n_analyses=n_analyses)
+
+
+async def _corps_json(request: Request) -> dict:
+    """Corps JSON, ou 400. Sans ce garde, un corps non-JSON ou un objet mal typé remonte
+    en 500 : une trace exposée, et le signal donné à l'attaquant qu'il a trouvé un chemin
+    non prévu."""
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — JSON illisible
+        raise HTTPException(status_code=400, detail="corps de requête JSON attendu")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="corps de requête JSON attendu")
+    return body
+
+
+def _identifiants(body: dict) -> tuple[str, str]:
+    """Extrait e-mail et mot de passe en exigeant du TEXTE. Un client qui envoie un nombre
+    ou une liste fait une requête malformée : 400. Sans ce garde, la valeur descendait
+    jusqu'aux fonctions de hachage et remontait en 500 — une trace exposée, et le signal
+    donné à l'attaquant qu'il a trouvé un chemin non prévu."""
+    email, mdp = body.get("email"), body.get("mot_de_passe")
+    if not isinstance(email, str) or not isinstance(mdp, str):
+        raise HTTPException(status_code=400,
+                            detail="« email » et « mot_de_passe » doivent être du texte")
+    return email, mdp
 
 
 def utilisateur_courant(request: Request) -> str:
@@ -120,15 +207,22 @@ def _adopter_donnees_locales(user_id: str) -> None:
 
 @app.post("/api/auth/inscription", status_code=201)
 async def api_inscription(request: Request, response: Response):
-    body = await request.json()
+    origine_sure(request)
+    body = await _corps_json(request)
     store = UserStore(_USERS_DB)
     premier = store.n_comptes() == 0
+    # La reprise des données « local » doit être DEMANDÉE. Elle était automatique pour le
+    # premier compte créé : sur une instance exposée, le premier visiteur venu devenait
+    # propriétaire de l'historique et de la consommation de Baptiste (revue de sécurité).
+    demande_reprise = bool(body.get("reprendre_donnees_locales"))
+    email, mdp = _identifiants(body)
     try:
-        compte = store.creer_compte(body.get("email", ""), body.get("mot_de_passe", ""))
+        compte = store.creer_compte(email, mdp)
     except EmailDejaPris as e:
         raise HTTPException(status_code=409, detail=str(e))
     except (EmailInvalide, MotDePasseFaible) as e:
         raise HTTPException(status_code=400, detail=str(e))
+    premier = premier and demande_reprise
     if premier:
         _adopter_donnees_locales(compte.user_id)
     _poser_session(response, store.creer_session(compte.user_id))
@@ -138,9 +232,16 @@ async def api_inscription(request: Request, response: Response):
 
 @app.post("/api/auth/connexion")
 async def api_connexion(request: Request, response: Response):
-    body = await request.json()
+    origine_sure(request)
+    body = await _corps_json(request)
     store = UserStore(_USERS_DB)
-    compte = store.verifier(body.get("email", ""), body.get("mot_de_passe", ""))
+    email, mdp = _identifiants(body)
+    try:
+        compte = store.verifier(email, mdp)
+    except TropDeTentatives as e:
+        # 429 et non 401 : l'utilisateur légitime qui s'est trompé doit comprendre que
+        # c'est le rythme qui bloque, pas son mot de passe.
+        raise HTTPException(status_code=429, detail=str(e))
     if compte is None:
         # UN SEUL message pour les deux causes : distinguer « email inconnu » de « mot de
         # passe faux » laisserait énumérer les clients avec une liste d'adresses.
@@ -204,9 +305,13 @@ def _consigner_fiction(rapports, user_id: str) -> None:
 
 
 @app.get("/api/scout")
-def scout(seed: str = "", ideas: int = 10, search: int = 4,
+def scout(request: Request, seed: str = "", ideas: int = 10, search: int = 4,
           user_id: str = Depends(utilisateur_courant)):
     """Lance le scout dans un thread et streame la progression + le résultat en SSE."""
+    origine_sure(request)
+    ideas = _borner("ideas", ideas, MAX_IDEES)
+    search = _borner("search", search, MAX_RECHERCHES)
+    _verifier_plafond(user_id)
     q: "queue.Queue" = queue.Queue()
 
     def progress(msg: str) -> None:
@@ -223,6 +328,8 @@ def scout(seed: str = "", ideas: int = 10, search: int = 4,
         except Exception as e:  # noqa: BLE001
             q.put(("error", f"{type(e).__name__}: {e}"))
         finally:
+            # Imputé dans tous les cas : en échec aussi, l'argent est déjà parti.
+            _imputer(user_id, "scout", cost.breakdown()["usd"], n_analyses=1)
             q.put(("done", None))
 
     threading.Thread(target=worker, daemon=True).start()
@@ -249,16 +356,19 @@ def fiction_sous_genres(user_id: str = Depends(utilisateur_courant)):
 
 
 @app.get("/api/fiction")
-def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle",
-            user_id: str = Depends(utilisateur_courant)):
+def fiction(request: Request, sous_genre: str = "", n_niches: int = 8,
+            rayon: str = "kindle", user_id: str = Depends(utilisateur_courant)):
     """Lance le scout fiction dans un thread, streame en SSE — même contrat que /api/scout
     (progress / result / cost / error / done)."""
     # Validation AVANT de lancer quoi que ce soit : un sous-genre inconnu (ou absent) doit
     # rendre une 400 explicite, jamais la KeyError 500 que lèverait fiction_taxonomy.sous_genre().
+    origine_sure(request)
+    n_niches = _borner("n_niches", n_niches, MAX_NICHES_FICTION)
     sgs = load_taxonomy().get("sous_genres", {})
     if sous_genre not in sgs:
         raise HTTPException(status_code=400,
                             detail=f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
+    _verifier_plafond(user_id)
 
     q: "queue.Queue" = queue.Queue()
 
@@ -284,6 +394,7 @@ def fiction(sous_genre: str = "", n_niches: int = 8, rayon: str = "kindle",
         except Exception as e:  # noqa: BLE001
             q.put(("error", f"{type(e).__name__}: {e}"))
         finally:
+            _imputer(user_id, "fiction", cost.breakdown()["usd"], n_analyses=1)
             q.put(("done", None))
 
     threading.Thread(target=worker, daemon=True).start()
@@ -313,8 +424,9 @@ def _run_scout_job(params: dict, progress, cost, user_id: str) -> list:
     # `ideas`/`search` sont les noms de l'endpoint SSE historique : les accepter aussi,
     # sinon un client qui reprend ces noms voit son plafond silencieusement ignoré et paie
     # les défauts (6 recherches au lieu de 2 demandées). Divergence constatée en live.
-    n_ideas = params.get("n_ideas", params.get("ideas", 12))
-    n_search = params.get("n_search", params.get("search", 6))
+    n_ideas = _borner("n_ideas", params.get("n_ideas", params.get("ideas", 12)), MAX_IDEES)
+    n_search = _borner("n_search", params.get("n_search", params.get("search", 6)),
+                       MAX_RECHERCHES)
     results = run_scout(seed=params.get("seed") or None, n_ideas=n_ideas,
                         n_search=n_search, progress=progress, cost=cost)
     _consigner_scout(results, user_id)
@@ -328,7 +440,8 @@ def _run_fiction_job(params: dict, progress, cost, user_id: str) -> list:
         # Échoue AVANT tout appel payant : capté par le worker comme un échec de job
         # normal (coût nul imputé), jamais une 500 opaque.
         raise ValueError(f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
-    rapports = run_fiction_scout(sous_genre, n_niches=params.get("n_niches", 8),
+    n_niches = _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
+    rapports = run_fiction_scout(sous_genre, n_niches=n_niches,
                                  rayon=params.get("rayon", "kindle"),
                                  progress=progress, cost=cost)
     payload = []
@@ -344,6 +457,16 @@ def _run_fiction_job(params: dict, progress, cost, user_id: str) -> list:
 # est celui qu'on RECOMMANDE (il survit à la fermeture de l'onglet et vérifie le plafond),
 # donc c'est précisément lui qui doit alimenter l'historique. Le laisser muet — l'état
 # initial, trouvé en revue — vidait la fonction de sa substance pour l'usage nominal.
+def _valider_volumes(type_: str, params: dict) -> None:
+    """Applique les bornes aux paramètres de volume d'un job, avant tout lancement."""
+    if type_ == "scout":
+        _borner("n_ideas", params.get("n_ideas", params.get("ideas", 12)), MAX_IDEES)
+        _borner("n_search", params.get("n_search", params.get("search", 6)),
+                MAX_RECHERCHES)
+    elif type_ == "fiction":
+        _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
+
+
 _JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}
 
 
@@ -353,7 +476,8 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     d'attente HTTP bloquante). Le thread du job est détaché de CETTE requête : il persiste
     sa progression/son résultat/son coût dans le magasin, pas dans une queue en mémoire liée
     à la connexion — fermer l'onglet ne l'arrête pas et ne perd pas l'argent déjà dépensé."""
-    body = await request.json()
+    origine_sure(request)
+    body = await _corps_json(request)
     type_ = body.get("type")
     runner = _JOB_RUNNERS.get(type_)
     if runner is None:
@@ -373,6 +497,9 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
             detail=f"plafond mensuel atteint pour l'utilisateur « {user_id} »")
 
     params = {k: v for k, v in body.items() if k not in ("type", "user_id")}
+    # Bornes validées AVANT de créer le job : levée depuis le thread détaché, la 400
+    # arriverait après un 202 déjà rendu, donc invisible pour le client.
+    _valider_volumes(type_, params)
     store = JobStore(_JOBS_DB)
     job_id = store.create(type_, params, user_id=user_id)
 
@@ -389,12 +516,17 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         try:
             resultat = runner(params, progress, cost, user_id)
             b = cost.breakdown()
+            # L'usage est imputé AVANT de marquer le job terminé. L'ordre inverse ouvrait
+            # une course : un client qui interroge dès qu'il voit « termine » lisait un
+            # compteur pas encore à jour, donc un total périmé juste après son run — et
+            # deux runs lancés coup sur coup pouvaient passer sous un plafond déjà atteint.
+            # « Terminé » doit impliquer « compté ».
+            _imputer(user_id, type_, b["usd"], n_analyses=1)
             job_store.finish(job_id, resultat, b)
-            UsageMeter(_USAGE_DB).enregistrer(user_id, type_, b["usd"], n_analyses=1)
         except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
             b = cost.breakdown()
+            _imputer(user_id, type_, b["usd"], n_analyses=1)
             job_store.fail(job_id, f"{type(e).__name__}: {e}", cout=b)
-            UsageMeter(_USAGE_DB).enregistrer(user_id, type_, b["usd"], n_analyses=1)
 
     threading.Thread(target=worker, daemon=True).start()
     return {"id": job_id}
@@ -402,8 +534,10 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
+    """404 — et non 403 — quand le job appartient à quelqu'un d'autre : distinguer les
+    deux confirmerait à l'attaquant que l'identifiant existe."""
     job = JobStore(_JOBS_DB).get(job_id)
-    if job is None:
+    if job is None or job.user_id != user_id:
         raise HTTPException(status_code=404, detail="job inconnu")
     return job.model_dump()
 
@@ -432,6 +566,11 @@ def stream_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
         envoyes = 0
         while True:
             job = store.get(job_id)
+            # Le job d'un autre compte est traité comme inexistant — et non refusé —
+            # pour ne pas confirmer qu'un identifiant est valide. Sans ce garde,
+            # connaître un id suffisait à lire le résultat et le coût du run d'autrui.
+            if job is not None and job.user_id != user_id:
+                job = None
             if job is None:
                 yield _sse("error", "job inconnu")
                 yield _sse("done", {})
@@ -474,6 +613,10 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
         scored = ScoredNiche.model_validate(await request.json())
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
+    # Appel LLM facturé. Il ne CONSOMME pas d'unité d'analyse (il complète une analyse
+    # déjà payée, d'où n_analyses=0 à l'imputation) mais il EXIGE une marge : un compte au
+    # plafond ne doit pas pouvoir continuer à faire tourner le LLM indéfiniment.
+    _verifier_plafond(user_id)
     cost = CostTracker()
     verdict = generate_verdict(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     UsageMeter(_USAGE_DB).enregistrer(user_id, "verdict", cost.total_usd(), n_analyses=0)
@@ -504,6 +647,7 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
         scored = ScoredNiche.model_validate(await request.json())
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
+    _verifier_plafond(user_id)          # même raisonnement que /api/verdict
     cost = CostTracker()
     mots = generer_mots_cles(scored, titre=scored.niche,
                              on_usage=lambda i, o, m: cost.add_llm(m, i, o))

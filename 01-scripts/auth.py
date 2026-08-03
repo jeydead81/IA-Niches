@@ -40,8 +40,31 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-LONGUEUR_MIN_MOT_DE_PASSE = 10
+LONGUEUR_MIN_MOT_DE_PASSE = 12
+# Plafond de longueur. Sans lui, un mot de passe de plusieurs mégaoctets fait tourner
+# scrypt très longtemps, et quelques requêtes parallèles figent le serveur — sans
+# authentification et sans coût pour l'attaquant. Mesuré en revue de sécurité.
+LONGUEUR_MAX_MOT_DE_PASSE = 128
 SESSION_TTL_S = 30 * 24 * 3600          # 30 jours : au-delà, on redemande le mot de passe
+
+# Limitation des tentatives : le chemin LE PLUS COURT vers une prise de compte. Sans
+# elle, un top-1000 de mots de passe se teste en ligne en moins d'une minute contre une
+# adresse connue. Verrou par e-mail, sur une fenêtre glissante.
+MAX_TENTATIVES = 8
+FENETRE_TENTATIVES_S = 15 * 60
+
+# Mots de passe interdits parce qu'ils sont en tête de tous les dictionnaires d'attaque,
+# y compris au-delà de 12 caractères. La revue a MESURÉ que c'est la politique de mot de
+# passe — et non le réglage de scrypt — qui décide si un dictionnaire casse les comptes :
+# le même dictionnaire de 10 000 entrées tombe dans les trois paramétrages de scrypt
+# testés (6,9 / 34 / 60 min). Durcir scrypt sans cette liste n'aurait sauvé aucun compte.
+MOTS_DE_PASSE_INTERDITS = frozenset({
+    "azertyuiop", "qwertyuiop", "motdepasse", "password", "123456789", "1234567890",
+    "12345678901", "123456789012", "azerty123456", "motdepasse1", "administrateur",
+    "bonjour12345", "iloveyou1234", "0000000000", "1111111111", "aaaaaaaaaaaa",
+    "abcdefghijkl", "password1234", "motdepasse12", "azertyuiop12", "qwertyuiop12",
+    "loulou123456", "soleil123456", "chouchou1234", "motdepasse123", "azertyuiop123",
+})
 
 # Paramètres scrypt. n=2^14 -> 128*r*n = 16 Mo de mémoire par vérification et ~45 ms sur le
 # poste de mesure : assez coûteux pour rendre une attaque par dictionnaire pénible, assez
@@ -69,6 +92,11 @@ class MotDePasseFaible(ValueError):
     pass
 
 
+class TropDeTentatives(ValueError):
+    """L'e-mail a épuisé son quota d'essais sur la fenêtre courante."""
+    pass
+
+
 class Compte(BaseModel):
     """Un compte, sans rien de secret : ce type est sérialisable vers l'interface."""
     user_id: str
@@ -76,12 +104,34 @@ class Compte(BaseModel):
     cree_le: float = 0.0
 
 
+def valider_mot_de_passe(mot_de_passe) -> str:
+    """Applique la politique de mot de passe. Rend la valeur, ou lève MotDePasseFaible.
+
+    L'ordre des contrôles compte : la longueur MAXIMALE passe avant tout le reste, parce
+    que son rôle est précisément d'éviter de lancer scrypt sur une entrée démesurée."""
+    if not isinstance(mot_de_passe, str):
+        raise MotDePasseFaible("le mot de passe doit être du texte")
+    if len(mot_de_passe) > LONGUEUR_MAX_MOT_DE_PASSE:
+        raise MotDePasseFaible(
+            f"le mot de passe ne doit pas dépasser {LONGUEUR_MAX_MOT_DE_PASSE} caractères")
+    if len(mot_de_passe) < LONGUEUR_MIN_MOT_DE_PASSE:
+        raise MotDePasseFaible(
+            f"le mot de passe doit faire au moins {LONGUEUR_MIN_MOT_DE_PASSE} caractères")
+    if mot_de_passe.strip().lower() in MOTS_DE_PASSE_INTERDITS:
+        raise MotDePasseFaible(
+            "ce mot de passe est trop courant — il figure en tête des dictionnaires "
+            "utilisés pour attaquer les comptes")
+    return mot_de_passe
+
+
 def normaliser_email(email: str) -> str:
     """Casse et espaces retirés. « Baptiste@Example.COM » et « baptiste@example.com » sont
     le même compte : sinon un client se crée un doublon sans comprendre où est passé son
     historique. On ne touche PAS à la partie locale au-delà de la casse (pas de retrait des
     points ni du +suffixe) : ce serait un choix de fournisseur, pas une règle générale."""
-    return (email or "").strip().lower()
+    if not isinstance(email, str):
+        return ""
+    return email.strip().lower()
 
 
 class UserStore:
@@ -110,6 +160,14 @@ class UserStore:
             )
             cx.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user "
                        "ON sessions (user_id)")
+            cx.execute(
+                "CREATE TABLE IF NOT EXISTS tentatives ("
+                " email TEXT NOT NULL,"
+                " horodatage REAL NOT NULL"
+                ")"
+            )
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_tentatives "
+                       "ON tentatives (email, horodatage)")
 
     def _conn(self):
         cx = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
@@ -132,10 +190,8 @@ class UserStore:
     def creer_compte(self, email: str, mot_de_passe: str) -> Compte:
         propre = normaliser_email(email)
         if not _EMAIL.match(propre):
-            raise EmailInvalide(f"adresse e-mail invalide : « {email} »")
-        if len(mot_de_passe or "") < LONGUEUR_MIN_MOT_DE_PASSE:
-            raise MotDePasseFaible(
-                f"le mot de passe doit faire au moins {LONGUEUR_MIN_MOT_DE_PASSE} caractères")
+            raise EmailInvalide("adresse e-mail invalide")
+        valider_mot_de_passe(mot_de_passe)
 
         sel = secrets.token_bytes(16)          # sel PAR COMPTE : une table pré-calculée ne
         empreinte = self._deriver(mot_de_passe, sel)   # casse alors qu'un seul compte
@@ -150,10 +206,43 @@ class UserStore:
             raise EmailDejaPris(f"un compte existe déjà pour « {propre} »") from e
         return compte
 
+    # ── Limitation des tentatives ───────────────────────────────────────────────────
+
+    def _tentatives_recentes(self, email: str) -> int:
+        with self._conn() as cx:
+            return cx.execute("SELECT COUNT(*) FROM tentatives WHERE email=? AND "
+                              "horodatage>?",
+                              (email, self.now() - FENETRE_TENTATIVES_S)).fetchone()[0]
+
+    def _noter_tentative(self, email: str) -> None:
+        with self._conn() as cx:
+            cx.execute("INSERT INTO tentatives (email, horodatage) VALUES (?, ?)",
+                       (email, self.now()))
+            # Purge opportuniste : c'est le seul moment où on touche cette table, elle ne
+            # doit pas croître indéfiniment.
+            cx.execute("DELETE FROM tentatives WHERE horodatage<?",
+                       (self.now() - FENETRE_TENTATIVES_S,))
+
+    def _oublier_tentatives(self, email: str) -> None:
+        with self._conn() as cx:
+            cx.execute("DELETE FROM tentatives WHERE email=?", (email,))
+
     def verifier(self, email: str, mot_de_passe: str) -> Compte | None:
         """Rend le compte, ou None. NE DIT JAMAIS lequel des deux a échoué — ni par le
-        message, ni par le temps de réponse (voir le leurre ci-dessous)."""
+        message, ni par le temps de réponse (voir le leurre plus bas).
+
+        Lève `TropDeTentatives` au-delà de MAX_TENTATIVES échecs sur la fenêtre. C'est un
+        état DISTINCT de « identifiants faux », que l'appelant traduit en 429 et non en
+        401. Une connexion réussie remet le compteur à zéro."""
         propre = normaliser_email(email)
+        if not isinstance(mot_de_passe, str):
+            return None
+        if len(mot_de_passe) > LONGUEUR_MAX_MOT_DE_PASSE:
+            # Refusé AVANT scrypt : c'est tout l'intérêt du plafond de longueur.
+            return None
+        if self._tentatives_recentes(propre) >= MAX_TENTATIVES:
+            raise TropDeTentatives(
+                "trop de tentatives de connexion — réessayez dans quelques minutes")
         with self._conn() as cx:
             ligne = cx.execute(
                 "SELECT user_id, sel, empreinte, params, cree_le FROM comptes WHERE email=?",
@@ -164,6 +253,7 @@ class UserStore:
             # instantané et à un email connu lent — le temps de réponse suffirait à
             # énumérer les clients. On paie donc le même prix dans les deux cas.
             self._deriver(mot_de_passe or "", b"leurre-de-temps-constant")
+            self._noter_tentative(propre)
             return None
 
         user_id, sel, empreinte, params, cree_le = ligne
@@ -172,7 +262,9 @@ class UserStore:
         # compare_digest et non « == » : une comparaison qui s'arrête au premier octet
         # différent laisse deviner l'empreinte octet par octet.
         if not hmac.compare_digest(candidat, empreinte):
+            self._noter_tentative(propre)
             return None
+        self._oublier_tentatives(propre)
         return Compte(user_id=user_id, email=propre, cree_le=cree_le)
 
     def compte(self, user_id: str) -> Compte | None:

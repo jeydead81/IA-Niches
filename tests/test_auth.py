@@ -177,3 +177,22 @@ def test_le_user_id_n_est_pas_l_email(tmp_path):
     s = _store(tmp_path)
     u = s.creer_compte("baptiste@example.com", "un-mot-de-passe-solide")
     assert u.user_id and "@" not in u.user_id and u.user_id != u.email
+
+
+def test_durcir_la_politique_ne_verrouille_pas_les_comptes_existants(tmp_path, monkeypatch):
+    """MENACE : la politique de mot de passe a été durcie APRÈS que Baptiste ait créé son
+    compte (minimum passé de 10 à 12 caractères, liste de mots courants ajoutée). Si
+    `verifier` réappliquait la politique, il se retrouverait enfermé dehors de son propre
+    outil, sans aucune procédure de réinitialisation. La politique s'applique à la CRÉATION,
+    jamais à la vérification."""
+    import auth
+    monkeypatch.setattr(auth, "LONGUEUR_MIN_MOT_DE_PASSE", 10)
+    s = _store(tmp_path)
+    s.creer_compte("ancien@example.com", "dix-caract")     # 10 caractères, valide à l'époque
+    monkeypatch.setattr(auth, "LONGUEUR_MIN_MOT_DE_PASSE", 12)   # durcissement ultérieur
+
+    assert s.verifier("ancien@example.com", "dix-caract") is not None, (
+        "un compte existant doit continuer à s'ouvrir après un durcissement de la politique")
+    # …mais la création, elle, applique bien la nouvelle règle.
+    with pytest.raises(MotDePasseFaible):
+        s.creer_compte("nouveau@example.com", "dix-caract")
