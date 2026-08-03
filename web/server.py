@@ -33,8 +33,8 @@ from positioning_pdf import build_positioning_pdf  # noqa: E402
 from jobs import JobStore  # noqa: E402
 from usage import UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
-from auth import (EmailDejaPris, EmailInvalide, MotDePasseFaible,  # noqa: E402
-                  SESSION_TTL_S, TropDeTentatives, UserStore)
+from auth import (EmailDejaPris, EmailInvalide, MAX_INSCRIPTIONS_PAR_CLIENT,  # noqa: E402
+                  MotDePasseFaible, SESSION_TTL_S, TropDeTentatives, UserStore)
 
 app = FastAPI(title="IA-Niches")
 _HERE = Path(__file__).resolve().parent
@@ -73,20 +73,31 @@ def _plafond_analyses_mensuel() -> int | None:
         return None
 
 
-def _cookie_securise() -> bool:
-    """`Secure` interdit au navigateur d'envoyer le cookie en clair sur HTTP. Impossible à
-    activer par défaut : en local le serveur est en http://127.0.0.1 et le cookie ne
-    partirait jamais — l'utilisateur ne pourrait plus se connecter du tout. C'est donc un
-    réglage EXPLICITE, à mettre à 1 le jour du déploiement derrière HTTPS."""
-    return os.getenv("COOKIE_SECURE", "0").strip().lower() in ("1", "true", "yes", "oui")
+def _cookie_securise(request: Request) -> bool:
+    """`Secure` interdit au navigateur d'envoyer le cookie en clair sur HTTP.
+
+    DÉDUIT du protocole, et non lu dans un réglage. C'était auparavant une variable à 0 par
+    défaut, documentée « à passer à 1 au déploiement » : autant dire un jeton de 30 jours
+    diffusé en clair le jour où quelqu'un oublie de la lire. Ce qui s'oublie doit se
+    déduire — et le protocole est connu à chaque requête.
+
+    `X-Forwarded-Proto` est consulté parce qu'un serveur derrière un proxy TLS voit du HTTP
+    en interne alors que le navigateur, lui, parle en HTTPS. `COOKIE_SECURE=1` reste
+    disponible pour FORCER le drapeau derrière un proxy qui n'annonce rien ; il ne peut plus
+    le désactiver."""
+    if os.getenv("COOKIE_SECURE", "").strip().lower() in ("1", "true", "yes", "oui"):
+        return True
+    protocole = (request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+                 or request.url.scheme)
+    return protocole.lower() == "https"
 
 
-def _poser_session(reponse: Response, jeton: str) -> None:
+def _poser_session(request: Request, reponse: Response, jeton: str) -> None:
     """httponly : hors de portée de tout JavaScript, donc involable par injection de script.
     samesite=lax : le cookie ne part pas sur une requête POST venue d'un autre site, ce qui
     ferme la falsification de requête (CSRF) sans avoir à gérer un jeton anti-CSRF séparé."""
     reponse.set_cookie(COOKIE_SESSION, jeton, max_age=int(SESSION_TTL_S), httponly=True,
-                       samesite="lax", secure=_cookie_securise(), path="/")
+                       samesite="lax", secure=_cookie_securise(request), path="/")
 
 
 def _borner(nom: str, valeur: int, maxi: int) -> int:
@@ -156,6 +167,21 @@ async def _corps_json(request: Request) -> dict:
     return body
 
 
+def _inscriptions_ouvertes() -> bool:
+    """Fermé par DÉFAUT. Le plafond mensuel est PAR utilisateur : un compte de plus, c'est
+    un plafond neuf. Laisser l'inscription libre revenait donc à offrir une dépense
+    illimitée à un anonyme, et chaque analyse coûte de l'argent réel.
+
+    Le premier compte passe toujours (amorçage) : sur une installation neuve il n'y a
+    personne pour ouvrir les inscriptions, et une porte fermée à double tour rendrait le
+    produit inutilisable. À rouvrir explicitement le jour où le paiement sera branché."""
+    return os.getenv("INSCRIPTIONS_OUVERTES", "").strip().lower() in ("1", "true", "yes", "oui")
+
+
+def _client_distant(request: Request) -> str:
+    return (request.client.host if request.client else "") or "inconnu"
+
+
 def _identifiants(body: dict) -> tuple[str, str]:
     """Extrait e-mail et mot de passe en exigeant du TEXTE. Un client qui envoie un nombre
     ou une liste fait une requête malformée : 400. Sans ce garde, la valeur descendait
@@ -211,6 +237,22 @@ async def api_inscription(request: Request, response: Response):
     body = await _corps_json(request)
     store = UserStore(_USERS_DB)
     premier = store.n_comptes() == 0
+    if not premier and not _inscriptions_ouvertes():
+        # Message IDENTIQUE quelle que soit l'adresse : renvoyer 409 « déjà pris » sur une
+        # adresse connue et 201 sur une inconnue faisait de l'inscription un oracle
+        # d'énumération, qui annulait l'anti-énumération soignée de la connexion.
+        raise HTTPException(status_code=403,
+                            detail="les inscriptions sont fermées sur cette instance")
+    if not premier:
+        # Inscriptions ouvertes : on ne PEUT pas cacher qu'une adresse est prise sans mentir
+        # à l'utilisateur légitime. On empêche alors l'énumération EN MASSE — la limitation
+        # porte sur le client, car sonder mille adresses distinctes ne déclencherait aucun
+        # compteur par adresse.
+        cle = f"ip:{_client_distant(request)}"
+        if store.tentatives_recentes(cle) >= MAX_INSCRIPTIONS_PAR_CLIENT:
+            raise HTTPException(status_code=429,
+                                detail="trop d'inscriptions depuis ce poste — réessayez plus tard")
+        store.noter_tentative(cle)
     # La reprise des données « local » doit être DEMANDÉE. Elle était automatique pour le
     # premier compte créé : sur une instance exposée, le premier visiteur venu devenait
     # propriétaire de l'historique et de la consommation de Baptiste (revue de sécurité).
@@ -225,7 +267,7 @@ async def api_inscription(request: Request, response: Response):
     premier = premier and demande_reprise
     if premier:
         _adopter_donnees_locales(compte.user_id)
-    _poser_session(response, store.creer_session(compte.user_id))
+    _poser_session(request, response, store.creer_session(compte.user_id))
     return {"user_id": compte.user_id, "email": compte.email,
             "donnees_locales_reprises": premier}
 
@@ -246,7 +288,7 @@ async def api_connexion(request: Request, response: Response):
         # UN SEUL message pour les deux causes : distinguer « email inconnu » de « mot de
         # passe faux » laisserait énumérer les clients avec une liste d'adresses.
         raise HTTPException(status_code=401, detail="e-mail ou mot de passe incorrect")
-    _poser_session(response, store.creer_session(compte.user_id))
+    _poser_session(request, response, store.creer_session(compte.user_id))
     return {"user_id": compte.user_id, "email": compte.email}
 
 

@@ -81,8 +81,12 @@ def test_inscription_puis_identite_connue(tmp_path, monkeypatch):
 
 
 def test_un_email_deja_pris_rend_409(tmp_path, monkeypatch):
+    """Le 409 n'existe que si les inscriptions sont OUVERTES : fermées, toute adresse rend
+    le même 403, précisément pour ne pas révéler qui est déjà client."""
+    from tests.conftest import ouvrir_inscriptions
     client, _ = _client(monkeypatch, tmp_path)
     _inscrire(client)
+    ouvrir_inscriptions(monkeypatch)
     assert _inscrire(client).status_code == 409
 
 
@@ -186,7 +190,9 @@ def test_le_plafond_ne_se_contourne_plus_en_changeant_de_user_id(tmp_path, monke
 def test_deux_comptes_ne_voient_pas_l_historique_l_un_de_l_autre(tmp_path, monkeypatch):
     """L'historique, l'usage et les jobs sont PAR utilisateur — à la différence du cache de
     scraping, mutualisé par conception (CLAUDE.md)."""
+    from tests.conftest import ouvrir_inscriptions
     client, server = _client(monkeypatch, tmp_path)
+    ouvrir_inscriptions(monkeypatch)
     _inscrire(client, "un@example.com")
     from history import NicheHistory
     mien = client.get("/api/auth/moi").json()["user_id"]
@@ -225,7 +231,9 @@ def test_le_premier_compte_adopte_les_donnees_locales_s_il_le_demande(tmp_path, 
 
 def test_le_second_compte_n_adopte_rien(tmp_path, monkeypatch):
     """Sinon chaque nouveau client hériterait de l'historique de Baptiste."""
+    from tests.conftest import ouvrir_inscriptions
     client, server = _client(monkeypatch, tmp_path)
+    ouvrir_inscriptions(monkeypatch)
     from history import NicheHistory
     NicheHistory(tmp_path / "h.db").enregistrer("local", "scout", "ancienne", {"global_score": 7.0})
 

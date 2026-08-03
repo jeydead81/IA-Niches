@@ -53,6 +53,11 @@ SESSION_TTL_S = 30 * 24 * 3600          # 30 jours : au-delà, on redemande le m
 MAX_TENTATIVES = 8
 FENETRE_TENTATIVES_S = 15 * 60
 
+# Inscriptions depuis un MÊME client sur la fenêtre. Le compteur porte ici sur le client et
+# non sur l'adresse : sonder mille adresses différentes ne déclencherait jamais un compteur
+# par adresse, alors que c'est exactement le mode opératoire de l'énumération en masse.
+MAX_INSCRIPTIONS_PAR_CLIENT = 10
+
 # Mots de passe interdits parce qu'ils sont en tête de tous les dictionnaires d'attaque,
 # y compris au-delà de 12 caractères. La revue a MESURÉ que c'est la politique de mot de
 # passe — et non le réglage de scrypt — qui décide si un dictionnaire casse les comptes :
@@ -207,6 +212,15 @@ class UserStore:
         return compte
 
     # ── Limitation des tentatives ───────────────────────────────────────────────────
+
+    def tentatives_recentes(self, cle: str) -> int:
+        """Nombre d'échecs récents pour une clé. La clé est un e-mail pour la connexion,
+        une adresse IP pour l'inscription — le choix dépend de ce qu'on protège : un
+        compte ciblé dans un cas, le service entier dans l'autre."""
+        return self._tentatives_recentes(cle)
+
+    def noter_tentative(self, cle: str) -> None:
+        self._noter_tentative(cle)
 
     def _tentatives_recentes(self, email: str) -> int:
         with self._conn() as cx:

@@ -22,6 +22,15 @@ def isoler_bases(monkeypatch, server, tmp_path) -> None:
         monkeypatch.setattr(server, attr, tmp_path / nom)
 
 
+def ouvrir_inscriptions(monkeypatch) -> None:
+    """Les inscriptions sont FERMÉES par défaut depuis la revue de sécurité : le plafond
+    mensuel étant par utilisateur, un compte de plus est un plafond neuf. Seul le premier
+    compte passe (amorçage). Tout test qui a besoin d'un SECOND compte doit donc ouvrir la
+    porte explicitement — ce qui rend la contrainte visible dans le test plutôt que de la
+    contourner en douce depuis un helper partagé."""
+    monkeypatch.setenv("INSCRIPTIONS_OUVERTES", "1")
+
+
 def ouvrir_session(client, email: str = "test@example.com") -> str:
     """Crée un compte et laisse le cookie de session sur le client. Rend le user_id, dont
     plusieurs tests ont besoin pour vérifier le cloisonnement."""

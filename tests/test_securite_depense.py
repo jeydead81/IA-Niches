@@ -12,7 +12,8 @@ import time
 
 import pytest
 
-from tests.conftest import MDP_TEST, isoler_bases, ouvrir_session
+from tests.conftest import (MDP_TEST, isoler_bases, ouvrir_inscriptions,
+                            ouvrir_session)
 
 
 def _client(monkeypatch, tmp_path, plafond=None):
@@ -122,6 +123,7 @@ def test_un_compte_ne_lit_pas_le_job_d_un_autre(tmp_path, monkeypatch):
     _sans_moteur(monkeypatch, server)
     job_id = client.post("/api/jobs", json={"type": "scout"}).json()["id"]
 
+    ouvrir_inscriptions(monkeypatch)
     client.post("/api/auth/deconnexion")
     client.post("/api/auth/inscription",
                 json={"email": "autre@example.com", "mot_de_passe": MDP_TEST})
@@ -140,6 +142,7 @@ def test_l_adoption_des_donnees_locales_doit_etre_demandee(tmp_path, monkeypatch
     from history import NicheHistory
     NicheHistory(tmp_path / "history.db").enregistrer("local", "scout", "ancienne",
                                                       {"global_score": 7.0})
+    ouvrir_inscriptions(monkeypatch)
     client.post("/api/auth/deconnexion")
     r = client.post("/api/auth/inscription",
                     json={"email": "opportuniste@example.com", "mot_de_passe": MDP_TEST})

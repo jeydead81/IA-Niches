@@ -87,9 +87,13 @@ ENV_VARS = [
      "Défaut claude-sonnet-5. NE PAS rétrograder le classifieur : Haiku 4.5 mesuré à "
      "42 % d'accord contre 80 % requis."),
     ("KDP_KEYWORDS_MODEL", "Defaut claude-sonnet-5. Les 7 mots-cles backend."),
-    ("COOKIE_SECURE", "0 par defaut (local, HTTP). A METTRE A 1 AU DEPLOIEMENT : sans "
-                      "lui le cookie de session voyage en clair. Impossible d'activer "
-                      "par defaut, le cookie ne partirait pas sur http://127.0.0.1."),
+    ("INSCRIPTIONS_OUVERTES", "FERME par defaut. Le plafond mensuel etant PAR "
+                              "utilisateur, un compte de plus est un plafond neuf : "
+                              "l'inscription libre offrait une depense illimitee a un "
+                              "anonyme. Le PREMIER compte passe toujours (amorcage)."),
+    ("COOKIE_SECURE", "Normalement inutile : le drapeau Secure est DEDUIT du protocole "
+                      "(X-Forwarded-Proto puis le schema). A ne renseigner que derriere "
+                      "un proxy TLS qui n'annonce rien. Il ne peut que FORCER."),
 ]
 
 ENDPOINTS = [
