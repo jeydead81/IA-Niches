@@ -161,6 +161,13 @@
   .prixbox{font-size:12.5px;color:var(--text-muted);margin:0 0 12px}
   .prixbox strong{color:var(--heading);font-family:var(--mono)}
 
+  /* Ce que disent les suggestions Amazon. Ambré : ce sont des mises en garde, pas des
+     verdicts — le score, lui, n'en tient volontairement aucun compte. */
+  .sugbox{font-size:12.5px;color:#92400E;background:var(--amber-bg);border:1px solid #FCD34D;
+    border-radius:8px;padding:9px 11px;margin:0 0 12px}
+  .sugbox + .sugbox{margin-top:-6px}
+  .sugbox strong{color:#7C2D12}
+
   /* Compositeur de trio : replié par défaut. Le mode « propose-moi des trios » reste
      le chemin nominal ; composer soi-même est un choix qu'on va chercher. */
   .compo{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
@@ -768,6 +775,27 @@ async function downloadPdf(niche) {
 // coûte rien de plus. On dit TOUJOURS sur combien de livres elle porte — « 9,99-19,99 € »
 // sur deux livres ne se lit pas comme la même chose que sur vingt — et une fourchette
 // inconnue se dit, elle ne se remplace pas par un zéro.
+// Ce que les suggestions Amazon disent AU-DELÀ de leur nombre. Deux mises en garde que le
+// score ne peut pas porter : il note la quantité de demande, pas sa nature.
+// Volontairement affichées comme des alertes et NON intégrées au score — les ajouter
+// silencieusement à une note serait un jugement déguisé en mesure.
+function blocSuggestions(r){
+  let html='';
+  if(r.terme_dominant){
+    html += `<p class="sugbox"><strong>« ${esc(r.terme_dominant)} » revient dans
+      ${Math.round((r.part_dominante||0)*100)} % des suggestions.</strong> Les gens qui
+      tapent cette requête cherchent surtout ça — souvent un auteur ou un titre qui tient
+      le rayon. Vérifiez à qui vous vous mesurez avant d'écrire.</p>`;
+  }
+  if(r.intention_informationnelle){
+    html += `<p class="sugbox"><strong>Demande plutôt informationnelle</strong> — les
+      suggestions parlent de : ${(r.marqueurs_informationnels||[]).map(esc).join(', ')}. Ces
+      lecteurs cherchent l'information, pas forcément un livre à acheter : une demande
+      élevée ne se convertira pas mécaniquement en ventes.</p>`;
+  }
+  return html;
+}
+
 function blocPrix(r){
   if(!r.n_prix_connus)
     return `<p class="prixbox">Prix du rayon : <strong>inconnu</strong> — Amazon n'a
@@ -805,6 +833,7 @@ function render(rows){
         DataForSEO épuisé.</p>` : '';
     det.innerHTML=`<td colspan="8"><div class="inner">
         ${alerteNm}
+        ${blocSuggestions(r)}
         ${blocPrix(r)}
         <div class="histslot"></div>
         ${verdictBlock(r)}

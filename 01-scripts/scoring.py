@@ -142,5 +142,10 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
         concurrence_mesuree=mesuree,
         prix_min=prix["min"], prix_median=prix["median"], prix_max=prix["max"],
         n_prix_connus=prix["n_connus"],
+        # Recopiés tels quels : ces drapeaux INFORMENT, ils n'entrent dans aucun axe.
+        terme_dominant=validation.terme_dominant,
+        part_dominante=validation.part_dominante,
+        intention_informationnelle=validation.intention_informationnelle,
+        marqueurs_informationnels=validation.marqueurs_informationnels,
         top_asins=[o.asin for o in organic[:5] if o.asin],
     )

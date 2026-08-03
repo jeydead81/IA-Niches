@@ -113,6 +113,11 @@ class ScoredNiche(BaseModel):
     prix_median: float | None = None
     prix_max: float | None = None
     n_prix_connus: int = 0
+    # Ce que disent les suggestions Amazon, au-delà de leur nombre. Drapeaux, pas score.
+    terme_dominant: str | None = None
+    part_dominante: float = 0.0
+    intention_informationnelle: bool = False
+    marqueurs_informationnels: list[str] = Field(default_factory=list)
     top_asins: list[str] = Field(default_factory=list)
     verdict: NicheVerdict | None = None    # rempli pour le top-N (gate coût)
 
@@ -127,6 +132,13 @@ class NicheValidation(BaseModel):
     demand_score: int = 0                   # nb de suggestions Amazon distinctes surfacées
     queries_hit: int = 0                    # nb de requêtes (niche+satellites) qu'Amazon auto-complète
     validated: bool = False                 # True si Amazon auto-complète au moins une requête
+    # Lecture du CONTENU des suggestions (cf. niche_validator.lire_suggestions).
+    # DRAPEAUX, jamais des points de score : les ajouter au score serait un jugement
+    # déguisé en mesure, comme pour la fourchette de prix.
+    terme_dominant: str | None = None       # mot hors requête présent dans >= la moitié
+    part_dominante: float = 0.0
+    intention_informationnelle: bool = False
+    marqueurs_informationnels: list[str] = Field(default_factory=list)
 
 
 class MotsClesKDP(BaseModel):

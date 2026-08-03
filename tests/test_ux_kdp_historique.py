@@ -166,3 +166,18 @@ def test_les_menus_se_rechargent_au_changement_de_sous_genre():
 def test_les_contraintes_partent_bien_dans_la_requete():
     for param in ("'tropes'", "'decor'", "'libre'"):
         assert f"q.set({param}" in HTML, f"contrainte non transmise : {param}"
+
+
+# ── Lecture des suggestions Amazon ──────────────────────────────────────────────────
+
+def test_le_terme_dominant_est_affiche():
+    """Le score note la QUANTITÉ de demande ; il ne peut pas dire qu'un rayon est tenu par
+    un nom. Sans affichage, cette lecture resterait une donnée morte de plus."""
+    assert "terme_dominant" in HTML and "part_dominante" in HTML
+    assert "tient" in HTML.lower()
+
+
+def test_l_intention_informationnelle_est_affichee():
+    assert "intention_informationnelle" in HTML
+    assert "marqueurs_informationnels" in HTML
+    assert "pas forcément un livre" in HTML or "pas forcement un livre" in HTML
