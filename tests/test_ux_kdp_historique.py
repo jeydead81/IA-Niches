@@ -137,3 +137,32 @@ def test_le_nombre_d_idees_n_est_plus_reglable():
 
 def test_le_nombre_de_niches_analysees_va_jusqu_a_20():
     assert 'id="search"' in HTML and 'max="20"' in HTML
+
+
+# ── Compositeur de trio fiction ─────────────────────────────────────────────────────
+
+def test_le_compositeur_de_trio_existe_et_est_facultatif():
+    """Le mode « propose-moi des trios » reste le chemin nominal : composer soi-même est un
+    choix qu'on va chercher, replié, pas une étape imposée."""
+    assert "Composer moi-même le trio" in HTML
+    assert 'id="fic-tropes"' in HTML and 'id="fic-decor"' in HTML and 'id="fic-libre"' in HTML
+
+
+def test_les_menus_du_trio_viennent_de_la_taxonomie():
+    """Jamais une liste dupliquée en dur côté JS : elle se périmerait à la première taxo v2,
+    et le serveur refuserait alors des clés que l'interface propose encore."""
+    assert "/api/fiction/taxonomie/" in HTML
+    for trope_en_dur in ("enquetrice_amatrice", "village_breton", "mafia"):
+        assert f'value="{trope_en_dur}"' not in HTML, (
+            f"{trope_en_dur} est écrit en dur dans le HTML")
+
+
+def test_les_menus_se_rechargent_au_changement_de_sous_genre():
+    """Les tropes diffèrent d'un sous-genre à l'autre : garder les anciens ferait composer
+    un trio impossible, refusé ensuite par le serveur sans que l'auteur comprenne."""
+    assert "sgSelect.addEventListener('change'" in HTML
+
+
+def test_les_contraintes_partent_bien_dans_la_requete():
+    for param in ("'tropes'", "'decor'", "'libre'"):
+        assert f"q.set({param}" in HTML, f"contrainte non transmise : {param}"

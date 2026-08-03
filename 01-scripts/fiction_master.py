@@ -23,7 +23,8 @@ from cost_tracker import CostTracker
 from fiction_autocomplete import probe_niche as _probe_niche
 from fiction_classifier import DEFAULT_MODEL as _CLASSIFIER_MODEL
 from fiction_classifier import classify_books as _classify_books
-from fiction_ideator import generate_trios as _generate_trios
+from fiction_ideator import (contraintes_impossibles as _contraintes_impossibles,
+                             generate_trios as _generate_trios)
 from fiction_scoring import build_report
 from fiction_serp_provider import enrich_asins as _enrich_asins
 from fiction_serp_provider import fetch_shelf_asins as _fetch_shelf_asins
@@ -36,7 +37,7 @@ def _noop(_msg: str) -> None:
 
 def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kindle",
                       version: str = "fr_v1", n_top: int = 12, depth: int = 30,
-                      model: str | None = None,
+                      model: str | None = None, contraintes=None,
                       ideate=None, serp_fn=None, enrich_fn=None, classify=None, probe=None,
                       cache=None, use_cache: bool = True, cache_path: str | None = None,
                       cost=None, progress=None) -> list[FictionNicheReport]:
@@ -71,7 +72,17 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     # A) Ideator — 1 seul appel LLM pour tous les trios de ce sous-genre.
     progress(f"Génération de {n_niches} trios pour « {sous_genre_cle} »…")
     niches = ideate(sous_genre_cle, n=n_niches, rayon=rayon, version=version, model=model,
+                    contraintes=contraintes,
                     on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+    # Aucun trio ALORS QUE l'auteur a posé des contraintes : c'est une impossibilité
+    # de COMPOSITION, pas un verdict de marché — rien n'a encore été mesuré, aucune
+    # requête Amazon n'est partie. Le dire évite que la liste vide se lise « ce
+    # marché est mort », ce qui ferait abandonner une piste sur un malentendu.
+    if _contraintes_impossibles(niches, contraintes):
+        progress("Vos contraintes ne laissent aucun trio crédible sur ce sous-genre. "
+                 "Rien n'a été mesuré : élargissez-les (retirez le décor, ou un trope) "
+                 "plutôt que d'en conclure que le marché est vide.")
+        return []
     progress(f"{len(niches)} trios générés.")
 
     # B) N x SERP — rapide, isolée par niche : une niche qui lève est ÉCARTÉE, les rayons

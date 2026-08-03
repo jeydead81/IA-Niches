@@ -161,6 +161,15 @@
   .prixbox{font-size:12.5px;color:var(--text-muted);margin:0 0 12px}
   .prixbox strong{color:var(--heading);font-family:var(--mono)}
 
+  /* Compositeur de trio : replié par défaut. Le mode « propose-moi des trios » reste
+     le chemin nominal ; composer soi-même est un choix qu'on va chercher. */
+  .compo{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+  .compo summary{font-size:12.5px;font-weight:600;color:var(--primary);cursor:pointer}
+  .compo-corps{display:flex;flex-wrap:wrap;gap:12px;margin-top:11px;align-items:flex-end}
+  .compo .field{min-width:172px}
+  .compo-note{width:100%;font-size:11.5px;color:var(--text-muted);margin:2px 0 0}
+  .compo select[multiple]{height:74px}
+
   /* Écran de connexion. Il occulte TOUT le reste tant qu'aucune session n'est ouverte :
      laisser l'application visible derrière ferait cliquer sur des boutons qui rendent 401. */
   .auth-ecran{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;
@@ -472,6 +481,32 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
           <span id="run-fic-label">Lancer le scout fiction</span>
         </button>
+
+        <!-- Composer soi-même le trio. Les menus sont peuplés depuis la TAXONOMIE (aucune
+             liste en dur ici, elle se périmerait à la première taxo v2). Laissés vides,
+             l'IA propose librement : c'est le comportement d'origine, inchangé. -->
+        <details class="compo" id="compo">
+          <summary>Composer moi-même le trio (facultatif)</summary>
+          <div class="compo-corps">
+            <div class="field">
+              <label for="fic-tropes">Tropes imposés</label>
+              <select id="fic-tropes" multiple size="4"></select>
+            </div>
+            <div class="field">
+              <label for="fic-decor">Décor imposé</label>
+              <select id="fic-decor"><option value="">Peu importe</option></select>
+            </div>
+            <div class="field grow">
+              <label for="fic-libre">Piste personnelle</label>
+              <input type="text" id="fic-libre" placeholder="ex. thermalisme, fanfare de village…" autocomplete="off" />
+            </div>
+            <p class="compo-note">Ce que vous fixez ici s'impose à <strong>tous</strong> les
+              trios ; l'IA cherche des combinaisons crédibles à l'intérieur de vos
+              contraintes. La piste personnelle ne fait pas partie de la taxonomie : elle
+              oriente la requête, elle ne remplace ni un trope ni un décor. Plus vous
+              contraignez, moins il reste de combinaisons possibles.</p>
+          </div>
+        </details>
       </form>
       <p class="hint">Un trio = sous-genre × tropes × décor. La file ASIN est payée UNE fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page, le travail continue et vous le retrouverez ici.</p>
     </div>
@@ -849,7 +884,24 @@ let esFic=null;
 fetch('/api/fiction/sous-genres').then(r=>r.json()).then(list=>{
   sgSelect.innerHTML = list.map(o=>`<option value="${esc(o.cle)}">${esc(o.label)}</option>`).join('')
     || '<option value="">(aucun sous-genre)</option>';
+  chargerTaxonomie();
 }).catch(()=>{ sgSelect.innerHTML='<option value="">(taxonomie indisponible)</option>'; });
+
+// Menus du compositeur : rechargés à CHAQUE changement de sous-genre, parce que les tropes
+// et les décors ne sont pas les mêmes d'un sous-genre à l'autre. Garder les anciens ferait
+// composer un trio impossible, refusé ensuite par le serveur sans que l'auteur comprenne.
+function chargerTaxonomie(){
+  const sg = sgSelect.value;
+  const selTropes=$('#fic-tropes'), selDecor=$('#fic-decor');
+  if(!sg){ selTropes.innerHTML=''; selDecor.innerHTML='<option value="">Peu importe</option>'; return; }
+  fetch('/api/fiction/taxonomie/'+encodeURIComponent(sg)).then(r=>r.ok?r.json():null).then(d=>{
+    if(!d) return;
+    selTropes.innerHTML = d.tropes.map(t=>`<option value="${esc(t)}">${esc(t.replace(/_/g,' '))}</option>`).join('');
+    selDecor.innerHTML = '<option value="">Peu importe</option>'
+      + d.decors.map(t=>`<option value="${esc(t)}">${esc(t.replace(/_/g,' '))}</option>`).join('');
+  }).catch(()=>{});
+}
+sgSelect.addEventListener('change', chargerTaxonomie);
 
 function addStepFic(msg){
   stepsFic.querySelectorAll('li.cur').forEach(li=>{li.classList.remove('cur');li.querySelector('.dot').innerHTML=ICON_CHECK;});
@@ -965,6 +1017,11 @@ formFic.addEventListener('submit', e=>{
   runFicBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
   const q=new URLSearchParams({sous_genre:sgSelect.value, n_niches:$('#fic-n').value, rayon:$('#fic-rayon').value});
+  // Contraintes de composition. Absentes = mode « propose-moi des trios ».
+  const tropesChoisis=[...$('#fic-tropes').selectedOptions].map(o=>o.value);
+  if(tropesChoisis.length) q.set('tropes', tropesChoisis.join(','));
+  if($('#fic-decor').value) q.set('decor', $('#fic-decor').value);
+  if($('#fic-libre').value.trim()) q.set('libre', $('#fic-libre').value.trim());
   esFic=new EventSource('/api/fiction?'+q.toString());
   esFic.addEventListener('progress',ev=>addStepFic(JSON.parse(ev.data)));
   esFic.addEventListener('result',ev=>renderFic(JSON.parse(ev.data)));

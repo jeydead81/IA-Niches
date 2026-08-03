@@ -26,7 +26,8 @@ from scout_master import run_scout  # noqa: E402
 from fiction_master import run_fiction_scout  # noqa: E402
 from niche_verdict import generate_verdict  # noqa: E402
 from kdp_keywords import generer_mots_cles  # noqa: E402
-from fiction_taxonomy import load_taxonomy  # noqa: E402
+from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
+from fiction_ideator import ContraintesTrio  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from models import ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
@@ -55,11 +56,22 @@ COOKIE_SESSION = "ia_niches_session"
 # appels payants : sans ces bornes, une seule « analyse » avec search=9999 déclenche des
 # milliers de requêtes DataForSEO tout en ne consommant qu'une unité du plafond. Borner
 # le volume est donc la seule protection réelle du MONTANT (revue de sécurité 2026-08-03).
-# Le nombre d'IDÉES est fixé, pas offert au réglage : l'ideator est UN SEUL appel LLM quel
-# que soit le nombre demandé, donc en proposer 20 plutôt que 10 coûte des millièmes de
-# dollar et améliore le tri gratuit qui suit. C'est le nombre de RECHERCHES qui pèse
-# (~0,003 $ par niche, plus le lot BSR) : c'est donc le seul que l'utilisateur choisit.
-IDEES_PAR_RUN = 20
+# Le nombre d'IDÉES est fixé, pas offert au réglage : c'est le nombre de RECHERCHES qui
+# décide de la facture (~0,003 $ par niche, plus le lot BSR), pas celui d'idées.
+#
+# Fixé à 10 sur MESURE, pas sur intuition (30 niches sur « bien-être », 2026-08-03) :
+#   vivier 10 -> top-4 demand_score [19, 12, 11, 11]
+#   vivier 20 -> top-4 demand_score [19, 15, 12, 12]
+#   vivier 30 -> top-4 demand_score [19, 15, 13, 12]
+# Dans les TROIS cas, les 4 niches retenues sont déjà toutes au-dessus du plafond du
+# scoring (`min(demand_score, 10)`, scoring.py) : élargir le vivier change QUELLES niches
+# sont testées, jamais leur note sur l'axe demande. Gain mesuré : nul.
+# Le coût, lui, est réel : 0,0459 $ mesuré pour 30 niches, soit ~0,0015 $ par niche — la
+# sortie du LLM croît avec n. Passer de 10 à 20 coûterait ~+0,015 $ par run, autant que
+# toute la phase DataForSEO d'un run à 4 recherches, pour rien.
+# Ce réglage sera à revoir SI le plafond de `min(demand_score, 10)` est relevé : c'est lui
+# qui rend le classement aveugle au-delà de 10 suggestions, pas la taille du vivier.
+IDEES_PAR_RUN = 10
 MAX_IDEES = 30
 MAX_RECHERCHES = 20
 MAX_NICHES_FICTION = 20
@@ -394,6 +406,18 @@ def scout(request: Request, seed: str = "", ideas: int = IDEES_PAR_RUN, search: 
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@app.get("/api/fiction/taxonomie/{sous_genre}")
+def fiction_taxonomie(sous_genre: str, user_id: str = Depends(utilisateur_courant)):
+    """Tropes et décors autorisés pour un sous-genre — alimente les menus déroulants
+    du compositeur de trio. Même principe que /api/fiction/sous-genres : la taxonomie
+    est la source de vérité UNIQUE, jamais une liste dupliquée en dur côté JS."""
+    if sous_genre not in load_taxonomy().get("sous_genres", {}):
+        raise HTTPException(status_code=400,
+                            detail=f"sous-genre inconnu : « {sous_genre} »")
+    tropes, decors = valid_keys(sous_genre)
+    return {"sous_genre": sous_genre, "tropes": tropes, "decors": decors}
+
+
 @app.get("/api/fiction/sous-genres")
 def fiction_sous_genres(user_id: str = Depends(utilisateur_courant)):
     """Peuple le sélecteur fiction de l'UI depuis la taxonomie (source de vérité unique) —
@@ -404,7 +428,8 @@ def fiction_sous_genres(user_id: str = Depends(utilisateur_courant)):
 
 @app.get("/api/fiction")
 def fiction(request: Request, sous_genre: str = "", n_niches: int = 8,
-            rayon: str = "kindle", user_id: str = Depends(utilisateur_courant)):
+            rayon: str = "kindle", tropes: str = "", decor: str = "", libre: str = "",
+            user_id: str = Depends(utilisateur_courant)):
     """Lance le scout fiction dans un thread, streame en SSE — même contrat que /api/scout
     (progress / result / cost / error / done)."""
     # Validation AVANT de lancer quoi que ce soit : un sous-genre inconnu (ou absent) doit
@@ -415,6 +440,21 @@ def fiction(request: Request, sous_genre: str = "", n_niches: int = 8,
     if sous_genre not in sgs:
         raise HTTPException(status_code=400,
                             detail=f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
+
+    # Contraintes de composition posées par l'auteur (menus déroulants + champ libre).
+    # Toutes vides = mode « propose-moi des trios », le comportement d'origine.
+    contraintes = ContraintesTrio(
+        tropes=[t.strip() for t in (tropes or "").split(",") if t.strip()],
+        decor=(decor or None), libre=(libre or ""))
+    tropes_ok, decors_ok = valid_keys(sous_genre)
+    inconnus = [t for t in contraintes.tropes if t not in tropes_ok]
+    if inconnus or (contraintes.decor and contraintes.decor not in decors_ok):
+        # Les menus sont peuplés depuis la taxonomie : une clé inconnue ne peut venir que
+        # d'une requête forgée à la main. La refuser explicitement évite que l'auteur croie
+        # sa contrainte appliquée alors qu'elle serait ignorée en silence.
+        raise HTTPException(
+            status_code=400,
+            detail=f"contrainte hors taxonomie : {inconnus or contraintes.decor}")
     _verifier_plafond(user_id)
 
     q: "queue.Queue" = queue.Queue()
@@ -426,6 +466,7 @@ def fiction(request: Request, sous_genre: str = "", n_niches: int = 8,
         cost = CostTracker()
         try:
             rapports = run_fiction_scout(sous_genre, n_niches=n_niches, rayon=rayon,
+                                         contraintes=contraintes,
                                          progress=progress, cost=cost)
             payload = []
             for r in rapports:

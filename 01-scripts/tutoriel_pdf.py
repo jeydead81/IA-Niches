@@ -111,6 +111,7 @@ ENDPOINTS = [
     ("GET  /api/scout", "Scout non-fiction en SSE. Meurt si le client se déconnecte."),
     ("GET  /api/fiction", "Scout fiction en SSE. Idem."),
     ("GET  /api/fiction/sous-genres", "Peuple le sélecteur depuis la taxonomie."),
+    ("GET  /api/fiction/taxonomie/{sous_genre}", "Tropes et decors autorises du sous-genre. Alimente les menus du compositeur de trio : la taxonomie est la source de verite UNIQUE, jamais une liste en dur cote JS."),
     ("POST /api/jobs", "202 + id immédiat. Travail détaché : survit à la déconnexion. "
                        "À PRIVILÉGIER pour la fiction (10-15 min)."),
     ("GET  /api/jobs/{id}", "Statut, progression, résultat, coût."),

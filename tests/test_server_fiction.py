@@ -109,3 +109,49 @@ def test_endpoint_fiction_sous_genres_liste_la_taxonomie(tmp_path, monkeypatch):
     assert r.status_code == 200
     cles = [item["cle"] for item in r.json()]
     assert "cosy_mystery" in cles
+
+
+# ── Composition du trio par l'auteur ────────────────────────────────────────────────
+
+def test_l_endpoint_expose_les_tropes_et_decors_d_un_sous_genre(tmp_path, monkeypatch):
+    """Les menus déroulants doivent être peuplés depuis la TAXONOMIE, jamais depuis une
+    liste dupliquée en dur côté JS — qui se périmerait à la première taxo v2."""
+    client, _ = _client(monkeypatch, tmp_path)
+    r = client.get("/api/fiction/taxonomie/cosy_mystery")
+    assert r.status_code == 200
+    d = r.json()
+    assert "enquetrice_amatrice" in d["tropes"] and "village_breton" in d["decors"]
+    assert "mafia" not in d["tropes"]
+
+
+def test_un_sous_genre_inconnu_rend_400(tmp_path, monkeypatch):
+    client, _ = _client(monkeypatch, tmp_path)
+    assert client.get("/api/fiction/taxonomie/inexistant").status_code == 400
+
+
+def test_les_contraintes_de_l_auteur_arrivent_jusqu_a_l_ideator(tmp_path, monkeypatch):
+    """Sans propagation, les menus seraient décoratifs : l'utilisateur croirait avoir
+    contraint la recherche alors que l'IA proposerait ce qu'elle veut."""
+    client, server = _client(monkeypatch, tmp_path)
+    vu = {}
+
+    def faux_run(sous_genre_cle, **kw):
+        vu.update(kw)
+        return []
+
+    monkeypatch.setattr(server, "run_fiction_scout", faux_run)
+    client.get("/api/fiction?sous_genre=cosy_mystery&tropes=enquetrice_amatrice"
+               "&decor=village_breton&libre=thermalisme")
+    c = vu.get("contraintes")
+    assert c is not None
+    assert c.tropes == ["enquetrice_amatrice"] and c.decor == "village_breton"
+    assert c.libre == "thermalisme"
+
+
+def test_une_contrainte_hors_taxonomie_rend_400(tmp_path, monkeypatch):
+    """Les menus viennent de la taxonomie : une clé inconnue ne peut venir que d'une
+    requête forgée. La refuser explicitement évite que l'auteur croie sa contrainte
+    appliquée."""
+    client, _ = _client(monkeypatch, tmp_path)
+    r = client.get("/api/fiction?sous_genre=cosy_mystery&tropes=mafia")
+    assert r.status_code == 400 and "taxonomie" in r.json()["detail"].lower()

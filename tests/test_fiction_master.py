@@ -8,7 +8,7 @@ from models import AutocompleteSignal, EnrichedBook, FictionNiche, TropeClassifi
 
 
 def _faux_ideate(sous_genre_cle, n=8, rayon="kindle", model=None, client=None,
-                 on_usage=None, version="fr_v1"):
+                 on_usage=None, version="fr_v1", **_kw):
     """Signature calquée sur fiction_ideator.generate_trios : n trios distincts, une
     query numérotée pour que les fakes serp/classify puissent s'y raccrocher par index."""
     if on_usage:
