@@ -155,3 +155,45 @@ def test_une_contrainte_hors_taxonomie_rend_400(tmp_path, monkeypatch):
     client, _ = _client(monkeypatch, tmp_path)
     r = client.get("/api/fiction?sous_genre=cosy_mystery&tropes=mafia")
     assert r.status_code == 400 and "taxonomie" in r.json()["detail"].lower()
+
+
+# ── Le chemin asynchrone doit porter les mêmes contraintes que le SSE ────────────────
+
+def test_un_job_fiction_transmet_les_contraintes(tmp_path, monkeypatch):
+    """L'interface bascule sur POST /api/jobs (elle survit alors à la fermeture de
+    l'onglet). Si ce chemin ignorait les contraintes, le compositeur de trio deviendrait
+    décoratif du jour au lendemain, sans qu'aucun message ne l'annonce."""
+    import time as _t
+    client, server = _client(monkeypatch, tmp_path)
+    vu = {}
+
+    def faux_run(sous_genre_cle, **kw):
+        vu.update(kw)
+        return []
+
+    monkeypatch.setattr(server, "run_fiction_scout", faux_run)
+    r = client.post("/api/jobs", json={"type": "fiction", "sous_genre": "cosy_mystery",
+                                       "tropes": ["enquetrice_amatrice"],
+                                       "decor": "village_breton", "libre": "thermalisme"})
+    assert r.status_code == 202
+    jid = r.json()["id"]
+    fin = _t.time() + 10
+    while _t.time() < fin:
+        if client.get(f"/api/jobs/{jid}").json()["statut"] in ("termine", "echec"):
+            break
+        _t.sleep(0.02)
+
+    c = vu.get("contraintes")
+    assert c is not None, "les contraintes n'ont pas atteint le moteur"
+    assert c.tropes == ["enquetrice_amatrice"] and c.decor == "village_breton"
+    assert c.libre == "thermalisme"
+
+
+def test_un_job_fiction_refuse_une_contrainte_hors_taxonomie(tmp_path, monkeypatch):
+    """Refusé AVANT la création du job : levée depuis le thread détaché, l'erreur
+    arriverait après un 202 déjà rendu et l'utilisateur ne verrait qu'un job en échec sans
+    comprendre pourquoi."""
+    client, _ = _client(monkeypatch, tmp_path)
+    r = client.post("/api/jobs", json={"type": "fiction", "sous_genre": "cosy_mystery",
+                                       "tropes": ["mafia"]})
+    assert r.status_code == 400 and "taxonomie" in r.json()["detail"].lower()

@@ -153,6 +153,29 @@ def origine_sure(request: Request) -> None:
                                 detail="requête refusée : elle vient d'un autre site")
 
 
+def _contraintes_fiction(sous_genre: str, tropes, decor, libre) -> ContraintesTrio:
+    """Construit les contraintes de composition ET les valide contre la taxonomie.
+
+    Partagée par les DEUX chemins (SSE et travail asynchrone) : c'est exactement la
+    divergence qu'on vient de payer. Le compositeur de trio n'avait été branché que sur le
+    chemin SSE, si bien que basculer l'interface sur les travaux asynchrones l'aurait rendu
+    décoratif du jour au lendemain, sans le moindre message.
+
+    Une clé inconnue LÈVE : les menus étant peuplés depuis la taxonomie, elle ne peut venir
+    que d'une requête forgée. L'ignorer ferait croire à l'auteur que sa contrainte est
+    appliquée."""
+    if isinstance(tropes, str):
+        tropes = tropes.split(",")
+    liste = [t.strip() for t in (tropes or []) if isinstance(t, str) and t.strip()]
+    c = ContraintesTrio(tropes=liste, decor=(decor or None), libre=(libre or ""))
+    tropes_ok, decors_ok = valid_keys(sous_genre)
+    inconnus = [t for t in c.tropes if t not in tropes_ok]
+    if inconnus or (c.decor and c.decor not in decors_ok):
+        raise HTTPException(status_code=400,
+                            detail=f"contrainte hors taxonomie : {inconnus or c.decor}")
+    return c
+
+
 def _verifier_plafond(user_id: str, n_analyses: int = 1) -> None:
     """Vérifié AVANT de dépenser, sur TOUT chemin payant.
 
@@ -441,20 +464,8 @@ def fiction(request: Request, sous_genre: str = "", n_niches: int = 8,
         raise HTTPException(status_code=400,
                             detail=f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
 
-    # Contraintes de composition posées par l'auteur (menus déroulants + champ libre).
     # Toutes vides = mode « propose-moi des trios », le comportement d'origine.
-    contraintes = ContraintesTrio(
-        tropes=[t.strip() for t in (tropes or "").split(",") if t.strip()],
-        decor=(decor or None), libre=(libre or ""))
-    tropes_ok, decors_ok = valid_keys(sous_genre)
-    inconnus = [t for t in contraintes.tropes if t not in tropes_ok]
-    if inconnus or (contraintes.decor and contraintes.decor not in decors_ok):
-        # Les menus sont peuplés depuis la taxonomie : une clé inconnue ne peut venir que
-        # d'une requête forgée à la main. La refuser explicitement évite que l'auteur croie
-        # sa contrainte appliquée alors qu'elle serait ignorée en silence.
-        raise HTTPException(
-            status_code=400,
-            detail=f"contrainte hors taxonomie : {inconnus or contraintes.decor}")
+    contraintes = _contraintes_fiction(sous_genre, tropes, decor, libre)
     _verifier_plafond(user_id)
 
     q: "queue.Queue" = queue.Queue()
@@ -529,8 +540,11 @@ def _run_fiction_job(params: dict, progress, cost, user_id: str) -> list:
         # normal (coût nul imputé), jamais une 500 opaque.
         raise ValueError(f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
     n_niches = _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
+    contraintes = _contraintes_fiction(sous_genre, params.get("tropes"),
+                                       params.get("decor"), params.get("libre"))
     rapports = run_fiction_scout(sous_genre, n_niches=n_niches,
                                  rayon=params.get("rayon", "kindle"),
+                                 contraintes=contraintes,
                                  progress=progress, cost=cost)
     payload = []
     for r in rapports:
@@ -546,13 +560,21 @@ def _run_fiction_job(params: dict, progress, cost, user_id: str) -> list:
 # donc c'est précisément lui qui doit alimenter l'historique. Le laisser muet — l'état
 # initial, trouvé en revue — vidait la fonction de sa substance pour l'usage nominal.
 def _valider_volumes(type_: str, params: dict) -> None:
-    """Applique les bornes aux paramètres de volume d'un job, avant tout lancement."""
+    """Valide tout ce qui peut l'être AVANT de créer le job et de rendre 202.
+
+    Levée depuis le thread détaché, une erreur de paramètre arriverait après un 202 déjà
+    rendu : l'utilisateur ne verrait qu'un job en échec, sans savoir que c'est sa saisie
+    qui est en cause."""
     if type_ == "scout":
         _borner("n_ideas", params.get("n_ideas", params.get("ideas", 12)), MAX_IDEES)
         _borner("n_search", params.get("n_search", params.get("search", 6)),
                 MAX_RECHERCHES)
     elif type_ == "fiction":
         _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
+        sgs = load_taxonomy().get("sous_genres", {})
+        if params.get("sous_genre") in sgs:      # sous-genre inconnu : dit par le runner
+            _contraintes_fiction(params.get("sous_genre", ""), params.get("tropes"),
+                                 params.get("decor"), params.get("libre"))
 
 
 _JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}

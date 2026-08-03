@@ -539,7 +539,7 @@
           </div>
         </details>
       </form>
-      <p class="hint">Un trio = sous-genre × tropes × décor. Le relevé des ventes est fait UNE seule fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes : laissez cet onglet ouvert jusqu'au bout, le résultat serait perdu sinon.</p>
+      <p class="hint">Un trio = sous-genre × tropes × décor. Le relevé des ventes est fait UNE seule fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page : le travail continue et vous le retrouverez ici.</p>
     </div>
 
     <div class="panel progress" id="progress-fic">
@@ -890,18 +890,90 @@ form.addEventListener('submit',e=>{
   runBtn.disabled=true; runLabel.textContent='Scout en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
-  const q=new URLSearchParams({seed:$('#seed').value.trim(),search:$('#search').value});
-  es=new EventSource('/api/scout?'+q.toString());
-  es.addEventListener('progress',ev=>addStep(JSON.parse(ev.data)));
-  es.addEventListener('result',ev=>render(JSON.parse(ev.data)));
-  es.addEventListener('error',ev=>{ if(ev.data){errbox.textContent='Erreur : '+JSON.parse(ev.data);errbox.classList.add('on');} });
-  es.addEventListener('done',()=>{
-    es.close(); progress.classList.remove('on');
-    runBtn.disabled=false; runLabel.textContent='Lancer le scout';
-    runBtn.querySelector('.spin').outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
-    if(!tbody.children.length && !errbox.classList.contains('on')){ empty.style.display='block'; }
-  });
+
+  lancerTravail('scout', {seed:$('#seed').value.trim(), n_search:Number($('#search').value)}, VUE_NF);
 });
+
+
+// ================= Travaux asynchrones =================
+// L'interface passe par POST /api/jobs puis se raccroche au flux du travail, au lieu de
+// consommer directement /api/scout et /api/fiction.
+//
+// Trois raisons, dans l'ordre d'importance :
+// 1. Le run SURVIT à la fermeture de l'onglet. Le flux direct vit le temps de la requête
+//    HTTP : fermer la page perdait le résultat d'une analyse fiction de 15 minutes, alors
+//    que l'interface promettait le contraire. C'est cette promesse qu'on rend vraie.
+// 2. Le flux d'un travail est RECONNECTABLE : il rejoue toute la progression depuis le
+//    début à chaque raccrochage, puisqu'elle est lue dans la base et non dans une file en
+//    mémoire. C'est ce qui permet de reprendre un run après un rechargement.
+// 3. La création du travail vérifie le plafond AVANT de dépenser et rend une 429 lisible,
+//    là où le flux direct commençait à travailler puis échouait en cours de route.
+async function lancerTravail(type, params, vue){
+  vue.avant();
+  let r;
+  try{
+    r = await fetch('/api/jobs', {method:'POST', headers:{'Content-Type':'application/json'},
+                                  body: JSON.stringify({type, ...params})});
+  }catch(e){
+    vue.erreur("Le serveur ne répond pas."); vue.apres(); return null;
+  }
+  if(!r.ok){
+    const d = await r.json().catch(()=>({}));
+    // 429 = plafond mensuel atteint. Le dire tel quel : « erreur » laisserait croire à une
+    // panne, alors que c'est une limite volontaire et que rien n'a été dépensé.
+    vue.erreur(r.status===429
+      ? "Vous avez atteint votre limite d'analyses pour ce mois-ci. Rien n'a été lancé."
+      : (d.detail || "La demande a été refusée."));
+    vue.apres();
+    return null;
+  }
+  const id = (await r.json()).id;
+  try{ localStorage.setItem(vue.cle, id); }catch(e){}
+  suivreTravail(id, vue);
+  return id;
+}
+
+function suivreTravail(id, vue){
+  const es = new EventSource('/api/jobs/' + encodeURIComponent(id) + '/stream');
+  vue.flux(es);
+  // Le flux rejoue TOUTE la progression à chaque raccrochage : on repart d'une liste vide
+  // pour ne pas empiler deux fois les mêmes étapes après un rechargement.
+  vue.viderEtapes();
+  es.addEventListener('progress', ev => vue.etape(JSON.parse(ev.data)));
+  es.addEventListener('result',   ev => vue.resultat(JSON.parse(ev.data)));
+  es.addEventListener('error',    ev => { if(ev.data) vue.erreur(JSON.parse(ev.data)); });
+  es.addEventListener('done', () => {
+    es.close();
+    try{ localStorage.removeItem(vue.cle); }catch(e){}
+    vue.apres();
+  });
+}
+
+// Au chargement : si un travail était en cours, on s'y raccroche. Sans ça, la promesse
+// « vous pouvez fermer cette page » resterait fausse — le travail continuerait côté
+// serveur mais l'utilisateur n'aurait aucun moyen de revenir dessus.
+function reprendreTravail(vue){
+  let id = null;
+  try{ id = localStorage.getItem(vue.cle); }catch(e){}
+  if(!id) return;
+  fetch('/api/jobs/' + encodeURIComponent(id)).then(r => r.ok ? r.json() : null).then(job => {
+    if(!job){ try{ localStorage.removeItem(vue.cle); }catch(e){} return; }
+    vue.avant();
+    if(job.statut === 'termine' || job.statut === 'echec'){
+      // Terminé pendant l'absence : on montre le résultat sans rouvrir de flux.
+      try{ localStorage.removeItem(vue.cle); }catch(e){}
+      vue.viderEtapes();
+      (job.progression || []).forEach(m => vue.etape(m));
+      if(job.resultat) vue.resultat(job.resultat);
+      if(job.erreur) vue.erreur(job.erreur);
+      vue.apres();
+      vue.etape("Analyse retrouvée : elle s'est terminée pendant votre absence.");
+    }else{
+      vue.etape("Analyse toujours en cours, reprise en direct…");
+      suivreTravail(id, vue);
+    }
+  }).catch(()=>{});
+}
 
 // ================= Fiction =================
 const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>';
@@ -1058,23 +1130,65 @@ formFic.addEventListener('submit', e=>{
   runFicBtn.disabled=true; runFicLabel.textContent='Scout en cours…';
   runFicBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
-  const q=new URLSearchParams({sous_genre:sgSelect.value, n_niches:$('#fic-n').value, rayon:$('#fic-rayon').value});
+  const params={sous_genre:sgSelect.value, n_niches:Number($('#fic-n').value),
+                rayon:$('#fic-rayon').value};
   // Contraintes de composition. Absentes = mode « propose-moi des trios ».
   const tropesChoisis=[...$('#fic-tropes').selectedOptions].map(o=>o.value);
-  if(tropesChoisis.length) q.set('tropes', tropesChoisis.join(','));
-  if($('#fic-decor').value) q.set('decor', $('#fic-decor').value);
-  if($('#fic-libre').value.trim()) q.set('libre', $('#fic-libre').value.trim());
-  esFic=new EventSource('/api/fiction?'+q.toString());
-  esFic.addEventListener('progress',ev=>addStepFic(JSON.parse(ev.data)));
-  esFic.addEventListener('result',ev=>renderFic(JSON.parse(ev.data)));
-  esFic.addEventListener('error',ev=>{ if(ev.data){errboxFic.textContent='Erreur : '+JSON.parse(ev.data);errboxFic.classList.add('on');} });
-  esFic.addEventListener('done',()=>{
-    esFic.close(); progressFic.classList.remove('on');
-    runFicBtn.disabled=false; runFicLabel.textContent='Lancer le scout fiction';
-    runFicBtn.querySelector('.spin').outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
-    if(!gridFic.children.length && !errboxFic.classList.contains('on')){ emptyFic.style.display='block'; }
-  });
+  if(tropesChoisis.length) params.tropes = tropesChoisis;
+  if($('#fic-decor').value) params.decor = $('#fic-decor').value;
+  if($('#fic-libre').value.trim()) params.libre = $('#fic-libre').value.trim();
+  lancerTravail('fiction', params, VUE_FIC);
 });
+
+
+// Chaque onglet décrit à `lancerTravail` comment se mettre en attente, afficher une étape,
+// rendre un résultat et revenir au repos. Deux objets plutôt qu'une fonction à dix
+// paramètres : c'est ce qui garde le socle asynchrone identique pour les deux moteurs.
+const VUE_NF = {
+  cle: 'ia-niches-job-scout',
+  avant(){
+    if(es) es.close();
+    steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
+    errbox.classList.remove('on'); errbox.textContent='';
+    empty.style.display='none'; progress.classList.add('on');
+    runBtn.disabled=true; runLabel.textContent='Scout en cours…';
+    const ic=runBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
+  },
+  flux(e){ es=e; },
+  viderEtapes(){ steps.innerHTML=''; },
+  etape(m){ addStep(m); },
+  resultat(d){ render(d); },
+  erreur(m){ errbox.textContent='Erreur : '+m; errbox.classList.add('on'); },
+  apres(){
+    progress.classList.remove('on');
+    runBtn.disabled=false; runLabel.textContent='Lancer le scout';
+    const sp=runBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
+    if(!tbody.children.length && !errbox.classList.contains('on')) empty.style.display='block';
+  },
+};
+
+const VUE_FIC = {
+  cle: 'ia-niches-job-fiction',
+  avant(){
+    if(esFic) esFic.close();
+    stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
+    errboxFic.classList.remove('on'); errboxFic.textContent='';
+    emptyFic.style.display='none'; progressFic.classList.add('on');
+    runFicBtn.disabled=true; runFicLabel.textContent='Scout en cours…';
+    const ic=runFicBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
+  },
+  flux(e){ esFic=e; },
+  viderEtapes(){ stepsFic.innerHTML=''; },
+  etape(m){ addStepFic(m); },
+  resultat(d){ renderFic(d); },
+  erreur(m){ errboxFic.textContent='Erreur : '+m; errboxFic.classList.add('on'); },
+  apres(){
+    progressFic.classList.remove('on');
+    runFicBtn.disabled=false; runFicLabel.textContent='Lancer le scout fiction';
+    const sp=runFicBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
+    if(!gridFic.children.length && !errboxFic.classList.contains('on')) emptyFic.style.display='block';
+  },
+};
 
 // ================= Glossaire (Task U1) =================
 // Bulle UNIQUE partagée par tous les boutons « ? », en position:fixed (jamais rognée par
@@ -1224,6 +1338,8 @@ function chargerUsage(){
     emailAffiche.textContent = adresse;
     mdp.value = '';
     chargerUsage();
+    reprendreTravail(VUE_NF);
+    reprendreTravail(VUE_FIC);
   }
 
   function sortir(){

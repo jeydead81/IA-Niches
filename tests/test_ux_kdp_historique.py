@@ -164,8 +164,10 @@ def test_les_menus_se_rechargent_au_changement_de_sous_genre():
 
 
 def test_les_contraintes_partent_bien_dans_la_requete():
-    for param in ("'tropes'", "'decor'", "'libre'"):
-        assert f"q.set({param}" in HTML, f"contrainte non transmise : {param}"
+    """Elles voyagent désormais dans le corps JSON de `POST /api/jobs` et non dans l'URL :
+    l'interface est passée sur le chemin asynchrone, qui survit à la fermeture de l'onglet."""
+    for champ in ("params.tropes", "params.decor", "params.libre"):
+        assert champ in HTML, f"contrainte non transmise : {champ}"
 
 
 # ── Lecture des suggestions Amazon ──────────────────────────────────────────────────
@@ -240,3 +242,31 @@ def test_la_fourchette_de_prix_des_livres_reste():
 def test_le_compteur_d_analyses_du_mois_reste():
     """C'est lui que le plafond mensuel consomme, et le seul repère avant un blocage."""
     assert "/api/usage" in HTML and "Ce mois-ci" in HTML
+
+
+# ── Chemin asynchrone ───────────────────────────────────────────────────────────────
+
+def test_l_interface_lance_les_runs_par_le_chemin_asynchrone():
+    """`/api/scout` et `/api/fiction` en flux direct meurent avec la requête HTTP : fermer
+    l'onglet perdait le résultat d'une analyse fiction de 15 minutes. `POST /api/jobs`
+    détache le run, vérifie le plafond AVANT de dépenser et rend une 429 lisible."""
+    assert "lancerTravail" in HTML
+    assert "'/api/jobs'" in HTML
+    assert "/stream" in HTML
+    assert "new EventSource('/api/scout" not in HTML
+    assert "new EventSource('/api/fiction?" not in HTML
+
+
+def test_un_run_interrompu_est_repris_au_rechargement():
+    """Sans reprise, la promesse « vous pouvez fermer cette page » resterait fausse : le
+    travail continuerait côté serveur mais l'utilisateur n'aurait aucun moyen d'y revenir."""
+    assert "reprendreTravail" in HTML
+    assert "localStorage" in HTML
+    assert "Analyse toujours en cours" in HTML
+
+
+def test_le_plafond_atteint_se_dit_et_ne_passe_pas_pour_une_panne():
+    """429 n'est pas une erreur technique : c'est une limite volontaire, et rien n'a été
+    dépensé. Le dire évite que l'utilisateur relance en boucle."""
+    assert "limite d'analyses pour ce mois-ci" in HTML
+    assert "Rien n'a été lancé" in HTML

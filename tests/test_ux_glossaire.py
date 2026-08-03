@@ -55,12 +55,14 @@ def test_duree_reelle_annoncee():
     chemin asynchrone survit, et l'UI ne l'emprunte pas.
 
     Un test qui protège un mensonge est pire qu'une absence de test : il donne l'assurance
-    que la promesse tient. La bonne correction reste de brancher l'interface sur
-    `POST /api/jobs` ; en attendant, on dit la vérité."""
+    que la promesse tient. La phrase a donc été retirée un temps, puis REMISE une fois
+    l'interface branchée sur `POST /api/jobs` : le run est désormais détaché de la requête
+    HTTP, et un rechargement se raccroche au travail en cours. La promesse est vraie, et
+    c'est `test_l_interface_lance_les_runs_par_le_chemin_asynchrone` qui l'atteste."""
     assert "Une analyse fiction prend 10 à 15 minutes" in HTML
-    assert "laissez cet onglet ouvert" in HTML.lower()
-    assert "Vous pouvez fermer cette page" not in HTML, (
-        "l'interface ne survit pas à la fermeture tant qu'elle n'utilise pas /api/jobs")
+    assert "Vous pouvez fermer cette page" in HTML
+    assert "lancerTravail" in HTML, (
+        "la promesse n'est vraie que si l'interface passe par POST /api/jobs")
 
 
 def test_panneau_aide_repliable_present():
