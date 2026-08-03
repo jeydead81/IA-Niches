@@ -41,25 +41,13 @@ def _client(monkeypatch, tmp_path):
     return client, server
 
 
-def test_endpoint_fiction_refuse_un_sous_genre_inconnu(tmp_path, monkeypatch):
-    """400 explicite plutôt qu'une KeyError 500 venue de la taxonomie."""
-    client, _ = _client(monkeypatch, tmp_path)
-    r = client.get("/api/fiction?sous_genre=inexistant")
-    assert r.status_code == 400
-
-
-def test_endpoint_fiction_refuse_sous_genre_absent(tmp_path, monkeypatch):
-    """Paramètre manquant = même traitement propre, pas une 422 opaque."""
-    client, _ = _client(monkeypatch, tmp_path)
-    r = client.get("/api/fiction")
-    assert r.status_code == 400
-
-
-def test_endpoint_fiction_stream_sse(tmp_path, monkeypatch):
-    """Même contrat SSE que /api/scout : progress -> result -> cost -> done."""
-    pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
-    import server
+def test_un_run_fiction_complet_par_le_chemin_asynchrone(tmp_path, monkeypatch):
+    """Le run fiction de bout en bout, sur le SEUL chemin restant. Le flux direct
+    (GET /api/fiction) a ete retire : sa file de progression mourait avec la requete HTTP,
+    donc fermer l'onglet perdait 15 minutes d'analyse. Ici l'etat vient du magasin, donc
+    on peut l'interroger apres coup — c'est ce que fait ce test."""
+    import time as _t
+    client, server = _client(monkeypatch, tmp_path)
     from models import FictionNiche, FictionNicheReport
 
     def fake_run(sous_genre_cle, n_niches=8, rayon="kindle", progress=None, cost=None, **kw):
@@ -75,30 +63,29 @@ def test_endpoint_fiction_stream_sse(tmp_path, monkeypatch):
                                            "saturation_trio=0.30.")]
 
     monkeypatch.setattr(server, "run_fiction_scout", fake_run)
-    from tests.conftest import isoler_bases, ouvrir_session
-    isoler_bases(monkeypatch, server, tmp_path)
-    client = TestClient(server.app)
-    ouvrir_session(client)
-    r = client.get("/api/fiction?sous_genre=cosy_mystery&n_niches=1")
-    assert r.status_code == 200
+    jid = client.post("/api/jobs", json={"type": "fiction", "sous_genre": "cosy_mystery",
+                                         "n_niches": 1}).json()["id"]
+    fin = _t.time() + 10
+    while _t.time() < fin:
+        job = client.get(f"/api/jobs/{jid}").json()
+        if job["statut"] in ("termine", "echec"):
+            break
+        _t.sleep(0.02)
 
-    events = _parse_sse(r.text)
+    assert job["statut"] == "termine"
+    assert any("trio genere" in m for m in job["progression"])
+    res = job["resultat"]
+    assert res[0]["niche"]["query"] == "cosy mystery village"
+    assert res[0]["saturation_trio"] == 0.3
+    # La sonde n'a jamais ete appelee par le faux run : autocomplete_score doit valoir None
+    # et NON 0.0 — un signal jamais mesure ne se lit pas comme un zero mesure.
+    assert res[0]["autocomplete_score"] is None
+
+    # Le flux du travail rejoue tout depuis le magasin : c'est ce qui rend la reprise
+    # possible apres un rechargement.
+    events = _parse_sse(client.get(f"/api/jobs/{jid}/stream").text)
     kinds = [e for e, _ in events]
-    assert "progress" in kinds
-    assert "result" in kinds
-    assert "cost" in kinds
-    assert kinds[-1] == "done"
-
-    result = next(d for k, d in events if k == "result")
-    assert result[0]["niche"]["query"] == "cosy mystery village"
-    assert result[0]["saturation_trio"] == 0.3
-    # La sonde n'a jamais été appelée par le faux run -> autocomplete_score doit être None,
-    # PAS 0 : le champ n'existe que via une propriété non sérialisée par model_dump(), le
-    # endpoint doit l'ajouter explicitement (CLAUDE.md §10 : ne pas confondre non-mesuré et zéro).
-    assert result[0]["autocomplete_score"] is None
-
-    cost = next(d for k, d in events if k == "cost")
-    assert cost["llm_usd"] > 0
+    assert "progress" in kinds and "result" in kinds and kinds[-1] == "done"
 
 
 def test_endpoint_fiction_sous_genres_liste_la_taxonomie(tmp_path, monkeypatch):
@@ -128,36 +115,6 @@ def test_un_sous_genre_inconnu_rend_400(tmp_path, monkeypatch):
     client, _ = _client(monkeypatch, tmp_path)
     assert client.get("/api/fiction/taxonomie/inexistant").status_code == 400
 
-
-def test_les_contraintes_de_l_auteur_arrivent_jusqu_a_l_ideator(tmp_path, monkeypatch):
-    """Sans propagation, les menus seraient décoratifs : l'utilisateur croirait avoir
-    contraint la recherche alors que l'IA proposerait ce qu'elle veut."""
-    client, server = _client(monkeypatch, tmp_path)
-    vu = {}
-
-    def faux_run(sous_genre_cle, **kw):
-        vu.update(kw)
-        return []
-
-    monkeypatch.setattr(server, "run_fiction_scout", faux_run)
-    client.get("/api/fiction?sous_genre=cosy_mystery&tropes=enquetrice_amatrice"
-               "&decor=village_breton&libre=thermalisme")
-    c = vu.get("contraintes")
-    assert c is not None
-    assert c.tropes == ["enquetrice_amatrice"] and c.decor == "village_breton"
-    assert c.libre == "thermalisme"
-
-
-def test_une_contrainte_hors_taxonomie_rend_400(tmp_path, monkeypatch):
-    """Les menus viennent de la taxonomie : une clé inconnue ne peut venir que d'une
-    requête forgée. La refuser explicitement évite que l'auteur croie sa contrainte
-    appliquée."""
-    client, _ = _client(monkeypatch, tmp_path)
-    r = client.get("/api/fiction?sous_genre=cosy_mystery&tropes=mafia")
-    assert r.status_code == 400 and "taxonomie" in r.json()["detail"].lower()
-
-
-# ── Le chemin asynchrone doit porter les mêmes contraintes que le SSE ────────────────
 
 def test_un_job_fiction_transmet_les_contraintes(tmp_path, monkeypatch):
     """L'interface bascule sur POST /api/jobs (elle survit alors à la fermeture de

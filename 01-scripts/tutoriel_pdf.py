@@ -108,12 +108,14 @@ ENDPOINTS = [
     ("POST /api/auth/deconnexion", "Ferme cette session cote serveur et retire le cookie. "
                                    "Les autres sessions du meme compte restent ouvertes."),
     ("GET  /api/auth/moi", "Le compte de la session en cours."),
-    ("GET  /api/scout", "Scout non-fiction en SSE. Meurt si le client se déconnecte."),
-    ("GET  /api/fiction", "Scout fiction en SSE. Idem."),
     ("GET  /api/fiction/sous-genres", "Peuple le sélecteur depuis la taxonomie."),
     ("GET  /api/fiction/taxonomie/{sous_genre}", "Tropes et decors autorises du sous-genre. Alimente les menus du compositeur de trio : la taxonomie est la source de verite UNIQUE, jamais une liste en dur cote JS."),
-    ("POST /api/jobs", "202 + id immédiat. Travail détaché : survit à la déconnexion. "
-                       "À PRIVILÉGIER pour la fiction (10-15 min)."),
+    ("POST /api/jobs", "202 + id immediat. SEUL chemin de lancement des deux scouts. "
+                       "Le travail est detache : il survit a la fermeture de l'onglet, "
+                       "verifie le plafond AVANT de depenser et impute l'usage. Les "
+                       "anciens GET /api/scout et /api/fiction, qui streamaient dans la "
+                       "requete HTTP, ont ete retires : deux chemins pour le meme travail "
+                       "divergent des que l'un des deux n'est plus exerce."),
     ("GET  /api/jobs/{id}", "Statut, progression, résultat, coût."),
     ("GET  /api/jobs/{id}/stream", "Progression en SSE, reconnectable."),
     ("GET  /api/jobs", "Liste par utilisateur."),

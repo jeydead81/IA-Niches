@@ -1,12 +1,20 @@
 """server.py — backend FastAPI de l'UI IA-Niches.
-Sert la page unique et expose le scout en SSE (progression live + résultats).
+Sert la page unique et expose les deux scouts par des TRAVAUX asynchrones
+(POST /api/jobs, puis flux reconnectable sur /api/jobs/{id}/stream).
+
+Il a existé un second chemin, en flux direct (GET /api/scout, GET /api/fiction), qui
+streamait le run dans la connexion HTTP. Il a été RETIRÉ : deux chemins pour le même
+travail, dont un seul exercé par l'interface, c'est une dette — le chemin non emprunté
+dérive sans que personne s'en aperçoive. C'est exactement ce qui est arrivé aux
+contraintes de composition fiction, présentes sur le flux direct et absentes du chemin
+asynchrone. Ne pas le réintroduire : sa file de progression mourait avec la requête,
+donc fermer l'onglet perdait un run de 15 minutes.
 
 Lancer :  uvicorn server:app --reload   (depuis le dossier web/)
    ou     python web/server.py
 """
 import json
 import os
-import queue
 import sys
 import tempfile
 import threading
@@ -130,10 +138,11 @@ def _borner(nom: str, valeur: int, maxi: int) -> int:
 def origine_sure(request: Request) -> None:
     """Refuse les requêtes déclenchées depuis un AUTRE site.
 
-    `/api/scout` et `/api/fiction` sont des GET qui dépensent de l'argent réel. Or
-    SameSite=Lax laisse partir le cookie sur une navigation de premier niveau : une page
-    malveillante qui fait `window.open('http://127.0.0.1:8000/api/scout?...')` déclenche
-    donc un run facturé sur le compte de la victime. Le cookie seul ne suffit pas ici.
+    Le lancement d'un run dépense de l'argent réel. SameSite=Lax laisse partir le cookie
+    sur une navigation de premier niveau : sans ce garde, une page malveillante pourrait
+    déclencher un run facturé sur le compte de la victime. Le cookie seul ne suffit pas.
+    (Le risque était plus direct encore du temps des endpoints de flux direct, qui étaient
+    des GET : une simple balise <img> suffisait.)
 
     On s'appuie sur `Sec-Fetch-Site`, envoyé par tous les navigateurs actuels et NON
     falsifiable par une page (c'est un en-tête interdit au script). Absent = client hors
@@ -386,49 +395,6 @@ def _consigner_fiction(rapports, user_id: str) -> None:
         })
 
 
-@app.get("/api/scout")
-def scout(request: Request, seed: str = "", ideas: int = IDEES_PAR_RUN, search: int = 4,
-          user_id: str = Depends(utilisateur_courant)):
-    """Lance le scout dans un thread et streame la progression + le résultat en SSE."""
-    origine_sure(request)
-    ideas = _borner("ideas", ideas, MAX_IDEES)
-    search = _borner("search", search, MAX_RECHERCHES)
-    _verifier_plafond(user_id)
-    q: "queue.Queue" = queue.Queue()
-
-    def progress(msg: str) -> None:
-        q.put(("progress", msg))
-
-    def worker() -> None:
-        cost = CostTracker()
-        try:
-            results = run_scout(seed=(seed or None), n_ideas=ideas, n_search=search,
-                                progress=progress, cost=cost)
-            _consigner_scout(results, user_id)
-            q.put(("result", [r.model_dump() for r in results]))
-            q.put(("cost", cost.breakdown()))
-        except Exception as e:  # noqa: BLE001
-            q.put(("error", f"{type(e).__name__}: {e}"))
-        finally:
-            # Imputé dans tous les cas : en échec aussi, l'argent est déjà parti.
-            _imputer(user_id, "scout", cost.breakdown()["usd"], n_analyses=1)
-            q.put(("done", None))
-
-    threading.Thread(target=worker, daemon=True).start()
-
-    def stream():
-        yield _sse("progress", "Démarrage du scout…")
-        while True:
-            kind, payload = q.get()
-            if kind == "done":
-                yield _sse("done", {})
-                break
-            yield _sse(kind, payload)
-
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-
 @app.get("/api/fiction/taxonomie/{sous_genre}")
 def fiction_taxonomie(sous_genre: str, user_id: str = Depends(utilisateur_courant)):
     """Tropes et décors autorisés pour un sous-genre — alimente les menus déroulants
@@ -449,73 +415,11 @@ def fiction_sous_genres(user_id: str = Depends(utilisateur_courant)):
     return [{"cle": cle, "label": sg.get("label", cle)} for cle, sg in sorted(sgs.items())]
 
 
-@app.get("/api/fiction")
-def fiction(request: Request, sous_genre: str = "", n_niches: int = 8,
-            rayon: str = "kindle", tropes: str = "", decor: str = "", libre: str = "",
-            user_id: str = Depends(utilisateur_courant)):
-    """Lance le scout fiction dans un thread, streame en SSE — même contrat que /api/scout
-    (progress / result / cost / error / done)."""
-    # Validation AVANT de lancer quoi que ce soit : un sous-genre inconnu (ou absent) doit
-    # rendre une 400 explicite, jamais la KeyError 500 que lèverait fiction_taxonomy.sous_genre().
-    origine_sure(request)
-    n_niches = _borner("n_niches", n_niches, MAX_NICHES_FICTION)
-    sgs = load_taxonomy().get("sous_genres", {})
-    if sous_genre not in sgs:
-        raise HTTPException(status_code=400,
-                            detail=f"sous-genre inconnu : « {sous_genre} » (dispo : {sorted(sgs)})")
-
-    # Toutes vides = mode « propose-moi des trios », le comportement d'origine.
-    contraintes = _contraintes_fiction(sous_genre, tropes, decor, libre)
-    _verifier_plafond(user_id)
-
-    q: "queue.Queue" = queue.Queue()
-
-    def progress(msg: str) -> None:
-        q.put(("progress", msg))
-
-    def worker() -> None:
-        cost = CostTracker()
-        try:
-            rapports = run_fiction_scout(sous_genre, n_niches=n_niches, rayon=rayon,
-                                         contraintes=contraintes,
-                                         progress=progress, cost=cost)
-            payload = []
-            for r in rapports:
-                d = r.model_dump()
-                # autocomplete_score est une @property (non sérialisée par model_dump) :
-                # None tant que la sonde n'a rien mesuré — ne JAMAIS la laisser retomber à
-                # 0 par omission, un utilisateur lirait ça comme un verdict (CLAUDE.md §10).
-                d["autocomplete_score"] = r.autocomplete_score
-                payload.append(d)
-            _consigner_fiction(rapports, user_id)
-            q.put(("result", payload))
-            q.put(("cost", cost.breakdown()))
-        except Exception as e:  # noqa: BLE001
-            q.put(("error", f"{type(e).__name__}: {e}"))
-        finally:
-            _imputer(user_id, "fiction", cost.breakdown()["usd"], n_analyses=1)
-            q.put(("done", None))
-
-    threading.Thread(target=worker, daemon=True).start()
-
-    def stream():
-        yield _sse("progress", "Démarrage du scout fiction…")
-        while True:
-            kind, payload = q.get()
-            if kind == "done":
-                yield _sse("done", {})
-                break
-            yield _sse(kind, payload)
-
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-
 # ── Travaux asynchrones (plan SaaS S4) ──────────────────────────────────────────────────
-# LE point de ce bloc : /api/scout et /api/fiction ci-dessus streament la progression dans
-# une queue.Queue qui ne vit QUE le temps de la requête HTTP — rien n'est persisté nulle
-# part, donc un client qui se déconnecte perd toute trace exploitable du run (résultat ET
-# coût). Ici le run est écrit dans le magasin de travaux (SQLite, jobs.db) à chaque étape :
+# LE point de ce bloc, et désormais le SEUL chemin de lancement : le run est écrit dans le
+# magasin de travaux (SQLite, jobs.db) à chaque étape, au lieu d'être streamé dans une file
+# en mémoire qui mourait avec la requête HTTP — un client déconnecté perdait alors toute
+# trace exploitable du run, résultat ET coût.
 # POST rend un id tout de suite, le thread continue seul, GET peut être interrogé n'importe
 # quand ensuite — y compris après une déconnexion complète du client d'origine.
 
@@ -571,10 +475,19 @@ def _valider_volumes(type_: str, params: dict) -> None:
                 MAX_RECHERCHES)
     elif type_ == "fiction":
         _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
+        # Le sous-genre est validé ICI, pas seulement dans le runner. Le flux direct
+        # rendait une 400 immédiate ; en ne gardant que le chemin asynchrone, laisser la
+        # validation au thread détaché donnerait un 202 suivi d'un job en échec —
+        # l'utilisateur verrait une analyse « lancée » qui rate, sans comprendre que sa
+        # saisie était fautive.
         sgs = load_taxonomy().get("sous_genres", {})
-        if params.get("sous_genre") in sgs:      # sous-genre inconnu : dit par le runner
-            _contraintes_fiction(params.get("sous_genre", ""), params.get("tropes"),
-                                 params.get("decor"), params.get("libre"))
+        if params.get("sous_genre") not in sgs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"sous-genre inconnu : « {params.get('sous_genre', '')} » "
+                       f"(dispo : {sorted(sgs)})")
+        _contraintes_fiction(params.get("sous_genre", ""), params.get("tropes"),
+                             params.get("decor"), params.get("libre"))
 
 
 _JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}
@@ -667,10 +580,11 @@ def usage(user_id: str = Depends(utilisateur_courant)):
 
 @app.get("/api/jobs/{job_id}/stream")
 def stream_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
-    """SSE branché sur la progression du magasin — RECONNECTABLE : contrairement à
-    /api/scout et /api/fiction (queue en mémoire propre à une connexion), l'état lu ici
-    vient du magasin persistant, donc une reconnexion peut relire la progression à tout
-    moment, y compris longtemps après la requête POST d'origine."""
+    """SSE branché sur la progression du magasin — RECONNECTABLE. L'état vient de la base
+    et non d'une file en mémoire liée à UNE connexion : une reconnexion relit donc la
+    progression depuis le début, à tout moment, y compris longtemps après le POST
+    d'origine. C'est ce qui permet à l'interface de reprendre un run après un
+    rechargement, et ce que l'ancien flux direct ne pouvait pas offrir."""
     def stream():
         store = JobStore(_JOBS_DB)
         envoyes = 0

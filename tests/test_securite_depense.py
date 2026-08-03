@@ -39,78 +39,82 @@ def _sans_moteur(monkeypatch, server):
 # ── 1. Toute dépense passe par le plafond ───────────────────────────────────────────
 
 @pytest.mark.parametrize("methode,chemin,corps", [
-    ("get", "/api/scout?seed=x", None),
-    ("get", "/api/fiction?sous_genre=cosy_mystery", None),
+    ("post", "/api/jobs", {"type": "scout"}),
+    ("post", "/api/jobs", {"type": "fiction", "sous_genre": "cosy_mystery"}),
     ("post", "/api/verdict", {"niche": "x", "global_score": 7.0}),
     ("post", "/api/kdp-keywords", {"niche": "x", "global_score": 7.0}),
 ])
 def test_aucun_endpoint_payant_ne_depense_au_dela_du_plafond(tmp_path, monkeypatch,
                                                              methode, chemin, corps):
     """CONFIRMÉ EN REVUE (critique et élevée). `UsageMeter.autorise` n'avait qu'UN SEUL site
-    d'appel dans tout le dépôt : `POST /api/jobs`. Les quatre endpoints ci-dessous
-    dépensaient donc sans jamais consulter le plafond — or ce sont ceux que l'interface
-    utilise réellement. Un plafond qui ne couvre que le chemin que personne n'emprunte ne
-    protège rien."""
+    d'appel dans tout le dépôt : `POST /api/jobs`. Les endpoints réellement utilisés par
+    l'interface dépensaient donc sans jamais consulter le plafond. Un plafond qui ne couvre
+    que le chemin que personne n'emprunte ne protège rien.
+
+    Depuis la suppression des endpoints de flux direct, tout lancement passe par
+    `POST /api/jobs` — mais la garantie doit tenir aussi pour les deux appels LLM à la
+    demande, qui restent des chemins de dépense distincts."""
     client, server, uid = _client(monkeypatch, tmp_path, plafond=0)
     _sans_moteur(monkeypatch, server)
-    r = getattr(client, methode)(chemin, **({"json": corps} if corps else {}))
+    r = getattr(client, methode)(chemin, json=corps)
     assert r.status_code == 429, f"{methode.upper()} {chemin} a dépensé malgré le plafond"
 
 
-def test_les_endpoints_sse_imputent_leur_consommation(tmp_path, monkeypatch):
-    """Ils ne comptaient rien : le bandeau « Ce mois-ci » restait à 0 quoi que fasse
-    l'utilisateur, et le plafond ne pouvait jamais être atteint puisque rien ne montait."""
+def test_un_run_impute_sa_consommation(tmp_path, monkeypatch):
+    """Rien n'était compté sur le chemin qu'empruntait l'interface : le bandeau « Ce
+    mois-ci » restait à 0 quoi que fasse l'utilisateur, et le plafond ne pouvait jamais
+    être atteint puisque rien ne montait."""
     client, server, uid = _client(monkeypatch, tmp_path)
     _sans_moteur(monkeypatch, server)
     assert client.get("/api/usage").json()["n_analyses"] == 0
-    client.get("/api/scout?seed=x")
+    jid = client.post("/api/jobs", json={"type": "scout"}).json()["id"]
+    fin = time.time() + 10
+    while time.time() < fin:
+        if client.get(f"/api/jobs/{jid}").json()["statut"] in ("termine", "echec"):
+            break
+        time.sleep(0.02)
     assert client.get("/api/usage").json()["n_analyses"] == 1
 
 
 # ── 2. Les paramètres de volume sont bornés ─────────────────────────────────────────
 
-@pytest.mark.parametrize("chemin", [
-    "/api/scout?ideas=9999&search=9999",
-    "/api/fiction?sous_genre=cosy_mystery&n_niches=9999",
+@pytest.mark.parametrize("corps", [
+    {"type": "scout", "n_ideas": 9999, "n_search": 9999},
+    {"type": "fiction", "sous_genre": "cosy_mystery", "n_niches": 9999},
 ])
-def test_les_parametres_de_volume_sont_bornes(tmp_path, monkeypatch, chemin):
+def test_les_parametres_de_volume_sont_bornes(tmp_path, monkeypatch, corps):
     """CONFIRMÉ EN REVUE (moyenne). Le plafond compte des ANALYSES, pas des appels payants :
-    une seule « analyse » avec search=9999 coûte des milliers de requêtes DataForSEO tout en
-    ne consommant qu'une unité du plafond. Borner le volume est la seule protection réelle
-    du montant."""
+    une seule « analyse » avec n_search=9999 coûterait des milliers de requêtes Amazon tout
+    en ne consommant qu'une unité du plafond. Borner le volume est la seule protection
+    réelle du montant. Validé AVANT la création du job : levée depuis le thread détaché,
+    la 400 arriverait après un 202 déjà rendu."""
     client, server, uid = _client(monkeypatch, tmp_path)
     _sans_moteur(monkeypatch, server)
-    assert client.get(chemin).status_code == 400
-
-
-def test_un_job_ne_peut_pas_non_plus_demander_un_volume_illimite(tmp_path, monkeypatch):
-    client, server, uid = _client(monkeypatch, tmp_path)
-    _sans_moteur(monkeypatch, server)
-    r = client.post("/api/jobs", json={"type": "scout", "n_ideas": 9999, "n_search": 9999})
-    assert r.status_code == 400
+    assert client.post("/api/jobs", json=corps).status_code == 400
 
 
 # ── 3. Pas de dépense déclenchable depuis un autre site ─────────────────────────────
 
 def test_une_page_tierce_ne_peut_pas_declencher_une_depense(tmp_path, monkeypatch):
-    """CONFIRMÉ EN REVUE (élevée). `/api/scout` et `/api/fiction` sont des GET : une simple
-    balise <img> ou une navigation depuis un site malveillant les déclenche, et SameSite=Lax
-    laisse partir le cookie sur une navigation de premier niveau. L'argent de Baptiste se
-    dépense alors depuis l'onglet d'un site qu'il visite."""
+    """CONFIRMÉ EN REVUE (élevée). SameSite=Lax laisse partir le cookie sur une navigation
+    de premier niveau : sans ce garde, une page malveillante déclencherait un run facturé
+    sur le compte de la victime. Le risque était plus direct encore du temps des endpoints
+    de flux direct, qui étaient des GET — une balise <img> suffisait."""
     client, server, uid = _client(monkeypatch, tmp_path)
     _sans_moteur(monkeypatch, server)
-    r = client.get("/api/scout?seed=x", headers={"Sec-Fetch-Site": "cross-site"})
-    assert r.status_code == 403
-    r = client.get("/api/scout?seed=x", headers={"Origin": "https://mechant.example"})
-    assert r.status_code == 403
+    corps = {"type": "scout"}
+    assert client.post("/api/jobs", json=corps,
+                       headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.post("/api/jobs", json=corps,
+                       headers={"Origin": "https://mechant.example"}).status_code == 403
 
 
 def test_une_requete_du_meme_site_passe(tmp_path, monkeypatch):
     """Le garde ne doit pas casser l'usage normal : l'interface envoie same-origin."""
     client, server, uid = _client(monkeypatch, tmp_path)
     _sans_moteur(monkeypatch, server)
-    assert client.get("/api/scout?seed=x",
-                      headers={"Sec-Fetch-Site": "same-origin"}).status_code == 200
+    assert client.post("/api/jobs", json={"type": "scout"},
+                       headers={"Sec-Fetch-Site": "same-origin"}).status_code == 202
 
 
 # ── 4. Cloisonnement des jobs (IDOR) ────────────────────────────────────────────────

@@ -257,3 +257,34 @@ def test_endpoint_mots_cles_kdp(monkeypatch, tmp_path):
 def test_endpoint_mots_cles_kdp_body_invalide_rend_400(monkeypatch, tmp_path):
     client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
     assert client.post("/api/kdp-keywords", json={"global_score": "pas un nombre"}).status_code == 400
+
+
+# ── Un seul chemin : les garanties du flux direct doivent tenir ici ──────────────────
+
+def test_un_sous_genre_inconnu_rend_400_et_ne_cree_aucun_job(tmp_path, monkeypatch):
+    """Les endpoints SSE rendaient 400 immédiatement. En ne gardant que le chemin
+    asynchrone, un sous-genre inconnu donnerait un 202 puis un job en échec : l'utilisateur
+    verrait une analyse « lancée » qui rate, sans comprendre que sa saisie était fautive.
+    On valide donc AVANT de créer le job."""
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    r = client.post("/api/jobs", json={"type": "fiction", "sous_genre": "inexistant"})
+    assert r.status_code == 400 and "inexistant" in r.json()["detail"]
+    assert client.get("/api/jobs").json() == [], "un job a été créé malgré la saisie fautive"
+
+
+def test_un_sous_genre_absent_rend_400(tmp_path, monkeypatch):
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    assert client.post("/api/jobs", json={"type": "fiction"}).status_code == 400
+
+
+def test_les_endpoints_de_flux_direct_n_existent_plus(tmp_path, monkeypatch):
+    """Deux chemins pour le même travail, dont un seul exercé par l'usage réel, c'est une
+    dette : le chemin non emprunté dérive sans que personne s'en aperçoive — c'est déjà
+    arrivé avec les contraintes de composition, absentes du chemin asynchrone pendant tout
+    un commit. On n'en garde qu'un."""
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    assert client.get("/api/scout?seed=x").status_code == 404
+    assert client.get("/api/fiction?sous_genre=cosy_mystery").status_code == 404
+    # …mais les deux endpoints qui peuplent les sélecteurs restent, eux.
+    assert client.get("/api/fiction/sous-genres").status_code == 200
+    assert client.get("/api/fiction/taxonomie/cosy_mystery").status_code == 200
