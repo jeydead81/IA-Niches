@@ -153,6 +153,32 @@
     background:var(--muted);border-radius:8px}
   .histbox strong{color:var(--heading)}
 
+  /* Aide contextuelle : une pastille « ? » fixe en bas à droite, et un panneau par onglet.
+     Fixe et non dans le flux, pour rester atteignable une fois la page défilée sur un
+     tableau de résultats — c'est justement au moment de LIRE les chiffres qu'on en a
+     besoin, pas au moment de lancer. */
+  .aide-btn{position:fixed;right:22px;bottom:22px;z-index:60;width:44px;height:44px;
+    border-radius:50%;border:none;cursor:pointer;background:var(--primary);color:#fff;
+    font-family:var(--sans);font-size:20px;font-weight:700;
+    box-shadow:0 4px 14px rgba(15,23,42,.22)}
+  .aide-btn:hover{background:var(--primary-600)}
+  .aide-fond{position:fixed;inset:0;z-index:61;background:rgba(15,23,42,.45);
+    display:none;place-items:center;padding:24px}
+  .aide-fond.on{display:grid}
+  .aide-panneau{width:100%;max-width:620px;max-height:86vh;overflow:auto;background:#fff;
+    border-radius:var(--radius);padding:22px 24px 24px;position:relative}
+  .aide-panneau h2{font-size:17px;color:var(--heading);margin:0 32px 4px 0;line-height:1.35}
+  .aide-panneau h3{font-size:13.5px;color:var(--heading);margin:18px 0 5px}
+  .aide-panneau p,.aide-panneau li{font-size:13px;line-height:1.55;margin:0 0 7px}
+  .aide-panneau ul{margin:0 0 7px;padding-left:18px}
+  .aide-fermer{position:absolute;top:14px;right:14px;border:none;background:var(--muted);
+    color:var(--text-muted);border-radius:6px;cursor:pointer;font-size:13px;padding:4px 9px;
+    font-family:var(--sans)}
+  .aide-fermer:hover{background:#E2E8F0;color:var(--heading)}
+  .aide-pieges{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
+  .aide-pieges h3{margin-top:0;color:#92400E}
+  .aide-pieges li{color:#7C2D12}
+
   .champ-aide{display:inline-flex;align-items:center;justify-content:center;width:14px;
     height:14px;margin-left:5px;border-radius:50%;background:var(--muted);color:var(--text-muted);
     font-size:10px;font-weight:700;cursor:help;vertical-align:middle}
@@ -224,7 +250,6 @@
   .empty svg{width:40px;height:40px;color:#CBD5E1;margin-bottom:10px}
   .errbox{color:#991B1B;background:var(--red-bg);border:1px solid #FECACA;border-radius:var(--radius);margin-top:18px;display:none}
   .errbox.on{display:block}
-  .cost{margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--text-muted);text-align:right}
 
   /* Onglets Non-fiction / Fiction — même charte, pas une seconde */
   .tabs{display:flex;gap:4px;background:var(--muted);border-radius:10px;padding:4px;width:max-content;margin-bottom:16px}
@@ -425,7 +450,7 @@
              dollar et donne au tri gratuit (autocomplete) un meilleur vivier. Le poste qui
              coûte vraiment, c'est le nombre de niches ANALYSÉES. -->
         <div class="field">
-          <label for="search">Niches à analyser<span class="champ-aide" title="20 idées sont toujours proposées par l'IA (coût négligeable). Ce réglage fixe combien d'entre elles seront confrontées à Amazon — c'est le seul poste qui coûte : environ 0,003 $ par niche, plus le relevé des ventes.">?</span></label>
+          <label for="search">Niches à analyser<span class="champ-aide" title="Une dizaine d'idées sont toujours proposées par l'IA. Ce réglage fixe combien d'entre elles seront réellement confrontées à Amazon : c'est lui qui pèse sur la durée du run et sur votre consommation du mois.">?</span></label>
           <input type="number" id="search" value="4" min="1" max="20" />
         </div>
         <button class="run" id="run" type="submit">
@@ -433,7 +458,7 @@
           <span id="run-label">Lancer le scout</span>
         </button>
       </form>
-      <p class="hint">« À analyser » = nb de niches passées à l'étape concurrence (payante DataForSEO, ~0,003 $/niche). Le reste est gratuit. Un run prend ~2-3 min.</p>
+      <p class="hint">« À analyser » = nombre de niches réellement confrontées à la concurrence Amazon. Le tri par la barre de recherche, lui, est gratuit et illimité. Un run prend 2 à 3 min.</p>
     </div>
 
     <div class="panel progress" id="progress">
@@ -457,7 +482,6 @@
           <tbody id="tbody"></tbody>
         </table>
       </div>
-      <div id="cost" class="cost" hidden></div>
     </section>
 
     <div class="panel empty" id="empty">
@@ -515,7 +539,7 @@
           </div>
         </details>
       </form>
-      <p class="hint">Un trio = sous-genre × tropes × décor. La file ASIN est payée UNE fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page, le travail continue et vous le retrouverez ici.</p>
+      <p class="hint">Un trio = sous-genre × tropes × décor. Le relevé des ventes est fait UNE seule fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes : laissez cet onglet ouvert jusqu'au bout, le résultat serait perdu sinon.</p>
     </div>
 
     <div class="panel progress" id="progress-fic">
@@ -528,7 +552,6 @@
     <section class="results panel" id="results-fic" style="border:none;background:none;box-shadow:none">
       <div class="rsum"><h2>Niches fiction classées</h2><span id="rcount-fic"></span></div>
       <div class="fic-grid" id="grid-fic"></div>
-      <div id="cost-fic" class="cost" hidden></div>
     </section>
 
     <div class="panel empty" id="empty-fic">
@@ -543,6 +566,17 @@
 <!-- Bulle du glossaire (Task U1), unique et partagée, en dehors de tout conteneur à
      overflow pour ne jamais être rognée. -->
 <div id="gloss-tip" class="gloss-tip" role="tooltip" hidden></div>
+
+<button class="aide-btn" id="aide-btn" type="button" aria-haspopup="dialog"
+        aria-label="Comment utiliser cet onglet ?" title="Comment utiliser cet onglet ?">?</button>
+
+<div class="aide-fond" id="aide-fond" role="dialog" aria-modal="true" aria-labelledby="aide-titre">
+  <div class="aide-panneau">
+    <button class="aide-fermer" id="aide-fermer" type="button">Fermer</button>
+    <h2 id="aide-titre"></h2>
+    <div id="aide-corps"></div>
+  </div>
+</div>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -593,18 +627,6 @@ const fmt = n => n==null?'—':Number(n).toLocaleString('fr-FR');
 // un seul appel, pas besoin de toFixed() en amont.
 const fmtDec = (n, d=2) => n==null ? '—'
   : Number(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d});
-// Coûts « en clair » (Task U2) : 0,15 $ plutôt que 0.1532. TAUX_USD_EUR est une
-// approximation FIXE (pas d'appel réseau ici) — juste un ordre de grandeur en euros,
-// pas un cours de change live.
-const TAUX_USD_EUR = 0.92;
-const fmtUsd = n => n==null ? '—' : fmtDec(n) + ' $';
-// Une seule fonction pour les deux barres de coût (nf + fiction) : même format, pas de
-// divergence si l'une des deux est corrigée sans l'autre.
-function formatCost(c){
-  return `Coût de ce run : ~${fmtUsd(c.usd)} (~${fmtDec(c.usd*TAUX_USD_EUR)} €) `
-    +`(DataForSEO ${fmtUsd(c.dataforseo_usd)} · LLM ${fmtUsd(c.llm_usd)} · `
-    +`${c.dataforseo_calls} appels)`;
-}
 
 // Seuils d'habillage alignés sur SEUILS de fiction_scoring.py (docs/superpowers/plans/
 // 2026-07-21-ux-lisibilite.md, Task U2) : profondeur/ouverture ≥ 0,6 forte · 0,3-0,6
@@ -829,8 +851,7 @@ function render(rows){
     const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
         La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
         et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
-        Le score n'est pas exploitable — à relancer. Cause la plus fréquente : solde
-        DataForSEO épuisé.</p>` : '';
+        Le score n'est pas exploitable — à relancer.</p>` : '';
     det.innerHTML=`<td colspan="8"><div class="inner">
         ${alerteNm}
         ${blocSuggestions(r)}
@@ -865,7 +886,6 @@ form.addEventListener('submit',e=>{
   if(es) es.close();
   steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
   errbox.classList.remove('on'); errbox.textContent='';
-  $('#cost').hidden=true; $('#cost').textContent='';
   empty.style.display='none'; progress.classList.add('on');
   runBtn.disabled=true; runLabel.textContent='Scout en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
@@ -874,12 +894,6 @@ form.addEventListener('submit',e=>{
   es=new EventSource('/api/scout?'+q.toString());
   es.addEventListener('progress',ev=>addStep(JSON.parse(ev.data)));
   es.addEventListener('result',ev=>render(JSON.parse(ev.data)));
-  es.addEventListener('cost',ev=>{
-    const c=JSON.parse(ev.data);
-    const el=$('#cost');
-    el.hidden=false;
-    el.textContent=formatCost(c);
-  });
   es.addEventListener('error',ev=>{ if(ev.data){errbox.textContent='Erreur : '+JSON.parse(ev.data);errbox.classList.add('on');} });
   es.addEventListener('done',()=>{
     es.close(); progress.classList.remove('on');
@@ -1040,7 +1054,6 @@ formFic.addEventListener('submit', e=>{
   if(esFic) esFic.close();
   stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
   errboxFic.classList.remove('on'); errboxFic.textContent='';
-  $('#cost-fic').hidden=true; $('#cost-fic').textContent='';
   emptyFic.style.display='none'; progressFic.classList.add('on');
   runFicBtn.disabled=true; runFicLabel.textContent='Scout en cours…';
   runFicBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
@@ -1054,12 +1067,6 @@ formFic.addEventListener('submit', e=>{
   esFic=new EventSource('/api/fiction?'+q.toString());
   esFic.addEventListener('progress',ev=>addStepFic(JSON.parse(ev.data)));
   esFic.addEventListener('result',ev=>renderFic(JSON.parse(ev.data)));
-  esFic.addEventListener('cost',ev=>{
-    const c=JSON.parse(ev.data);
-    const el=$('#cost-fic');
-    el.hidden=false;
-    el.textContent=formatCost(c);
-  });
   esFic.addEventListener('error',ev=>{ if(ev.data){errboxFic.textContent='Erreur : '+JSON.parse(ev.data);errboxFic.classList.add('on');} });
   esFic.addEventListener('done',()=>{
     esFic.close(); progressFic.classList.remove('on');
@@ -1144,7 +1151,7 @@ function chargerUsage(){
     const el = $('#usage-bar');
     if(!el || !u) return;
     el.hidden = false;
-    el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s) · <strong>${fmtUsd(u.cout_usd)}</strong>`;
+    el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s)`;
   }).catch(()=>{});
 }
 
@@ -1239,6 +1246,162 @@ function chargerUsage(){
     if(r.ok) return r.json().then(c=>entrer(c.email));
     sortir();
   }).catch(()=>sortir());
+})();
+
+// ================= Aide contextuelle =================
+// Un tutoriel PAR ONGLET : les deux moteurs ne se lisent pas de la même façon, et un texte
+// unique obligerait le lecteur à trier ce qui le concerne. Le contenu suit l'onglet actif.
+//
+// Aucun montant, en euros comme en dollars : la facturation se fera en jetons ou par
+// abonnement, et une aide qui annoncerait des prix serait périmée le jour où elle change.
+const AIDE = {
+  nf: {
+    titre: "Non-fiction : trouver un sujet qui se vend et où il reste de la place",
+    corps: `
+      <h3>À quoi sert cet onglet</h3>
+      <p>Vous donnez un mot de départ. L'outil demande à l'IA une dizaine d'idées de sujets,
+      vérifie <strong>gratuitement</strong> lesquels sont réellement tapés dans la barre de
+      recherche d'Amazon, puis va observer les livres déjà en place sur les meilleurs d'entre
+      eux. Vous obtenez un tableau classé, du plus prometteur au moins prometteur.</p>
+
+      <h3>Le champ « Graine »</h3>
+      <p>Tapez un domaine <strong>large</strong>, en un à trois mots : <em>sommeil</em>,
+      <em>jardinage urbain</em>, <em>reconversion</em>. L'IA part de ce mot et cherche
+      <strong>à côté</strong> : si vous saisissez déjà un sujet très précis, vous bridez la
+      recherche. Vous pouvez aussi laisser le champ vide pour explorer sans orientation.</p>
+
+      <h3>Le réglage « Niches à analyser »</h3>
+      <p>Il fixe combien d'idées seront réellement confrontées à Amazon — c'est le seul
+      réglage qui pèse sur la durée et sur votre consommation. Restez à <strong>4 ou 5</strong>
+      pour tester une graine nouvelle ; montez seulement quand la graine donne déjà de bons
+      résultats et qu'il faut départager plusieurs pistes.</p>
+
+      <h3>Lire le tableau</h3>
+      <ul>
+        <li><strong>Score</strong> — note sur 10 qui résume les deux colonnes suivantes.
+        Vert : à regarder en priorité. Orange : intéressant. Rouge : faible.</li>
+        <li><strong>Demande</strong> — à quel point le sujet est cherché. Elle plafonne
+        vite : au-delà d'un certain niveau, deux niches sont notées pareil.</li>
+        <li><strong>Pénétration</strong> — plus c'est haut, plus il semble facile de se
+        faire une place.</li>
+        <li><strong>BSR</strong> — le classement des ventes Amazon.
+        <strong>Plus le nombre est petit, plus le livre se vend.</strong> À gauche le
+        meilleur livre trouvé, à droite la moyenne des livres relevés.</li>
+        <li><strong>Le badge ✓</strong> — il s'allume quand trois conditions tombent
+        ensemble : un livre qui se vend très bien, une moyenne correcte, et au moins un
+        livre mal classé. C'est le signe qu'il reste une place à prendre.</li>
+        <li><strong>Concurrents</strong> — combien de titres de la première page reprennent
+        vraiment vos mots. Ce n'est pas le nombre de livres du marché.</li>
+      </ul>
+
+      <h3>Par quoi commencer</h3>
+      <p>Regardez d'abord la <strong>couleur du score</strong>, puis le <strong>BSR</strong>,
+      puis la pénétration. Une niche verte dont tous les BSR sont mauvais n'est pas une
+      bonne niche : le classement des ventes prime sur la note.</p>
+      <p><strong>Cliquez sur une ligne</strong> pour ouvrir le détail : mises en garde,
+      fourchette de prix du rayon, requêtes proches et liens vers les livres concurrents.
+      Retenez une ou deux niches au maximum, allez taper la recherche vous-même sur
+      Amazon.fr, puis relancez la même graine deux ou trois semaines plus tard : l'outil
+      vous dira alors ce qui a bougé.</p>`,
+    pieges: [
+      "Une ligne grise « Non mesurée » n'est PAS une mauvaise niche : la recherche Amazon n'a pas répondu et tous les compteurs sont à zéro faute de mesure. Relancez avant de conclure.",
+      "« Prix du rayon : inconnu » ne veut pas dire que les livres sont gratuits : Amazon n'a renvoyé aucun prix. C'est une donnée absente, pas un marché sans argent.",
+      "Un mot signalé en orange parce qu'il revient dans la majorité des suggestions est souvent un auteur ou un titre qui tient tout le rayon. Allez le vérifier avant de vous lancer.",
+      "Une demande « informationnelle » (avis, résumés, citations) signale des gens qui cherchent de l'information, pas forcément des acheteurs de livres.",
+      "Ces encadrés orange n'entrent pas dans le calcul du score : une niche verte peut très bien en porter un. Ce n'est pas une contradiction, c'est un avertissement à lire en plus de la note.",
+      "Au premier passage sur une niche, il n'y a aucune évolution à lire : c'est normal, il faut deux passages pour comparer.",
+    ],
+  },
+  fic: {
+    titre: "Fiction : mesurer un trio avant d'écrire le roman",
+    corps: `
+      <h3>Pourquoi la fiction ne se cherche pas comme la non-fiction</h3>
+      <p>Personne ne tape « thriller psychologique » pour choisir son prochain roman : les
+      lecteurs achètent une <strong>promesse d'histoire</strong>. Cet onglet part donc d'un
+      sous-genre, et l'IA propose des <strong>trios</strong> à mesurer un par un.</p>
+
+      <h3>Ce qu'est un trio</h3>
+      <p><strong>Sous-genre × tropes × décor.</strong> Un <em>trope</em> est un ressort
+      d'histoire que les lecteurs reconnaissent (secret de famille, ennemis puis amants,
+      huis clos) ; le décor est le lieu ou l'ambiance. « Cosy mystery » seul ne dit rien de
+      votre concurrence ; « cosy mystery × secret de village × librairie » se mesure.</p>
+
+      <h3>Sous-genre, rayon, nombre de trios</h3>
+      <p>Choisissez le sous-genre que vous savez déjà écrire, pas celui qui a l'air le plus
+      vide. Le <strong>rayon</strong> (Kindle ou papier) décide quel rayon Amazon est
+      observé et quels livres entrent dans les calculs — un livre de l'autre rayon est
+      écarté, volontairement. Laissez 8 trios pour un premier essai.</p>
+
+      <h3>Compter 10 à 15 minutes</h3>
+      <p>L'essentiel du temps est une file d'attente chez Amazon, faite une seule fois pour
+      tout le lot. <strong>Laissez l'onglet ouvert jusqu'au bout</strong> : le résultat
+      serait perdu sinon. Le panneau d'avancement est le seul endroit où apparaît la requête
+      exacte envoyée pour chaque trio — notez-la si elle vous intéresse.</p>
+
+      <h3>Lire une carte</h3>
+      <p>Commencez par la <strong>conclusion</strong> en haut (Pépite, Porteur mais
+      encombré, Mur installé, Désert, Sans intérêt, Non mesuré), puis les chiffres :</p>
+      <ul>
+        <li><strong>Saturation du trio</strong> — la part de votre trio que les livres du
+        rayon promettent déjà. <strong>Ici, élevé = mauvais</strong> : c'est le seul chiffre
+        de l'outil qui se lit à l'envers.</li>
+        <li><strong>Profondeur</strong> — est-ce que ces livres se vendent.</li>
+        <li><strong>Ouverture</strong> — reste-t-il de la place.</li>
+        <li><strong>Part séries</strong> — un pourcentage élevé signale un lectorat habitué
+        aux séries, où un tome unique s'installe plus difficilement.</li>
+      </ul>
+      <p>Lisez enfin les <strong>alertes en orange</strong> : elles disent ce qui n'a pas pu
+      être mesuré, et elles changent la lecture de toute la carte.</p>
+
+      <h3>Composer le trio vous-même</h3>
+      <p>Par défaut vous ne remplissez rien et l'IA propose librement : c'est le mode
+      conseillé pour découvrir un sous-genre. Sinon, ouvrez « Composer moi-même le trio »
+      pour imposer des tropes, un décor, et ajouter une piste personnelle en texte libre.
+      Plus vous contraignez, moins il reste de combinaisons — et si plus rien n'est crédible,
+      l'outil vous le dit et vous invite à élargir.</p>`,
+    pieges: [
+      "La saturation du trio est le seul chiffre inversé : élevé = mauvais. Lue comme les autres, elle vous ferait choisir exactement les pires trios.",
+      "Le badge « Non mesuré » n'est pas un mauvais résultat, c'est une absence de résultat : le rayon était vide ou tous les livres ont été écartés. Ne concluez pas que le marché est mort.",
+      "« Rayon incomplet » ne veut pas dire rayon désert : des concurrents existent, ils n'ont simplement pas pu être lus. La place que vous croyez voir est peut-être déjà prise.",
+      "Les classements de vente Kindle et papier sont deux classements séparés et ne se comparent pas. Ne mettez jamais face à face une analyse Kindle et une analyse papier.",
+      "Les livres gratuits ont leur propre classement et sont écartés des calculs : c'est volontaire, sinon les chiffres seraient faussés.",
+      "Une sonde à 0 ne signifie pas « personne ne cherche ça » : Amazon complète les débuts de mots, donc une formulation très précise ne remonte rien par construction.",
+      "Une ouverture élevée n'est pas forcément une bonne nouvelle : combinée à une profondeur basse, elle donne « Désert », c'est-à-dire de la place parce que personne n'achète.",
+      "« Vos contraintes ne laissent aucun trio crédible » veut dire que vos filtres ne se combinent pas. Aucune recherche Amazon n'a été lancée : ce n'est jamais un verdict sur le marché.",
+    ],
+  },
+};
+
+(function initAide(){
+  const btn=$('#aide-btn'), fond=$('#aide-fond'), titre=$('#aide-titre'), corps=$('#aide-corps');
+  const fermer=$('#aide-fermer');
+
+  function ongletActif(){
+    // On lit l'état RÉEL du DOM (la classe .active posée par switchTab) plutôt que de
+    // maintenir une variable en parallèle, qui finirait par diverger du bouton affiché.
+    const t=document.querySelector('#tab-fic');
+    return (t && t.classList.contains('active')) ? 'fic' : 'nf';
+  }
+
+  function ouvrir(){
+    const a=AIDE[ongletActif()];
+    titre.textContent=a.titre;
+    corps.innerHTML=a.corps
+      + `<div class="aide-pieges"><h3>Pièges de lecture</h3><ul>`
+      + a.pieges.map(x=>`<li>${x}</li>`).join('')
+      + `</ul></div>`;
+    fond.classList.add('on');
+    fermer.focus();
+  }
+  function refermer(){ fond.classList.remove('on'); btn.focus(); }
+
+  btn.addEventListener('click', ouvrir);
+  fermer.addEventListener('click', refermer);
+  // Clic sur le fond = fermeture, mais pas un clic DANS le panneau.
+  fond.addEventListener('click', ev=>{ if(ev.target===fond) refermer(); });
+  document.addEventListener('keydown', ev=>{
+    if(ev.key==='Escape' && fond.classList.contains('on')) refermer();
+  });
 })();
 </script>
 </body>

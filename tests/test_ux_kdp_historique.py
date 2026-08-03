@@ -181,3 +181,62 @@ def test_l_intention_informationnelle_est_affichee():
     assert "intention_informationnelle" in HTML
     assert "marqueurs_informationnels" in HTML
     assert "pas forcément un livre" in HTML or "pas forcement un livre" in HTML
+
+
+# ── Aide contextuelle ───────────────────────────────────────────────────────────────
+
+def test_le_bouton_d_aide_existe():
+    """Une pastille « ? » fixe en bas à droite : elle doit rester atteignable une fois la
+    page défilée sur un tableau de résultats, car c'est au moment de LIRE les chiffres
+    qu'on en a besoin — pas au moment de lancer."""
+    assert 'id="aide-btn"' in HTML
+    assert "position:fixed" in HTML
+
+
+def test_il_y_a_un_tutoriel_par_onglet():
+    """Un texte unique obligerait le lecteur à trier ce qui le concerne : les deux moteurs
+    ne se lisent pas de la même façon."""
+    assert "Non-fiction : trouver un sujet" in HTML
+    assert "Fiction : mesurer un trio" in HTML
+
+
+def test_le_tutoriel_suit_l_onglet_actif():
+    """Il lit l'état RÉEL du DOM (la classe posée par switchTab) plutôt qu'une variable
+    maintenue en parallèle, qui finirait par diverger du bouton affiché."""
+    assert "ongletActif" in HTML
+    assert "tab-fic" in HTML
+
+
+def test_les_tutoriels_portent_les_pieges_de_lecture():
+    """C'est la partie la plus utile : la faute la plus grave que ce produit puisse
+    commettre est de faire lire une absence de mesure comme un verdict de marché."""
+    assert "Pièges de lecture" in HTML
+    assert "seul chiffre inversé" in HTML          # saturation du trio
+    assert "n'est PAS une mauvaise niche" in HTML  # non mesurée
+
+
+def test_l_aide_se_ferme_au_clavier_et_au_clic():
+    """Une fenêtre qui ne se ferme qu'au bouton piège l'utilisateur qui clique à côté."""
+    assert "Escape" in HTML
+    assert 'id="aide-fermer"' in HTML
+
+
+# ── Plus aucun montant affiché ──────────────────────────────────────────────────────
+
+def test_aucun_cout_en_dollars_n_est_affiche():
+    """La facturation se fera en jetons ou par abonnement : montrer des dollars d'API à
+    l'utilisateur serait périmé le jour où le modèle change, et n'a jamais rien voulu dire
+    pour lui. Le backend continue de tout mesurer — seul l'AFFICHAGE disparaît."""
+    for mort in ("fmtUsd", "formatCost", "TAUX_USD_EUR", "Coût de ce run", "0,003 $"):
+        assert mort not in HTML, f"résidu de coût : {mort}"
+
+
+def test_la_fourchette_de_prix_des_livres_reste():
+    """À ne pas confondre avec le coût de l'outil : c'est une donnée de MARCHÉ, demandée
+    explicitement, et elle ne coûte rien de plus puisqu'elle arrive déjà avec la recherche."""
+    assert "fmtEur" in HTML and "Prix du rayon" in HTML
+
+
+def test_le_compteur_d_analyses_du_mois_reste():
+    """C'est lui que le plafond mensuel consomme, et le seul repère avant un blocage."""
+    assert "/api/usage" in HTML and "Ce mois-ci" in HTML

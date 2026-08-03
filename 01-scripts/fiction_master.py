@@ -176,8 +176,8 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
         progress(f"{n_niches_echouees} niche(s) en échec sur {len(niches)} — rayons déjà "
                  f"payés conservés.")
     b = cost.breakdown()
-    progress(f"Scout fiction terminé. Coût ~{b['usd']:.4f} $ "
-             f"({b['dataforseo_calls']} appels DataForSEO + LLM).")
+    # Même raison que scout_master : pas de montant sur le canal qui alimente l'écran.
+    progress(f"Scout fiction terminé ({b['dataforseo_calls']} recherches Amazon).")
     return rapports
 
 

@@ -122,8 +122,12 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
 
     scored = [sc for sc, _ in pairs]
     b = cost.breakdown()
-    progress(f"Scout terminé. Coût ~{b['usd']:.4f} $ "
-             f"({b['dataforseo_calls']} appels DataForSEO + LLM).")
+    # Le MONTANT ne passe plus par `progress` : ce canal alimente l'interface, qui ne
+    # montre plus aucun coût en dollars (facturation à venir en jetons/abonnement). Le
+    # coût reste intégralement mesuré dans `cost` et imputé côté serveur — c'est
+    # l'AFFICHAGE qui disparaît, pas la comptabilité. La CLI, elle, l'imprime toujours
+    # plus bas : c'est l'outil de contrôle du développeur, pas l'écran du client.
+    progress(f"Scout terminé ({b['dataforseo_calls']} recherches Amazon).")
     return scored
 
 

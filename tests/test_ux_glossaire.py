@@ -46,10 +46,21 @@ def test_chaque_fiche_dit_une_conclusion_actionnable():
 
 
 def test_duree_reelle_annoncee():
-    """Sans ça, 10-15 minutes d'attente (mesuré à 869 s) passent pour un plantage."""
-    phrase = ("Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page, "
-              "le travail continue et vous le retrouverez ici.")
-    assert phrase in HTML
+    """Sans ça, 10-15 minutes d'attente (mesuré à 869 s) passent pour un plantage.
+
+    Ce test verrouillait auparavant la phrase « Vous pouvez fermer cette page, le travail
+    continue et vous le retrouverez ici. » — qui était FAUSSE. L'interface consomme
+    `/api/fiction` en SSE et n'appelle jamais `POST /api/jobs` : la file de progression vit
+    le temps de la requête HTTP, donc fermer l'onglet perd bel et bien le résultat. Seul le
+    chemin asynchrone survit, et l'UI ne l'emprunte pas.
+
+    Un test qui protège un mensonge est pire qu'une absence de test : il donne l'assurance
+    que la promesse tient. La bonne correction reste de brancher l'interface sur
+    `POST /api/jobs` ; en attendant, on dit la vérité."""
+    assert "Une analyse fiction prend 10 à 15 minutes" in HTML
+    assert "laissez cet onglet ouvert" in HTML.lower()
+    assert "Vous pouvez fermer cette page" not in HTML, (
+        "l'interface ne survit pas à la fermeture tant qu'elle n'utilise pas /api/jobs")
 
 
 def test_panneau_aide_repliable_present():
