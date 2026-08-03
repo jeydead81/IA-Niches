@@ -153,6 +153,14 @@
     background:var(--muted);border-radius:8px}
   .histbox strong{color:var(--heading)}
 
+  .champ-aide{display:inline-flex;align-items:center;justify-content:center;width:14px;
+    height:14px;margin-left:5px;border-radius:50%;background:var(--muted);color:var(--text-muted);
+    font-size:10px;font-weight:700;cursor:help;vertical-align:middle}
+
+  /* Fourchette de prix du rayon — informe, ne note pas. */
+  .prixbox{font-size:12.5px;color:var(--text-muted);margin:0 0 12px}
+  .prixbox strong{color:var(--heading);font-family:var(--mono)}
+
   /* Écran de connexion. Il occulte TOUT le reste tant qu'aucune session n'est ouverte :
      laisser l'application visible derrière ferait cliquer sur des boutons qui rendent 401. */
   .auth-ecran{position:fixed;inset:0;background:var(--bg);display:none;place-items:center;
@@ -396,13 +404,13 @@
           <label for="seed">Graine</label>
           <input type="text" id="seed" placeholder="ex. ésotérisme, sommeil, stoïcisme…  (vide = à partir de rien)" autocomplete="off" />
         </div>
+        <!-- Le nombre d'idées n'est plus réglable : l'ideator est UN SEUL appel LLM quel
+             que soit le nombre demandé. En proposer 20 au lieu de 10 coûte des millièmes de
+             dollar et donne au tri gratuit (autocomplete) un meilleur vivier. Le poste qui
+             coûte vraiment, c'est le nombre de niches ANALYSÉES. -->
         <div class="field">
-          <label for="ideas">Idées IA</label>
-          <input type="number" id="ideas" value="10" min="4" max="30" />
-        </div>
-        <div class="field">
-          <label for="search">À analyser</label>
-          <input type="number" id="search" value="4" min="1" max="12" />
+          <label for="search">Niches à analyser<span class="champ-aide" title="20 idées sont toujours proposées par l'IA (coût négligeable). Ce réglage fixe combien d'entre elles seront confrontées à Amazon — c'est le seul poste qui coûte : environ 0,003 $ par niche, plus le relevé des ventes.">?</span></label>
+          <input type="number" id="search" value="4" min="1" max="20" />
         </div>
         <button class="run" id="run" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
@@ -721,6 +729,20 @@ async function downloadPdf(niche) {
   URL.revokeObjectURL(url);
 }
 
+// Fourchette de prix du rayon. Le prix arrive déjà dans la SERP qu'on paie : l'afficher ne
+// coûte rien de plus. On dit TOUJOURS sur combien de livres elle porte — « 9,99-19,99 € »
+// sur deux livres ne se lit pas comme la même chose que sur vingt — et une fourchette
+// inconnue se dit, elle ne se remplace pas par un zéro.
+function blocPrix(r){
+  if(!r.n_prix_connus)
+    return `<p class="prixbox">Prix du rayon : <strong>inconnu</strong> — Amazon n'a
+      renvoyé aucun prix pour cette niche. Ce n'est pas un rayon gratuit, c'est une donnée
+      absente.</p>`;
+  return `<p class="prixbox">Prix du rayon : de <strong>${fmtEur(r.prix_min)}</strong>
+    à <strong>${fmtEur(r.prix_max)}</strong>, médiane <strong>${fmtEur(r.prix_median)}</strong>
+    <span class="mut">(sur ${r.n_prix_connus} livre(s) affichant un prix)</span></p>`;
+}
+
 function render(rows){
   tbody.innerHTML='';
   rcount.textContent = rows.length ? `${rows.length} niche(s) analysée(s) en profondeur` : 'aucune niche validée';
@@ -748,6 +770,7 @@ function render(rows){
         DataForSEO épuisé.</p>` : '';
     det.innerHTML=`<td colspan="8"><div class="inner">
         ${alerteNm}
+        ${blocPrix(r)}
         <div class="histslot"></div>
         ${verdictBlock(r)}
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
@@ -783,7 +806,7 @@ form.addEventListener('submit',e=>{
   runBtn.disabled=true; runLabel.textContent='Scout en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
-  const q=new URLSearchParams({seed:$('#seed').value.trim(),ideas:$('#ideas').value,search:$('#search').value});
+  const q=new URLSearchParams({seed:$('#seed').value.trim(),search:$('#search').value});
   es=new EventSource('/api/scout?'+q.toString());
   es.addEventListener('progress',ev=>addStep(JSON.parse(ev.data)));
   es.addEventListener('result',ev=>render(JSON.parse(ev.data)));

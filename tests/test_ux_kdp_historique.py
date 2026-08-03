@@ -109,3 +109,31 @@ def test_la_reprise_des_donnees_locales_est_une_case_a_cocher():
     donc que l'interface propose ce consentement, sinon la reprise devient inaccessible."""
     assert 'type="checkbox"' in HTML
     assert "reprendre_donnees_locales" in HTML
+
+
+# ── Fourchette de prix et paramètres du scout ───────────────────────────────────────
+
+def test_la_fourchette_de_prix_est_affichee():
+    """Elle est déjà payée dans la SERP : ne pas l'afficher, c'est jeter une donnée
+    achetée."""
+    assert "n_prix_connus" in HTML
+    for champ in ("prix_min", "prix_max", "prix_median"):
+        assert champ in HTML, f"champ manquant : {champ}"
+
+
+def test_un_prix_inconnu_se_dit_et_ne_devient_pas_zero():
+    """Même invariant que partout : « inconnu » n'est pas « gratuit »."""
+    assert "Prix du rayon" in HTML
+    assert "donnée\n      absente" in HTML or "donnée absente" in HTML.replace("\n      ", " ")
+
+
+def test_le_nombre_d_idees_n_est_plus_reglable():
+    """L'ideator est UN SEUL appel LLM quel que soit le nombre d'idées : l'offrir au réglage
+    laissait croire que c'était un levier de coût, alors que le poste qui pèse est le nombre
+    de niches ANALYSÉES. Le champ « idées » disparaît, et la requête ne l'envoie plus."""
+    assert 'id="ideas"' not in HTML
+    assert "ideas:$('#ideas').value" not in HTML
+
+
+def test_le_nombre_de_niches_analysees_va_jusqu_a_20():
+    assert 'id="search"' in HTML and 'max="20"' in HTML

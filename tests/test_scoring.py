@@ -89,3 +89,66 @@ def test_un_rayon_mesure_et_reellement_vide_reste_une_bonne_nouvelle():
     r = score_niche(v, SearchResult(keyword="niche rare"), [])
     assert r.concurrence_mesuree is True
     assert "mesur" not in r.priorite.lower()
+
+
+# ── Fourchette de prix du rayon ─────────────────────────────────────────────────────
+
+from scoring import prix_stats                                        # noqa: E402
+
+
+def _item(prix, sponsored=False):
+    return SearchItem(title="t", price=prix, sponsored=sponsored)
+
+
+def test_la_fourchette_de_prix_donne_min_median_et_max():
+    """Le prix est DÉJÀ dans la SERP qu'on paie : l'agréger ne coûte rien de plus et dit à
+    l'auteur à quel prix le rayon se vend avant qu'il n'écrive une ligne."""
+    s = prix_stats([_item(2.99), _item(9.99), _item(14.99), _item(4.99)])
+    assert s["min"] == 2.99 and s["max"] == 14.99
+    assert s["median"] == 7.49          # moyenne des deux centraux (4,99 et 9,99)
+    assert s["n_connus"] == 4
+
+
+def test_un_prix_absent_n_est_pas_un_prix_bas():
+    """Piège central : Amazon ne rend pas toujours le prix. Compter un prix manquant comme
+    0 tirerait la fourchette vers le bas et ferait croire à un rayon bradé. On l'EXCLUT et
+    on dit combien de livres portaient réellement un prix."""
+    s = prix_stats([_item(9.99), _item(None), _item(19.99), _item(None)])
+    assert s["min"] == 9.99 and s["max"] == 19.99
+    assert s["n_connus"] == 2 and s["n_total"] == 4
+
+
+def test_aucun_prix_connu_rend_None_et_non_zero():
+    """Même invariant que partout : une absence de mesure ne se présente pas comme une
+    mesure. Zéro euro serait un verdict, `None` est une absence."""
+    s = prix_stats([_item(None), _item(None)])
+    assert s["min"] is None and s["median"] is None and s["max"] is None
+    assert s["n_connus"] == 0
+
+
+def test_les_sponsorises_ne_sont_pas_dans_la_fourchette():
+    """Cohérent avec §4.1 : les sponsorisés sont écartés de tous les calculs de QUALITÉ.
+    Un sponsorisé bradé fausserait la lecture du prix de marché."""
+    s = prix_stats([_item(9.99), _item(0.99, sponsored=True)])
+    assert s["min"] == 9.99 and s["n_connus"] == 1
+
+
+def test_la_fourchette_est_exposee_sur_la_niche_scoree():
+    """Sans exposition sur ScoredNiche, l'information reste dans une fonction que personne
+    n'appelle — c'est le défaut qu'on a déjà eu deux fois dans ce dépôt."""
+    v = NicheValidation(niche="n", requete_amazon="n", categorie="c", demand_score=5,
+                        validated=True)
+    sr = SearchResult(keyword="n", organic=[_item(4.99), _item(12.99)])
+    r = score_niche(v, sr, [])
+    assert r.prix_min == 4.99 and r.prix_max == 12.99
+    assert r.prix_median == 8.99 and r.n_prix_connus == 2
+
+
+def test_la_fourchette_ne_change_aucun_score():
+    """Le prix INFORME, il ne note pas : un rayon cher n'est ni meilleur ni pire, ça dépend
+    de la stratégie de l'auteur. L'ajouter au score serait un jugement déguisé."""
+    v = NicheValidation(niche="n", requete_amazon="n", categorie="c", demand_score=5,
+                        validated=True)
+    sans = score_niche(v, SearchResult(keyword="n", organic=[_item(None)]), [])
+    avec = score_niche(v, SearchResult(keyword="n", organic=[_item(29.99)]), [])
+    assert sans.global_score == avec.global_score

@@ -45,6 +45,34 @@ def count_targeted(query: str, items) -> int:
                if sum(1 for w in words if w in (it.title or "").lower()) >= need)
 
 
+def prix_stats(items) -> dict:
+    """Fourchette de prix d'un rayon : min, médiane, max, sur les seuls ORGANIQUES.
+
+    Le prix arrive déjà dans la SERP qu'on paie (`SearchItem.price`) : l'agréger ne coûte
+    pas un centime de plus et répond à une question que l'auteur se pose avant d'écrire —
+    à quel prix ce rayon se vend-il.
+
+    Deux partis pris :
+    - un prix ABSENT est exclu, jamais compté zéro. Amazon ne rend pas toujours le prix ;
+      le compter à zéro tirerait la fourchette vers le bas et ferait croire à un rayon
+      bradé. `n_connus` dit sur combien de livres la fourchette porte vraiment.
+    - les sponsorisés sont écartés, comme partout dans les calculs de qualité (§4.1) : un
+      sponsorisé bradé fausse la lecture du prix de marché.
+
+    N'entre dans AUCUN score : un rayon cher n'est ni meilleur ni pire, cela dépend de la
+    stratégie de l'auteur. L'ajouter au score serait un jugement déguisé en mesure."""
+    organiques = [i for i in (items or []) if not getattr(i, "sponsored", False)]
+    prix = sorted(float(i.price) for i in organiques
+                  if getattr(i, "price", None) is not None)
+    if not prix:
+        return {"min": None, "median": None, "max": None,
+                "n_connus": 0, "n_total": len(organiques)}
+    m = len(prix) // 2
+    mediane = prix[m] if len(prix) % 2 else (prix[m - 1] + prix[m]) / 2
+    return {"min": round(prix[0], 2), "median": round(mediane, 2), "max": round(prix[-1], 2),
+            "n_connus": len(prix), "n_total": len(organiques)}
+
+
 def score_niche(validation: NicheValidation, search: SearchResult | None,
                 bsrs: list[int]) -> ScoredNiche:
     """Calcule le score 3 axes d'une niche à partir de la demande (autocomplete),
@@ -57,6 +85,7 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
     avg_rating = round(sum(ratings) / len(ratings), 2) if ratings else None
     total_reviews = sum(reviews) if reviews else None
     n_cibles = count_targeted(validation.requete_amazon or validation.niche, organic)
+    prix = prix_stats(organic)
 
     # ── AXE 1 — Demande ──
     demande = _clamp(2 + min(validation.demand_score, 10) * 0.6)
@@ -111,5 +140,7 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
         bsr_best=stats["best"], bsr_top5_avg=stats["top5_avg"],
         bsr_worst_top10=stats["worst_top10"], criteres_bsr_ok=stats["ok"],
         concurrence_mesuree=mesuree,
+        prix_min=prix["min"], prix_median=prix["median"], prix_max=prix["max"],
+        n_prix_connus=prix["n_connus"],
         top_asins=[o.asin for o in organic[:5] if o.asin],
     )

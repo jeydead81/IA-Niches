@@ -105,6 +105,14 @@ class ScoredNiche(BaseModel):
     # Défaut pessimiste, comme AutocompleteSignal.mesure : un champ jamais renseigné doit
     # se lire « non mesuré », jamais « mesuré à zéro ».
     concurrence_mesuree: bool = False
+    # Fourchette de prix du rayon (organiques seulement). `None` = aucun prix connu, JAMAIS
+    # 0 : un prix absent tiré à zéro ferait croire à un rayon bradé. `n_prix_connus` dit sur
+    # combien de livres la fourchette porte réellement — sans lui, « 9,99-19,99 » sur deux
+    # livres se lit comme « 9,99-19,99 » sur vingt.
+    prix_min: float | None = None
+    prix_median: float | None = None
+    prix_max: float | None = None
+    n_prix_connus: int = 0
     top_asins: list[str] = Field(default_factory=list)
     verdict: NicheVerdict | None = None    # rempli pour le top-N (gate coût)
 

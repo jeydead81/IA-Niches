@@ -55,8 +55,13 @@ COOKIE_SESSION = "ia_niches_session"
 # appels payants : sans ces bornes, une seule « analyse » avec search=9999 déclenche des
 # milliers de requêtes DataForSEO tout en ne consommant qu'une unité du plafond. Borner
 # le volume est donc la seule protection réelle du MONTANT (revue de sécurité 2026-08-03).
+# Le nombre d'IDÉES est fixé, pas offert au réglage : l'ideator est UN SEUL appel LLM quel
+# que soit le nombre demandé, donc en proposer 20 plutôt que 10 coûte des millièmes de
+# dollar et améliore le tri gratuit qui suit. C'est le nombre de RECHERCHES qui pèse
+# (~0,003 $ par niche, plus le lot BSR) : c'est donc le seul que l'utilisateur choisit.
+IDEES_PAR_RUN = 20
 MAX_IDEES = 30
-MAX_RECHERCHES = 12
+MAX_RECHERCHES = 20
 MAX_NICHES_FICTION = 20
 
 
@@ -347,7 +352,7 @@ def _consigner_fiction(rapports, user_id: str) -> None:
 
 
 @app.get("/api/scout")
-def scout(request: Request, seed: str = "", ideas: int = 10, search: int = 4,
+def scout(request: Request, seed: str = "", ideas: int = IDEES_PAR_RUN, search: int = 4,
           user_id: str = Depends(utilisateur_courant)):
     """Lance le scout dans un thread et streame la progression + le résultat en SSE."""
     origine_sure(request)
