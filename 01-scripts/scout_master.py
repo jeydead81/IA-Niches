@@ -122,7 +122,11 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
     for v, sr, asins in per_niche:
         bsrs = [bsr_map[a].rank_livres for a in asins
                 if bsr_map.get(a) and bsr_map[a].rank_livres]
-        pairs.append((score_niche(v, sr, bsrs), sr))
+        # bsr_map complet (pas seulement les `asins` du lot BSR) : un livre du top sans
+        # classement resolu doit ressortir avec bsr=None, jamais absent de la liste.
+        rangs = {a: info.rank_livres for a, info in bsr_map.items()
+                 if info and info.rank_livres}
+        pairs.append((score_niche(v, sr, bsrs, bsr_map=rangs), sr))
     pairs.sort(key=lambda p: p[0].global_score, reverse=True)
 
     # Verdict IA (directeur éditorial) : n_verdict=0 PAR DÉFAUT. Mesuré à 0,0283 $ pièce

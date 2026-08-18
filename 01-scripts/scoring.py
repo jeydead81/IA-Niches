@@ -6,7 +6,7 @@ Axes : Demande (0.4) · Pénétration (0.4) · Compatibilité livre (0.2).
 """
 import re
 
-from models import NicheValidation, SearchResult, ScoredNiche
+from models import TopBook, NicheValidation, SearchResult, ScoredNiche
 
 
 def bsr_stats(bsrs: list[int]) -> dict:
@@ -29,6 +29,11 @@ def bsr_stats(bsrs: list[int]) -> dict:
     return {"best": best, "top5_avg": top5_avg, "worst_top10": worst10,
             "crit1": crit1, "crit2": crit2, "crit3": crit3,
             "ok": crit1 and crit2 and crit3}
+
+
+# 8 : de quoi juger un rayon d'un coup d'oeil sans transformer une carte en annuaire.
+# Le scout ne resout de toute facon le BSR que des 3 premiers (n_bsr_per_niche).
+MAX_TOP_BOOKS = 8
 
 
 def _clamp(x: float, lo: float = 1.0, hi: float = 10.0) -> float:
@@ -74,7 +79,7 @@ def prix_stats(items) -> dict:
 
 
 def score_niche(validation: NicheValidation, search: SearchResult | None,
-                bsrs: list[int]) -> ScoredNiche:
+                bsrs: list[int], bsr_map: dict[str, int] | None = None) -> ScoredNiche:
     """Calcule le score 3 axes d'une niche à partir de la demande (autocomplete),
     de la concurrence (search) et du BSR réel du top organique."""
     stats = bsr_stats(bsrs)
@@ -148,4 +153,9 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
         intention_informationnelle=validation.intention_informationnelle,
         marqueurs_informationnels=validation.marqueurs_informationnels,
         top_asins=[o.asin for o in organic[:5] if o.asin],
+        top_books=[
+            TopBook(asin=o.asin, title=o.title, url=f"https://www.amazon.fr/dp/{o.asin}",
+                    price=o.price, rating=o.rating, reviews_count=o.reviews_count,
+                    bsr=(bsr_map or {}).get(o.asin), sponsored=False)
+            for o in organic[:MAX_TOP_BOOKS] if o.asin],
     )

@@ -76,6 +76,28 @@ class NicheVerdict(BaseModel):
     differenciation: str = ""             # Q3 (exécution / angle / autorité)
 
 
+class TopBook(BaseModel):
+    """Un concurrent du top ORGANIQUE, avec de quoi le juger sans re-payer une SERP.
+
+    `top_asins` ne portait que des identifiants : l'UI, le Dossier PDF et le verdict
+    devaient soit re-interroger Amazon, soit se passer des concurrents -- c'est-a-dire
+    priver l'auteur de la seule chose qu'il veut voir, contre QUI il publierait.
+
+    `bsr` a None quand le classement n'a pas ete resolu. Jamais 0 : zero serait le
+    MEILLEUR classement possible, donc un BSR manquant se lirait comme un best-seller
+    (5.10). `sponsored` reste dans le modele bien qu'il vaille toujours False ici : le
+    jour ou un appelant voudra montrer les sponsorises a part, le champ dira lequel est
+    lequel plutot que de laisser deviner."""
+    asin: str
+    title: str = ""
+    url: str = ""
+    price: float | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
+    bsr: int | None = None
+    sponsored: bool = False
+
+
 class ScoredNiche(BaseModel):
     """Une niche entièrement évaluée (demande + concurrence + BSR réel) et scorée."""
     niche: str
@@ -119,6 +141,9 @@ class ScoredNiche(BaseModel):
     intention_informationnelle: bool = False
     marqueurs_informationnels: list[str] = Field(default_factory=list)
     top_asins: list[str] = Field(default_factory=list)
+    # Les concurrents du top organique, ordre de la SERP conserve : la position EST une
+    # donnee, la reclasser par BSR ou par prix effacerait ce qu'Amazon montre a l'acheteur.
+    top_books: list[TopBook] = Field(default_factory=list)
     verdict: NicheVerdict | None = None    # rempli pour le top-N (gate coût)
 
 
