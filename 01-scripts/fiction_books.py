@@ -17,6 +17,13 @@ _BSR_KEY = ("meilleures ventes", "best sellers rank")
 # sous-catégorie : "RANG en CATÉGORIE", une par ligne, APRÈS la parenthèse fermante du rang
 # principal. Le "(Livres)" qui qualifie parfois la catégorie (ex. "Jeux (Livres)") fait
 # partie du libellé Amazon -> on ne s'arrête pas au premier "(".
+# amazon.fr ecrit le format en CLE et la pagination en VALEUR : {"Broche": "120 pages"}.
+# Les deux se lisent donc du meme champ. \d avec separateurs de milliers francais (espace
+# fine incluse) : "1 248 pages" est une ecriture reelle.
+_PAGES = re.compile(r"([\d][\d\s  .]*)\s*pages?", re.I)
+_FORMATS_PAPIER = ("broch", "reli", "poche", "album", "cartonn")
+
+
 _SUBCAT_LINE = re.compile(r"^\s*([\d][\d\s.]*)\s*en\s+(.+?)\s*$")
 
 
@@ -104,6 +111,18 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
             tome, total = int(m.group(1)), int(m.group(2))
             break
 
+    # Format + pagination : la CLE porte le format ("Broche"), la VALEUR la pagination
+    # ("120 pages"). On rend le libelle Amazon tel quel plutot qu'une cle normalisee --
+    # c'est ce que l'auteur lit sur la fiche, et la grille de cout KDP s'y raccroche.
+    format_papier = pages = None
+    for kl, (k, v) in low.items():
+        if any(f in kl for f in _FORMATS_PAPIER):
+            format_papier = k
+            m = _PAGES.search(str(v or ""))
+            if m:
+                pages = _bsr_to_int(m.group(1))     # gere les separateurs de milliers FR
+            break
+
     rating = item.get("rating") if isinstance(item.get("rating"), dict) else {}
     # caster AVANT _series_hint_from_title : la regex lève un TypeError sur un non-str,
     # et le `except ValidationError` plus bas ne le rattraperait pas.
@@ -122,6 +141,9 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
             bsr_subcats=subcats,
             publication_date=_text(pick("date de publication")),
             publisher=_text(pick("diteur")),
+            pages=pages,
+            dimensions=_text(pick("dimensions")),
+            format_papier=format_papier,
             langue=_text(pick("langue")),
             serie_tome=tome,
             serie_total=total,

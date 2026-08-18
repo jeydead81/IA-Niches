@@ -260,6 +260,14 @@ class EnrichedBook(BaseModel):
     bsr_subcats: list[dict] = Field(default_factory=list)
     publication_date: str | None = None
     publisher: str | None = None
+    # Sans interet en fiction, ils SONT le produit en low-content : la redevance KDP se
+    # calcule sur le nombre de pages (cout d'impression fixe sous 110 pages, au-dela cout
+    # par page) et le format papier decide de la grille. `dimensions` reste du TEXTE brut :
+    # "15.24 x 0.71 x 22.86 cm" est ce qu'Amazon affiche, et l'ordre des axes n'est garanti
+    # nulle part -- le decouper en trois flottants inventerait une precision absente.
+    pages: int | None = None
+    dimensions: str | None = None
+    format_papier: str | None = None       # libelle Amazon : "Broche", "Relie", "Poche"
     langue: str | None = None
     serie_tome: int | None = None                       # clé « Livre N sur M »
     serie_total: int | None = None
