@@ -1,7 +1,15 @@
-"""launcher.py — petit lanceur interactif d'IA-Niches (canaux gratuits).
-Lancé par le raccourci bureau (IA-Niches.bat). En attendant l'orchestrateur
-complet (Plan 2), il expose les deux canaux déjà validés en live :
-suggestions Amazon (autocomplete) et classement des ventes (BSR)."""
+"""launcher.py — petit lanceur interactif d'IA-Niches. GRATUIT, et seulement gratuit.
+Lancé par le raccourci bureau (IA-Niches.bat). Deux sondes validées en live :
+suggestions Amazon (autocomplete) et classement des ventes (BSR scrapé).
+
+CE MODULE NE DOIT JAMAIS APPELER UN CHEMIN PAYANT. Il est antérieur à l'interface web
+et ne connaît ni compte, ni session, ni plafond : tout appel facturé lancé d'ici
+échapperait à `_verifier_plafond` ET à `UsageMeter`, donc à `usage.db`. Le montant
+n'est pas le sujet — une option retirée le 2026-08-18 coûtait ~0,02 €. Le sujet est
+que `usage.db` porte tout le raisonnement de marge du produit : ce qu'il ne voit pas,
+personne ne le voit. Pour dépenser, il y a `POST /api/jobs`, qui vérifie et impute.
+
+`tests/test_launcher.py` est le cliquet : il échoue si un import payant revient ici."""
 import sys
 
 try:
@@ -23,7 +31,6 @@ BANNER = """
 def _menu() -> str:
     print("\n  1) Suggestions Amazon pour un mot-clé   (gratuit)")
     print("  2) Classement des ventes (BSR) d'un ASIN  (gratuit)")
-    print("  3) Idées de niches par l'IA               (clé Anthropic, ~0,02€)")
     print("  q) Quitter")
     return input("\n  Choix > ").strip().lower()
 
@@ -54,32 +61,6 @@ def _do_bsr() -> None:
         print("  Classement introuvable (fiche bloquée ou sans BSR — réessaie).")
 
 
-def _do_niches() -> None:
-    seed = input("  Graine (ex. ésotérisme, sommeil, stoïcisme) > ").strip()
-    if not seed:
-        return
-    print("  L'IA propose des niches, puis on valide la demande sur Amazon (quelques secondes)…")
-    try:
-        from niche_ideator import generate_niches  # imports tardifs (dépendent d'anthropic)
-        from niche_validator import validate_niches
-        niches = generate_niches(seed=seed, n=10)
-        results = validate_niches(niches, pause=0.5, max_queries=3)
-    except Exception as e:
-        print(f"  Erreur : {type(e).__name__}: {e}")
-        print("  (clé ANTHROPIC_API_KEY dans .env ? SDK anthropic installé ?)")
-        return
-    n_ok = sum(v.validated for v in results)
-    print(f"\n  {len(results)} niches — {n_ok} validées par l'autocomplete Amazon "
-          f"(demande = nb de complétions) :")
-    for v in results:
-        mark = "OK" if v.validated else "--"
-        print(f"    [{mark} | demande {v.demand_score:2}] {v.niche}  ({v.categorie})")
-        if v.validated:
-            print(f"          « {v.requete_amazon} » → {', '.join(v.amazon_suggestions[:4])}")
-        else:
-            print(f"          « {v.requete_amazon} » → (Amazon ne complète pas)")
-
-
 def main() -> None:
     print(BANNER)
     while True:
@@ -91,8 +72,6 @@ def main() -> None:
             _do_suggest()
         elif choice == "2":
             _do_bsr()
-        elif choice == "3":
-            _do_niches()
         elif choice:
             print("  Choix non reconnu.")
 
