@@ -214,6 +214,15 @@ def redevance_estimee(prix: float | None, pages: int | None, encre: str = "bw",
     Sources et date de relevé dans `data/kdp_print_costs.json`. Ces barèmes sont ceux
     d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé.
 
+    La grille a DEUX bandes par encre, et chacune a SON forfait : 2,05 EUR pour 24-110
+    pages sans cout par page, 0,75 EUR + 0,012 EUR/page au-dela. Sous le seuil, le cout est
+    un forfait PLAT propre a la bande courte -- ce n'est PAS le forfait de la bande longue
+    ampute de sa part par page. Le premier relevé avait fait cette confusion : il
+    sous-estimait le cout d'impression de 1,30 EUR sur toute pagination courte, donc
+    surestimait la redevance d'autant, sur 35 des 36 formats de la taxonomie. Le symptome
+    qui l'a trahi : passer de 110 a 111 pages coutait 1,33 EUR de plus, ce qu'aucune grille
+    d'impression a la demande ne fait.
+
     Rend `None` si le prix ou la pagination manque — une redevance inconnue n'est pas une
     redevance nulle, et le scoring n'applique rien dessus.
 
@@ -230,9 +239,14 @@ def redevance_estimee(prix: float | None, pages: int | None, encre: str = "bw",
     if grille is None:
         raise ValueError(f"encre inconnue : « {encre} » "
                          f"(dispo : {sorted(couts['encres'])})")
-    impression = couts["cout_fixe"]
     if pages > grille["seuil_cout_fixe_seul"]:
-        impression += pages * grille["cout_par_page"]
+        impression = grille["cout_fixe_bande_longue"] + pages * grille["cout_par_page"]
+    else:
+        impression = grille["cout_fixe_bande_courte"]
+        if impression is None:
+            # Bande courte non relevee pour cette encre : on ne DEVINE pas un forfait.
+            # None remonte tel quel -- une redevance inconnue n'est pas une redevance.
+            return None
     r = couts["redevance"]
     taux = r["taux_haut"] if prix >= r["seuil_taux_haut"] else r["taux_bas"]
     return round(taux * prix - impression, 4)

@@ -135,11 +135,41 @@ def test_une_liste_vide_ne_conclut_rien():
 # ── Redevance ──────────────────────────────────────────────────────────────────
 
 def test_le_taux_bascule_au_seuil_officiel():
-    """Barème RELEVÉ chez Amazon (topic G201834330), pas estimé : 50 % jusqu'à 9,98 €,
-    60 % à partir de 9,99 €. À 100 pages en encre noire, l'impression est le coût fixe
-    seul (0,75 €), le seuil des 110 pages n'étant pas franchi."""
-    assert redevance_estimee(9.98, 100) == pytest.approx(0.50 * 9.98 - 0.75, abs=0.01)
-    assert redevance_estimee(9.99, 100) == pytest.approx(0.60 * 9.99 - 0.75, abs=0.01)
+    """Barème RELEVÉ chez Amazon (topic G201834330) : 50 % jusqu'à 9,98 €, 60 % à partir
+    de 9,99 €. À 100 pages en encre noire, l'impression est le forfait de la bande COURTE
+    (2,05 €), sans coût par page."""
+    assert redevance_estimee(9.98, 100) == pytest.approx(0.50 * 9.98 - 2.05, abs=0.01)
+    assert redevance_estimee(9.99, 100) == pytest.approx(0.60 * 9.99 - 2.05, abs=0.01)
+
+
+def test_les_deux_bandes_ont_chacune_leur_forfait():
+    """CE test est né d'un bug réel, trouvé par audit après coup.
+
+    La grille KDP a DEUX bandes par encre, et chacune a SON forfait : 2,05 € pour 24-110
+    pages (sans coût par page), 0,75 € + 0,012 €/page au-delà. Le premier relevé n'avait
+    retenu qu'un forfait unique de 0,75 € appliqué aux deux — ce qui sous-estimait le coût
+    d'impression de 1,30 € sur toute pagination courte, donc SURESTIMAIT la redevance
+    d'autant. Or 35 des 36 formats de la taxonomie ont une borne basse ≤ 110 pages : c'était
+    le cas NORMAL du rayon, pas un cas limite.
+
+    Et ce n'était pas cosmétique : à 7,99 € sur 100 pages, la redevance affichée passait de
+    1,95 € (sous `redevance_min_bonne`) à 3,25 € (au-dessus), ce qui accordait +2 sur l'axe
+    rentabilité et faisait basculer le verdict."""
+    courte = redevance_estimee(7.99, 100)
+    assert courte == pytest.approx(0.50 * 7.99 - 2.05, abs=0.01)
+    assert courte < 2.0                       # sous le seuil de bonus : c'est le point
+
+    longue = redevance_estimee(7.99, 200)
+    assert longue == pytest.approx(0.50 * 7.99 - (0.75 + 200 * 0.012), abs=0.01)
+
+
+def test_le_saut_au_point_de_bascule_reste_petit():
+    """Le symptôme qui a trahi le bug : avec un forfait unique, passer de 110 à 111 pages
+    coûtait 1,33 € de plus — aucune grille d'impression à la demande ne fait ça. Avec les
+    deux forfaits relevés, l'écart au point de bascule est de quelques centimes."""
+    c110 = redevance_estimee(14.99, 110)
+    c111 = redevance_estimee(14.99, 111)
+    assert abs(c110 - c111) < 0.10
 
 
 def test_au_dela_du_seuil_de_pages_le_cout_par_page_s_applique():

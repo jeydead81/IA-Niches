@@ -1,18 +1,19 @@
 {
-  "_source": "RELEVE, jamais calcule ni estime. Coûts d'impression : page d'aide KDP « Coût d'impression des livres brochés » (topic G201834340). Taux de redevance : page « Redevances des livres brochés » (topic G201834330). Les deux relevées le 2026-08-18 pour le marketplace amazon.fr en EUR, format de coupe STANDARD.",
+  "_source": "RELEVE, jamais calcule ni estime. Couts d'impression : page d'aide KDP « Coût d'impression des livres brochés » (topic G201834340). Taux de redevance : page « Redevances des livres brochés » (topic G201834330). Marketplace amazon.fr, EUR, format de coupe STANDARD. Premier relevé le 2026-08-18, CORRIGÉ le 2026-08-18 après audit : la grille a DEUX bandes par encre et chacune a SON forfait — le premier relevé n'en avait retenu qu'un.",
   "source_url_couts": "https://kdp.amazon.com/fr_FR/help/topic/G201834340",
   "source_url_redevance": "https://kdp.amazon.com/fr_FR/help/topic/G201834330",
   "date_releve": "2026-08-18",
-  "_avertissement": "Ces barèmes sont ceux d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé. Une date de relevé vieille de plus d'un an doit être re-vérifiée avant de présenter une redevance à un utilisateur. Le format LARGE (grand format) a ses propres coûts, non relevés ici : redevance_estimee ne couvre que le format standard.",
+  "_avertissement": "DEUX BANDES PAR ENCRE, chacune avec son propre forfait. Un forfait unique produit une discontinuité de 1,33 EUR au point de bascule et surestime la redevance de toute pagination courte — c'est-à-dire du cas NORMAL du rayon (35 des 36 formats de la taxonomie ont une borne basse ≤ 110 pages). Ces barèmes sont ceux d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé. Un relevé vieux de plus d'un an doit être re-vérifié avant de présenter une redevance à un utilisateur. Le format LARGE (grand format) a ses propres coûts, non relevés : redevance_estimee ne couvre que le format standard.",
   "marketplace": "fr",
   "devise": "EUR",
-  "cout_fixe": 0.75,
   "encres": {
     "bw": {
       "label": "Encre noire, papier blanc ou crème",
       "pages_min": 24,
       "pages_max": 828,
       "seuil_cout_fixe_seul": 110,
+      "cout_fixe_bande_courte": 2.05,
+      "cout_fixe_bande_longue": 0.75,
       "cout_par_page": 0.012
     },
     "couleur_standard": {
@@ -20,14 +21,16 @@
       "pages_min": 72,
       "pages_max": 600,
       "seuil_cout_fixe_seul": 0,
+      "cout_fixe_bande_courte": null,
+      "cout_fixe_bande_longue": 0.75,
       "cout_par_page": 0.024
     }
   },
   "redevance": {
     "_note": "Barème PAR PALIER de prix catalogue, propre aux marketplaces EUR. Ce n'est PAS la règle 35/70 % du Kindle : elle ne s'applique qu'aux ebooks et ne doit jamais être confondue avec celle-ci.",
     "seuil_taux_haut": 9.99,
-    "taux_bas": 0.50,
-    "taux_haut": 0.60,
+    "taux_bas": 0.5,
+    "taux_haut": 0.6,
     "formule": "(taux x prix catalogue) - cout d'impression = redevance"
   }
 }
