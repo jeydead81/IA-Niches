@@ -81,7 +81,11 @@ def _champs(objet) -> str:
     l'algorithme de conformité d'Amazon regarde."""
     if isinstance(objet, str):
         return objet
+    # `requete` couvre les `Suggestion` de l'arbre d'autocomplete, `requete_amazon` les
+    # niches. Sans le premier, le filtre rendait silencieusement TOUT sur les suggestions
+    # brutes -- c'est-a-dire exactement la ou il doit mordre le plus, avant l'appel LLM.
     morceaux = [getattr(objet, "niche", "") or "",
+                getattr(objet, "requete", "") or "",
                 getattr(objet, "requete_amazon", "") or ""]
     morceaux += list(getattr(objet, "satellite_keywords", None) or [])
     return " ".join(m for m in morceaux if m)
