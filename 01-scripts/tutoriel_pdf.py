@@ -109,6 +109,7 @@ ENDPOINTS = [
                                    "Les autres sessions du meme compte restent ouvertes."),
     ("GET  /api/auth/moi", "Le compte de la session en cours."),
     ("GET  /api/fiction/sous-genres", "Peuple le sélecteur depuis la taxonomie."),
+    ("GET  /api/lowcontent/formats", "Peuple le sélecteur de format low-content depuis la taxonomie, avec le drapeau « normé »."),
     ("GET  /api/fiction/taxonomie/{sous_genre}", "Tropes et decors autorises du sous-genre. Alimente les menus du compositeur de trio : la taxonomie est la source de verite UNIQUE, jamais une liste en dur cote JS."),
     ("POST /api/jobs", "202 + id immediat. SEUL chemin de lancement des deux scouts. "
                        "Le travail est detache : il survit a la fermeture de l'onglet, "

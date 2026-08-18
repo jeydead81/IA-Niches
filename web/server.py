@@ -34,6 +34,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(_ROOT / ".env")
 from scout_master import run_scout  # noqa: E402
 from fiction_master import run_fiction_scout  # noqa: E402
+from lowcontent_master import run_lowcontent_scout  # noqa: E402
+from lowcontent_taxonomy import (load_taxonomy as load_taxonomy_lc,  # noqa: E402
+                                 valid_formats as valid_formats_lc)
 from niche_verdict import generate_verdict  # noqa: E402
 from kdp_keywords import generer_mots_cles  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
@@ -85,6 +88,12 @@ IDEES_PAR_RUN = 10
 MAX_IDEES = 30
 MAX_RECHERCHES = 20
 MAX_NICHES_FICTION = 20
+# Meme borne que le non-fiction : le poste qui coute est le nombre de niches
+# CONFRONTEES a Amazon, pas le nombre de requetes lues dans l'arbre (gratuit).
+MAX_RECHERCHES_LC = 20
+# La graine part dans un prompt LLM. 80 caracteres couvrent largement un theme reel ;
+# au-dela ce n'est plus une graine, c'est une charge utile (meme garde que A5).
+MAX_LONGUEUR_GRAINE = 80
 
 
 def _plafond_analyses_mensuel() -> int | None:
@@ -435,6 +444,21 @@ def _consigner_scout(results, user_id: str) -> None:
         })
 
 
+def _consigner_lowcontent(results, user_id: str) -> None:
+    """Historique low-content. Une niche dont la concurrence n'a PAS ete mesuree est
+    exclue : un point qu'on sait faux produirait au passage suivant un delta
+    spectaculaire et mensonger (meme regle que _consigner_scout)."""
+    h = NicheHistory(_HISTORY_DB)
+    for r in results:
+        if not r.concurrence_mesuree:
+            continue
+        h.enregistrer(r.niche.niche, {
+            "global_score": r.global_score, "demande": r.demande,
+            "penetration": r.penetration, "rentabilite": r.rentabilite,
+            "bsr_best": r.bsr_best, "n_concurrents_cibles": r.n_concurrents_cibles,
+        }, user_id=user_id)
+
+
 def _consigner_fiction(rapports, user_id: str) -> None:
     h = NicheHistory(_HISTORY_DB)
     for r in rapports:
@@ -454,6 +478,20 @@ def fiction_taxonomie(sous_genre: str, user_id: str = Depends(utilisateur_couran
                             detail=f"sous-genre inconnu : « {sous_genre} »")
     tropes, decors = valid_keys(sous_genre)
     return {"sous_genre": sous_genre, "tropes": tropes, "decors": decors}
+
+
+@app.get("/api/lowcontent/formats")
+def lowcontent_formats(user_id: str = Depends(utilisateur_courant)):
+    """Source de verite unique du selecteur de format. Jamais de liste dupliquee en dur
+    cote JS : elle se perimerait a la premiere taxonomie v2.
+
+    `norme` est expose pour que l'UI pose son badge sans re-deduire la taxonomie."""
+    formats = load_taxonomy_lc()["formats"]
+    return sorted(
+        ({"cle": c, "label": f["label"], "famille": f["famille"],
+          "norme": bool(f["norme"]), "effort": f["effort"]}
+         for c, f in formats.items()),
+        key=lambda f: (f["famille"], f["label"]))
 
 
 @app.get("/api/fiction/sous-genres")
@@ -522,6 +560,23 @@ def _valider_volumes(type_: str, params: dict) -> None:
         _borner("n_ideas", params.get("n_ideas", params.get("ideas", 12)), MAX_IDEES)
         _borner("n_search", params.get("n_search", params.get("search", 6)),
                 MAX_RECHERCHES)
+    elif type_ == "lowcontent":
+        _borner("n_search", params.get("n_search", 6), MAX_RECHERCHES_LC)
+        seed = params.get("seed") or ""
+        if not isinstance(seed, str) or len(seed) > MAX_LONGUEUR_GRAINE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"la graine doit faire au plus {MAX_LONGUEUR_GRAINE} caracteres "
+                       f"(recu : {len(seed) if isinstance(seed, str) else type(seed).__name__})")
+        # Format valide ICI, pas dans le runner. Levee depuis le thread detache, la 400
+        # arriverait apres un 202 deja rendu : l'utilisateur verrait une analyse
+        # "lancee" qui rate, sans comprendre que sa saisie etait fautive.
+        cle = params.get("format_cle") or ""
+        if cle and cle not in valid_formats_lc():
+            raise HTTPException(
+                status_code=400,
+                detail=f"format low-content inconnu : \u00ab {cle} \u00bb "
+                       f"(dispo : {valid_formats_lc()})")
     elif type_ == "fiction":
         _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
         # Le sous-genre est validé ICI, pas seulement dans le runner. Le flux direct
@@ -539,7 +594,21 @@ def _valider_volumes(type_: str, params: dict) -> None:
                              params.get("decor"), params.get("libre"))
 
 
-_JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job}
+def _run_lowcontent_job(params: dict, progress, cost, user_id: str) -> list:
+    """Scout low-content. Meme forme que les deux autres runners : les bornes sont deja
+    validees par _valider_volumes, ce runner ne re-decide rien."""
+    results = run_lowcontent_scout(
+        seed=params.get("seed") or None,
+        format_cle=params.get("format_cle") or None,
+        n_search=_borner("n_search", params.get("n_search", 6), MAX_RECHERCHES_LC),
+        inclure_saisonnier=bool(params.get("inclure_saisonnier")),
+        progress=progress, cost=cost)
+    _consigner_lowcontent(results, user_id)
+    return [r.model_dump() for r in results]
+
+
+_JOB_RUNNERS = {"scout": _run_scout_job, "fiction": _run_fiction_job,
+                "lowcontent": _run_lowcontent_job}
 
 
 @app.post("/api/jobs", status_code=202)
