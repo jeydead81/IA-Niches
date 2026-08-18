@@ -138,7 +138,7 @@
   .preset input:checked + span{border-color:var(--primary);background:#EFF6FF}
   .preset input:focus-visible + span{outline:2px solid var(--primary);outline-offset:2px}
   .avance{margin-top:2px}
-  .avance summary{font-size:12px;color:var(--text-muted);cursor:pointer}
+  .avance summary{font-size:12px;color:var(--text-muted);cursor:pointer;padding:5px 0}
   .avance summary:hover{color:var(--primary)}
   .avance .field{margin-top:8px}
   .btn-act:disabled{background:var(--text-muted);cursor:progress}
@@ -171,7 +171,7 @@
   .btn-copy:hover{background:#E2E8F0;color:var(--heading)}
   .kdpnote{font-size:12.5px;color:#92400E;background:var(--amber-bg);border-radius:8px;padding:7px 10px;margin:8px 0 0}
   .kdpfold{margin-top:9px}
-  .kdpfold summary{font-size:12.5px;color:var(--text-muted);cursor:pointer}
+  .kdpfold summary{font-size:12.5px;color:var(--text-muted);cursor:pointer;padding:5px 0}
   .kdpfold li{font-size:12.5px;color:var(--text-muted);margin:3px 0}
 
   /* Historique : ce qui a bougé depuis le passage précédent sur la même niche. */
@@ -223,7 +223,8 @@
   /* Compositeur de trio : replié par défaut. Le mode « propose-moi des trios » reste
      le chemin nominal ; composer soi-même est un choix qu'on va chercher. */
   .compo{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
-  .compo summary{font-size:12.5px;font-weight:600;color:var(--primary);cursor:pointer}
+  .compo summary{font-size:12.5px;font-weight:600;color:var(--primary);cursor:pointer;
+    padding:5px 0}
   .compo-corps{display:flex;flex-wrap:wrap;gap:12px;margin-top:11px;align-items:flex-end}
   .compo .field{min-width:172px}
   .compo-note{width:100%;font-size:11.5px;color:var(--text-muted);margin:2px 0 0}
@@ -351,6 +352,12 @@
     border-radius:50%;border:1.3px solid var(--text-muted);background:#fff;color:var(--text-muted);
     font-family:var(--sans);font-weight:700;font-size:10.5px;line-height:1;cursor:pointer;
     padding:0;flex:none;margin-left:2px;transition:background .15s,color .15s,border-color .15s}
+  /* Cible tactile portee a 24 x 24 (WCAG 2.2, 2.5.8) SANS grossir le rond. La zone
+     est centree sur le bouton par translate(-50%,-50%) : posee sans centrage, elle
+     deborderait vers le bas-droite et attraperait les clics de l'element voisin. */
+  .gloss{position:relative}
+  .gloss::after{content:"";position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);width:24px;height:24px;border-radius:50%}
   .gloss:hover,.gloss[aria-expanded=true]{background:var(--secondary);border-color:var(--secondary);color:#fff}
   .gloss:focus-visible{outline:2px solid var(--secondary);outline-offset:2px}
   .gloss-tip{position:fixed;max-width:min(280px,calc(100vw - 24px));background:#0F172A;color:#F1F5F9;
@@ -373,7 +380,7 @@
      visite — mais on ne force jamais sa fermeture au premier chargement. */
   .help-panel{margin-bottom:16px;padding:16px 20px}
   .help-panel summary{cursor:pointer;font-weight:600;color:var(--heading);font-size:14.5px;
-    list-style:none;display:flex;align-items:center;gap:8px}
+    list-style:none;display:flex;align-items:center;gap:8px;min-height:24px}
   .help-panel summary::-webkit-details-marker{display:none}
   .help-panel summary::before{content:'▸';display:inline-block;color:var(--secondary);
     transition:transform .15s;font-size:12px}
@@ -505,10 +512,11 @@
 
     <div class="panel progress" id="progress">
       <div class="bar"><span></span></div>
-      <ul class="steps" id="steps"></ul>
+      <ul class="steps" id="steps" aria-live="polite" aria-relevant="additions"
+          aria-label="Progression du scout"></ul>
     </div>
 
-    <div class="errbox" id="errbox"></div>
+    <div class="errbox" id="errbox" role="alert" aria-live="assertive"></div>
 
     <section class="results panel" id="results" style="border:none;background:none;box-shadow:none">
       <div class="rsum"><h2>Niches classées</h2><span id="rcount"></span></div>
@@ -600,10 +608,11 @@
 
     <div class="panel progress" id="progress-fic">
       <div class="bar"><span></span></div>
-      <ul class="steps" id="steps-fic"></ul>
+      <ul class="steps" id="steps-fic" aria-live="polite" aria-relevant="additions"
+          aria-label="Progression du scout fiction"></ul>
     </div>
 
-    <div class="errbox" id="errbox-fic"></div>
+    <div class="errbox" id="errbox-fic" role="alert" aria-live="assertive"></div>
 
     <section class="results panel" id="results-fic" style="border:none;background:none;box-shadow:none">
       <div class="rsum"><h2>Niches fiction classées</h2><span id="rcount-fic"></span></div>
@@ -786,7 +795,11 @@ function verdictBlock(r){
 // le sens du gate de cout : /api/verdict impute n_analyses=0 parce qu'il complete une
 // analyse deja comptee, mais il exige quand meme une marge sous le plafond.
 async function loadVerdict(r, det, btn){
-  btn.disabled = true; btn.textContent = 'Analyse en cours\u2026';
+  // aria-busy plutot qu'un simple changement de libelle : le texte seul est un signal
+  // VISUEL, et ces dix secondes d'attente sont precisement le moment ou l'utilisateur
+  // qui n'a pas l'ecran a besoin de savoir qu'il se passe quelque chose.
+  btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+  btn.textContent = 'Analyse en cours\u2026';
   try{
     const rep = await fetch('/api/verdict', {method:'POST',
       headers:{'Content-Type':'application/json'}, body: JSON.stringify(r)});
@@ -804,6 +817,7 @@ async function loadVerdict(r, det, btn){
     brancherActions(r, det);          // le bloc vient d'etre remplace : re-brancher
   }catch(e){
     btn.disabled = false;
+    btn.removeAttribute('aria-busy');
     btn.textContent = 'Analyser cette niche (~10 s)';
     const p = det.querySelector('.vask p');
     if(p) p.textContent = String(e.message || e);
@@ -996,7 +1010,7 @@ function render(rows){
         ${blocSuggestions(r)}
         ${blocPrix(r)}
         <div class="histslot"></div>
-        <div class="verdictslot">${verdictSlot(r)}</div>
+        <div class="verdictslot" aria-live="polite">${verdictSlot(r)}</div>
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
         ${blocConcurrents(r)}
       </div></td>`;
