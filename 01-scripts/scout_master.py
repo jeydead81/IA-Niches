@@ -126,7 +126,11 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
         # classement resolu doit ressortir avec bsr=None, jamais absent de la liste.
         rangs = {a: info.rank_livres for a, info in bsr_map.items()
                  if info and info.rank_livres}
-        pairs.append((score_niche(v, sr, bsrs, bsr_map=rangs), sr))
+        # Les sous-categories viennent de la MEME fiche que le rang, deja payee. Les
+        # laisser derriere obligerait le Dossier PDF a re-interroger Amazon pour une
+        # donnee qu'on tient deja.
+        subcats = {a: (info.subcategories or []) for a, info in bsr_map.items() if info}
+        pairs.append((score_niche(v, sr, bsrs, bsr_map=rangs, subcats_map=subcats), sr))
     pairs.sort(key=lambda p: p[0].global_score, reverse=True)
 
     # Verdict IA (directeur éditorial) : n_verdict=0 PAR DÉFAUT. Mesuré à 0,0283 $ pièce

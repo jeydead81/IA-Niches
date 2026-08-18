@@ -164,3 +164,17 @@ def test_le_verdict_low_content_envoie_son_type(src):
 def test_le_glossaire_couvre_les_termes_low_content(src):
     for terme in ("Part indie", "Variantes", "Seuil 9,99"):
         assert terme in src, f"terme de glossaire manquant : {terme}"
+
+
+def test_le_bouton_pdf_appelle_le_dossier_et_non_l_ancien_one_pager(src):
+    """Le one-pager s'arrêtait au verdict. Laisser le bouton dessus rendrait le Dossier
+    inatteignable — développé, testé, et sans chemin d'accès. C'est le piège §5.26, et il
+    a déjà coûté trois endpoints."""
+    assert "'/api/dossier'" in src
+    assert "'/api/pdf'" not in src
+
+
+def test_le_bouton_distingue_les_deux_formes_de_niche(src):
+    """`type` est obligatoire : sans lui, une niche low-content serait validée comme une
+    ScoredNiche non-fiction et rendrait une 400."""
+    assert "typeof niche.niche === 'object'" in src

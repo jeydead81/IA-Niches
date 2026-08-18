@@ -212,6 +212,7 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
         progress(f"  ⚠ BSR indisponibles ({e}).")
     rangs = {a: info.rank_livres for a, info in (bsr_map or {}).items()
              if info and info.rank_livres}
+    subcats = {a: (info.subcategories or []) for a, info in (bsr_map or {}).items() if info}
 
     # ── Phase 5 — scoring ──
     out: list[LowContentScored] = []
@@ -224,7 +225,8 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
             n_other += 1
         livres = [enrichis[a] for a in asins if a in enrichis]
         bsrs = [rangs[a] for a in asins if a in rangs]
-        out.append(score_lowcontent(niche, v, sr, livres, bsrs, bsr_map=rangs))
+        out.append(score_lowcontent(niche, v, sr, livres, bsrs, bsr_map=rangs,
+                                    subcats_map=subcats))
     out.sort(key=lambda s: s.global_score, reverse=True)
 
     if n_other:

@@ -136,3 +136,39 @@ def test_un_livre_hors_du_lot_bsr_garde_un_bsr_None():
     livres = {b.asin: b for b in res[0].top_books}
     assert livres["A1"].bsr == 3000
     assert livres["A2"].bsr is None
+
+
+# ---------------------------------------------------------------------------
+# Sous-catégories : sans elles, la page « catégories » du Dossier PDF serait
+# décorative — exactement le piège §5.26, une fonction développée et inatteignable.
+# ---------------------------------------------------------------------------
+
+def test_les_sous_categories_du_bsr_voyagent_avec_le_livre():
+    """`suggerer_categories` (chunk B3) lit `BsrInfo.subcategories`. Si ces
+    sous-catégories ne sont pas propagées jusqu'à `TopBook`, le Dossier PDF ne peut RIEN
+    calculer : la fonction existerait sans jamais avoir de données."""
+    sn = score_niche(_validation(), _serp(), [3000],
+                     bsr_map={"A1": 3000},
+                     subcats_map={"A1": [{"category": "Ésotérisme", "rank": 12}]})
+    a1 = next(b for b in sn.top_books if b.asin == "A1")
+    assert a1.bsr_subcats == [{"category": "Ésotérisme", "rank": 12}]
+
+
+def test_sans_sous_categories_la_liste_est_vide_pas_absente():
+    sn = score_niche(_validation(), _serp(), [3000])
+    assert all(b.bsr_subcats == [] for b in sn.top_books)
+
+
+def test_le_scout_propage_les_sous_categories():
+    """Le scout est le seul endroit qui connaisse la table ASIN → BsrInfo complète."""
+    class _P(_Provider):
+        pass
+
+    def bsr_avec_subcats(asin):
+        return BsrInfo(rank_livres=3000, asin=asin,
+                       subcategories=[{"category": "Tarot", "rank": 7}])
+
+    res = run_scout(seed="x", n_search=1, bsr_pause=0, use_cache=False, ideate=_ideate,
+                    validate=_validate, provider=_P(), fetch_bsr_fn=bsr_avec_subcats)
+    livres = {b.asin: b for b in res[0].top_books}
+    assert livres["A1"].bsr_subcats == [{"category": "Tarot", "rank": 7}]

@@ -882,7 +882,7 @@ function verdictBlock(r){
       </div>
       <p class="vfacteur"><strong>Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
       ${angleHtml}
-      <button type="button" class="btn-act btn-pdf">Télécharger le PDF</button>
+      <button type="button" class="btn-act btn-pdf">Télécharger le Dossier (PDF)</button>
       <button type="button" class="btn-act btn-kdp">Mots-clés KDP</button>
       <div class="kdpslot"></div>
     </div>`;
@@ -1032,14 +1032,26 @@ async function loadHistorique(niche, slot){
   }catch(e){ /* l'historique est un plus : son absence ne casse pas la fiche */ }
 }
 
-async function downloadPdf(niche) {
-  const r = await fetch('/api/pdf', {method: 'POST',
-    headers: {'Content-Type': 'application/json'}, body: JSON.stringify(niche)});
+// Le Dossier remplace le one-pager. `type` distingue les deux formes de niche : sans
+// lui, une niche low-content serait validee comme une ScoredNiche et rendrait une 400.
+// Les CATEGORIES sont demandees par defaut (elles se deduisent des BSR deja payes, cout
+// 0 $) ; les MOTS-CLES non (0,006 $ l'appel) -- le defaut ne doit pas depenser a l'insu
+// de l'utilisateur, il les demande depuis le bloc verdict quand il en veut.
+async function downloadPdf(niche, opts) {
+  const o = opts || {};
+  const type = niche && niche.niche && typeof niche.niche === 'object'
+    ? 'lowcontent' : 'scout';
+  const r = await fetch('/api/dossier', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type, niche,
+                          inclure_categories: o.categories !== false,
+                          inclure_mots_cles: !!o.motsCles})});
   if (!r.ok) { alert('Erreur génération PDF'); return; }
   const blob = await r.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = (niche.niche || 'niche') + '.pdf';
+  const nom = (niche.niche && niche.niche.niche) || niche.niche || 'niche';
+  a.href = url; a.download = nom + '.pdf';
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }

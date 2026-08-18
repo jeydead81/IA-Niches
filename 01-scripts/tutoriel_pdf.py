@@ -128,6 +128,7 @@ ENDPOINTS = [
     ("POST /api/kdp-keywords", "Les 7 mots-clés backend KDP d'une niche (~0,006 $). Le LLM "
                                "propose, le code applique les règles KDP, l'autocomplete "
                                "confirme gratuitement."),
+    ("POST /api/dossier", "Dossier de niche en 3 pages : marche + concurrents, angle et spec, mots-cles KDP et categories suggerees. Gratuit sauf si les mots-cles sont demandes (~0,006 $)."),
     ("POST /api/pdf", "One-pager de positionnement. Sans état, gratuit."),
 ]
 

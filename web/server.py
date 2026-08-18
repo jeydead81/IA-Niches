@@ -45,6 +45,8 @@ from fiction_ideator import ContraintesTrio  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from models import LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
+from dossier_pdf import build_dossier_pdf  # noqa: E402
+from categories import suggerer_categories  # noqa: E402
 from jobs import JobStore  # noqa: E402
 from usage import UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
@@ -826,6 +828,62 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
     return {**mots.model_dump(), "_cout": cost.breakdown()}
 
 
+@app.post("/api/dossier")
+async def api_dossier(request: Request, user_id: str = Depends(utilisateur_courant)):
+    """Dossier de niche en trois pages : le marche, l'angle, la publication.
+
+    Trois choses que l'auteur n'avait nulle part et qui etaient DEJA payees : contre qui
+    il publie (top_books), quoi ecrire dans les 7 champs KDP, et ou ranger le livre.
+
+    Les mots-cles ne sont generes QUE si on les demande (0,006 $ l'appel) : le defaut ne
+    doit pas depenser a l'insu de l'utilisateur. Les categories, elles, se deduisent des
+    BSR deja collectes -- cout 0 $, donc cochees par defaut cote UI."""
+    body = await _corps_json(request)
+    type_ = (body.get("type") or "scout").strip().lower()
+    if type_ not in ("scout", "lowcontent"):
+        raise HTTPException(status_code=400,
+                            detail=f"type de dossier inconnu : « {type_} »")
+    try:
+        modele = LowContentScored if type_ == "lowcontent" else ScoredNiche
+        scored = modele.model_validate(body.get("niche") or {})
+    except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
+        raise HTTPException(status_code=400, detail="niche invalide")
+
+    titre = scored.niche.niche if type_ == "lowcontent" else scored.niche
+
+    cats = None
+    if body.get("inclure_categories", True):
+        # Deduites des sous-categories BSR portees par les livres du top : la donnee est
+        # deja payee, la relire ne coute rien et n'appelle personne.
+        from models import BsrInfo
+        cats = suggerer_categories(
+            [BsrInfo(rank_livres=b.bsr or 1, asin=b.asin, subcategories=b.bsr_subcats)
+             for b in scored.top_books if b.bsr_subcats], n=5)
+
+    mots = None
+    if body.get("inclure_mots_cles"):
+        # Appel LLM facture. Il n'entame pas le quota d'ANALYSES (il complete une analyse
+        # deja comptee) mais il EXIGE une marge : un compte au plafond ne doit pas pouvoir
+        # continuer a faire tourner le LLM.
+        _verifier_plafond(user_id)
+        cost = CostTracker()
+        try:
+            mots = generer_mots_cles(scored, titre=titre,
+                                     on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+        except Exception as e:  # noqa: BLE001 — le document reste utile sans eux (5.29)
+            _LOG.warning("mots-cles indisponibles pour le dossier : %s", e)
+            mots = None
+        UsageMeter(_USAGE_DB).enregistrer(user_id, "dossier", cost.total_usd(),
+                                          n_analyses=0)
+
+    with tempfile.TemporaryDirectory() as d:
+        chemin = build_dossier_pdf(scored, f"{d}/dossier.pdf", mots_cles=mots,
+                                   categories=cats)
+        pdf_bytes = chemin.read_bytes()
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": _content_disposition(titre)})
+
+
 @app.post("/api/pdf")
 async def api_pdf(request: Request, user_id: str = Depends(utilisateur_courant)):
     """Rend le one-pager PDF d'une niche à la volée (stateless : la niche est fournie
@@ -835,8 +893,11 @@ async def api_pdf(request: Request, user_id: str = Depends(utilisateur_courant))
         scored = ScoredNiche.model_validate(data)
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
+    # Alias historique : un client tiers peut l'appeler, et la casser sans prevenir
+    # n'apporterait rien. Elle sert le MEME document que /api/dossier -- deux generateurs
+    # divergeraient, et ce depot sait ce que ca coute.
     with tempfile.TemporaryDirectory() as d:
-        p = build_positioning_pdf(scored, f"{d}/positioning.pdf")
+        p = build_dossier_pdf(scored, f"{d}/dossier.pdf")
         pdf_bytes = p.read_bytes()
     return Response(content=pdf_bytes, media_type="application/pdf",
                     headers={"Content-Disposition": _content_disposition(scored.niche)})

@@ -136,6 +136,11 @@ class TopBook(BaseModel):
     rating: float | None = None
     reviews_count: int | None = None
     bsr: int | None = None
+    # Sous-categories de classement du livre ([{"category", "rank"}]). Sans elles, le
+    # Dossier PDF ne peut rien calculer : `suggerer_categories` existerait sans jamais
+    # avoir de donnees -- une fonction developpee et inatteignable, exactement le piege
+    # que ce depot a deja paye une fois.
+    bsr_subcats: list[dict] = Field(default_factory=list)
     sponsored: bool = False
 
 

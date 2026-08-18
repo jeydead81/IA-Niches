@@ -265,6 +265,7 @@ def _median(valeurs):
 def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
                      bsrs: list[int], criteres: dict | None = None,
                      bsr_map: dict[str, int] | None = None,
+                     subcats_map: dict[str, list[dict]] | None = None,
                      aujourdhui=None) -> LowContentScored:
     """Les quatre axes, pondérés 0,35 / 0,35 / 0,20 / 0,10."""
     c = criteres or charger_criteres()
@@ -410,7 +411,9 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
         top_books=[
             TopBook(asin=o.asin, title=o.title, url=f"https://www.amazon.fr/dp/{o.asin}",
                     price=o.price, rating=o.rating, reviews_count=o.reviews_count,
-                    bsr=(bsr_map or {}).get(o.asin), sponsored=False)
+                    bsr=(bsr_map or {}).get(o.asin),
+                    bsr_subcats=(subcats_map or {}).get(o.asin) or [],
+                    sponsored=False)
             for o in organic[:MAX_TOP_BOOKS] if o.asin],
         risques=risques,
     )
