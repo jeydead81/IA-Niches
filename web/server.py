@@ -38,11 +38,12 @@ from lowcontent_master import run_lowcontent_scout  # noqa: E402
 from lowcontent_taxonomy import (load_taxonomy as load_taxonomy_lc,  # noqa: E402
                                  valid_formats as valid_formats_lc)
 from niche_verdict import generate_verdict  # noqa: E402
+from lowcontent_verdict import generate_lowcontent_verdict  # noqa: E402
 from kdp_keywords import generer_mots_cles  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
-from models import ScoredNiche  # noqa: E402
+from models import LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from jobs import JobStore  # noqa: E402
 from usage import UsageMeter  # noqa: E402
@@ -751,8 +752,17 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
     dans le body). Mesuré à 0,0283 $ pièce : les générer d'avance pour le top-3 pesait
     78 % du coût d'un run, pour des analyses que l'utilisateur ne lisait pas. On ne paie
     donc que la niche sur laquelle il clique."""
+    body = await _corps_json(request)
+    # Dispatch sur `type`, defaut "scout" pour compat : un client existant n'envoie pas ce
+    # champ et doit continuer a fonctionner. UN SEUL endpoint pour les deux verdicts --
+    # en creer un seccond ferait diverger les gardes de plafond, comme l'a montre 5257323.
+    type_ = (body.pop("type", None) or "scout").strip().lower()
+    if type_ not in ("scout", "lowcontent"):
+        raise HTTPException(status_code=400,
+                            detail=f"type de verdict inconnu : « {type_} »")
     try:
-        scored = ScoredNiche.model_validate(await request.json())
+        scored = (LowContentScored if type_ == "lowcontent" else ScoredNiche
+                  ).model_validate(body)
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
     # Appel LLM facturé. Il ne CONSOMME pas d'unité d'analyse (il complète une analyse
@@ -760,7 +770,9 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
     # plafond ne doit pas pouvoir continuer à faire tourner le LLM indéfiniment.
     _verifier_plafond(user_id)
     cost = CostTracker()
-    verdict = generate_verdict(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+    fabrique = (generate_lowcontent_verdict if type_ == "lowcontent"
+                else generate_verdict)
+    verdict = fabrique(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     UsageMeter(_USAGE_DB).enregistrer(user_id, "verdict", cost.total_usd(), n_analyses=0)
     return {**verdict.model_dump(), "_cout": cost.breakdown()}
 

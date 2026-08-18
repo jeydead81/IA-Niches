@@ -94,6 +94,16 @@ class AngleAttaque(BaseModel):
     prix_suggere: str = ""                 # fourchette lisible, ex. "14,90-19,90 €"
     requete_principale: str = ""
     requetes_secondaires: list[str] = Field(default_factory=list)
+    # ── Champs LOW-CONTENT (vides ailleurs) ──
+    # En low-content, l'INTÉRIEUR est le produit : un angle qui ne dit ni le nombre de
+    # pages ni la structure d'une page type ne se fabrique pas. En non-fiction la question
+    # ne se pose pas — le contenu, c'est le texte.
+    spec_interieur: str = ""               # format cm, nb pages, structure d'une page type
+    redevance_estimee: str = ""            # ce que l'auteur touche par vente, en clair
+    # OBLIGATOIRE sur un format `norme: true`, et VÉRIFIÉ côté code (lowcontent_verdict) :
+    # un registre incomplet expose l'acheteur, qui est un employeur. Le champ vide dégrade
+    # le verdict, il ne le laisse pas passer en silence.
+    source_reglementaire: str = ""
 
 
 class NicheVerdict(BaseModel):

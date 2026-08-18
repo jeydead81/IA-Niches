@@ -92,3 +92,52 @@ def test_la_graine_est_bornee_en_longueur(tmp_path, monkeypatch):
     client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
     r = client.post("/api/jobs", json={"type": "lowcontent", "seed": "x" * 400})
     assert r.status_code == 400
+
+
+def test_le_verdict_low_content_passe_par_le_meme_endpoint(tmp_path, monkeypatch):
+    """UN SEUL /api/verdict pour les deux. Un second endpoint ferait diverger les gardes
+    de plafond — c'est la leçon du commit `5257323`."""
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    from models import NicheVerdict
+
+    vus = []
+
+    def faux_verdict_lc(scored, **kw):
+        vus.append(scored)
+        return NicheVerdict(verdict="Go prudent", confiance=7,
+                            facteur_decisif="la conformité")
+
+    monkeypatch.setattr(server, "generate_lowcontent_verdict", faux_verdict_lc)
+    corps = {
+        "type": "lowcontent",
+        "niche": {"niche": "registre du personnel",
+                  "requete_amazon": "registre du personnel obligatoire",
+                  "rationale": "r", "categorie": "pro",
+                  "format_cle": "registres_reglementaires", "theme": "personnel",
+                  "public": "professionnel"},
+        "global_score": 7.1,
+    }
+    r = client.post("/api/verdict", json=corps)
+    assert r.status_code == 200 and r.json()["verdict"] == "Go prudent"
+    assert vus and vus[0].niche.format_cle == "registres_reglementaires"
+
+
+def test_sans_type_le_verdict_reste_celui_du_scout(tmp_path, monkeypatch):
+    """Rétro-compatibilité : un client existant n'envoie pas `type` et doit continuer à
+    obtenir le verdict non-fiction."""
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    from models import NicheVerdict
+
+    appele = []
+    monkeypatch.setattr(server, "generate_verdict",
+                        lambda s, **kw: appele.append(s) or NicheVerdict(
+                            verdict="Go", confiance=8, facteur_decisif="x"))
+    r = client.post("/api/verdict", json={"niche": "tarot", "requete_amazon": "tarot",
+                                          "categorie": "éso"})
+    assert r.status_code == 200 and appele
+
+
+def test_un_type_de_verdict_inconnu_rend_400(tmp_path, monkeypatch):
+    client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    r = client.post("/api/verdict", json={"type": "fiction", "niche": "x"})
+    assert r.status_code == 400
