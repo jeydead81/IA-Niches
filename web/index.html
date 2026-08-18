@@ -154,6 +154,33 @@
   .ctab a{color:var(--primary);text-decoration:none}
   .ctab a:hover{text-decoration:underline}
   .ctab .nm{color:var(--text-muted);font-style:italic}
+  /* Cartes low-content. `v-bad` marque ce qui se lit A L'ENVERS ou ce qui alerte :
+     variantes elevees, prix sous le seuil de redevance, redevance negative. C'est le
+     piege n1 du depot transpose ici -- une jauge coloree uniformement ferait
+     recommander exactement les pires rayons. */
+  .lc-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  .lc-carte{background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:15px 17px;display:flex;flex-direction:column;gap:11px}
+  .lc-tete{display:flex;align-items:flex-start;gap:10px}
+  .lc-tete h3{margin:0;font-size:15px;color:var(--heading);line-height:1.3;flex:1}
+  .lc-req{font-family:var(--mono);font-size:11.5px;color:var(--text-muted);
+    word-break:break-word}
+  .lc-badges{display:flex;flex-wrap:wrap;gap:5px}
+  .lc-badge{font-size:11px;font-weight:600;padding:2.5px 8px;border-radius:99px;
+    background:var(--muted);color:var(--text-muted)}
+  .lc-badge.norme{background:#EEF2FF;color:#4338CA}
+  .lc-badge.other{background:#FEF3C7;color:#92400E}
+  .lc-mesures{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px}
+  .lc-m{display:flex;flex-direction:column;gap:1px}
+  .lc-m .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;
+    color:var(--text-muted);font-weight:600}
+  .lc-m .v{font-family:var(--mono);font-size:14px;color:var(--heading)}
+  .lc-m .v.mut{font-family:var(--sans);font-size:12.5px;color:var(--text-muted);
+    font-style:italic}
+  .lc-m.v-bad .v{color:#B91C1C}
+  .lc-m .note{font-size:11px;color:var(--text-muted);line-height:1.35}
+  .lc-nm{background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:9px 11px;
+    font-size:12.5px;color:#92400E;line-height:1.45;margin:0}
 
   /* Mots-clés KDP — 7 emplacements copiables UN PAR UN : l'auteur les colle dans les
      7 champs distincts du formulaire KDP, un bloc unique l'obligerait à découper. */
@@ -469,6 +496,7 @@
   <div class="tabs" role="tablist">
     <button type="button" class="tab active" id="tab-nf" role="tab" aria-selected="true">Non-fiction</button>
     <button type="button" class="tab" id="tab-fic" role="tab" aria-selected="false">Fiction</button>
+    <button type="button" class="tab" id="tab-lc" role="tab" aria-selected="false">Low-content</button>
   </div>
 
   <div id="view-nf">
@@ -625,6 +653,68 @@
     </div>
   </div>
 
+  <div id="view-lc" hidden>
+    <div class="panel controls">
+      <form id="form-lc">
+        <div class="field grow">
+          <label for="lc-seed">Graine / thème</label>
+          <input type="text" id="lc-seed" maxlength="80" autocomplete="off"
+                 placeholder="ex. livre coloriage, registre, mots mêlés, glycémie…  (vide = à partir de rien)" />
+        </div>
+        <div class="field">
+          <label for="lc-format">Format</label>
+          <select id="lc-format"><option value="">Chargement…</option></select>
+        </div>
+        <div class="field">
+          <label>Profondeur d'analyse</label>
+          <div class="presets" id="presets-lc" role="radiogroup" aria-label="Profondeur d'analyse">
+            <label class="preset"><input type="radio" name="preset-lc" value="rapide" />
+              <span><b>Rapide</b><i>~3 min</i></span></label>
+            <label class="preset"><input type="radio" name="preset-lc" value="standard" checked />
+              <span><b>Standard</b><i>~5 min</i></span></label>
+            <label class="preset"><input type="radio" name="preset-lc" value="approfondi" />
+              <span><b>Approfondi</b><i>~9 min</i></span></label>
+          </div>
+        </div>
+        <button class="run" id="run-lc" type="submit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
+          <span id="run-lc-label">Lancer le scout low-content</span>
+        </button>
+        <details class="avance">
+          <summary>Réglages avancés</summary>
+          <div class="field">
+            <label for="lc-search">Niches à analyser</label>
+            <input type="number" id="lc-search" value="6" min="1" max="20" />
+          </div>
+          <label class="lc-saison"><input type="checkbox" id="lc-saison" />
+            Inclure les niches saisonnières (Noël, rentrée, agendas datés)</label>
+        </details>
+      </form>
+      <p class="hint">Ici les niches ne sont pas inventées : elles sont LUES dans ce
+        qu'Amazon complète réellement, puis classées. Une requête que les acheteurs
+        affinent encore vaut mieux qu'une requête générique. Un run prend 3 à 9 minutes ;
+        vous pouvez fermer cette page.</p>
+    </div>
+
+    <div class="panel progress" id="progress-lc">
+      <div class="bar"><span></span></div>
+      <ul class="steps" id="steps-lc" aria-live="polite" aria-relevant="additions"
+          aria-label="Progression du scout low-content"></ul>
+    </div>
+
+    <div class="errbox" id="errbox-lc" role="alert" aria-live="assertive"></div>
+
+    <section class="results panel" id="results-lc" style="border:none;background:none;box-shadow:none">
+      <div class="rsum"><h2>Niches low-content classées</h2><span id="rcount-lc"></span></div>
+      <div class="lc-grid" id="grid-lc"></div>
+    </section>
+
+    <div class="panel empty" id="empty-lc">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      <div>Saisis une graine (ou laisse vide) et lance le scout pour voir ce qu'Amazon complète.</div>
+    </div>
+  </div>
+
   <footer>IA-Niches · moteur local · données Amazon.fr</footer>
 </div>
 
@@ -660,6 +750,13 @@ const esc = t => String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 // 2026-07-21-ux-lisibilite.md, tableau U1). Ne pas reformuler : rédigés pour un auteur
 // non technique, chaque changement de mot doit repasser par ce même plan.
 const GLOSSAIRE = {
+  'Part indie': `Part des livres du top publiés via KDP (« Independently published »). <strong>Élevée = rayon accessible</strong> à un auteur seul. Faible : le rayon est tenu par des éditeurs installés, qui ont des moyens que vous n'avez pas. Quand aucun éditeur n'a pu être lu, la carte affiche « non mesuré » — ce n'est pas zéro.`,
+  'Variantes': `Nombre de livres du top qui sont <strong>le même livre</strong> sous une autre couverture. Ce chiffre se lit à l'envers : <strong>élevé = mauvais</strong>. Au-delà de 6, le rayon est usiné par une ferme de variantes, et en publier une de plus n'y change rien. La sortie, c'est un intérieur différent.`,
+  'Seuil 9,99 €': `Sous 9,99 € de prix catalogue, Amazon vous verse <strong>50 %</strong> ; à partir de 9,99 €, <strong>60 %</strong>. Et le coût d'impression se déduit ensuite. Un rayon très demandé à 6,99 € peut ne rien rapporter.`,
+  'Redevance estimée': `Ce que vous touchez par vente au prix médian du rayon, coût d'impression déduit. <strong>Négative = vous perdez de l'argent</strong> à chaque exemplaire.`,
+  'Éditeurs installés': `Hachette, Larousse, Exacompta, Quo Vadis, Clairefontaine… Invisibles dans un simple comptage de résultats, et pourtant décisifs : ils tiennent des rayons entiers de papeterie.`,
+  'Format normé': `Le contenu est imposé par une règle extérieure (Code du travail, HACCP, sécurité ERP). Facile à produire — mais la <strong>conformité</strong> est la différenciation : un registre incomplet prend des avis à une étoile. Le verdict doit citer sa source réglementaire.`,
+  'Hors taxonomie': `La requête ne rentre dans aucun format connu. Ce n'est pas un rejet : sa faisabilité n'est simplement pas évaluée, et le libellé observé servira à enrichir la liste des formats.`,
   'BSR': `Classement des ventes Amazon. Plus le nombre est <strong>petit</strong>, plus le livre se vend. Sous 10 000 : très bon. Au-delà de 100 000 : faible.`,
   'Rayon': `L'endroit d'Amazon où le livre est classé : la boutique Kindle ou les livres papier. Les classements des deux ne se comparent pas.`,
   'Trio': `La recette d'un roman : un sous-genre + un ou deux thèmes + un décor. Exemple : cosy mystery + enquêtrice amatrice + village breton.`,
@@ -1062,7 +1159,10 @@ const PRESETS = {
               "approfondi": {"n": 10, "duree": "~7 min"}},
   "fiction": {"rapide":     {"n": 3,  "duree": "~5 min"},
               "standard":   {"n": 5,  "duree": "~8 min"},
-              "approfondi": {"n": 8,  "duree": "~12 min"}}
+              "approfondi": {"n": 8,  "duree": "~12 min"}},
+  "lowcontent": {"rapide":     {"n": 3,  "duree": "~3 min"},
+                 "standard":   {"n": 6,  "duree": "~5 min"},
+                 "approfondi": {"n": 10, "duree": "~9 min"}}
 };
 
 // Le preset ECRIT dans le champ avance plutot que de le court-circuiter : un seul endroit
@@ -1081,6 +1181,214 @@ function brancherPresets(nomRadio, cleScout, champ){
 
 brancherPresets('preset-nf', 'scout', '#search');
 brancherPresets('preset-fic', 'fiction', '#fic-n');
+
+// addStep et addStepFic sont deux quasi-copies. On n'en ajoute PAS une troisieme : ce
+// helper generique prend la liste en parametre. Les deux existantes restent en place --
+// les refactorer ici melangerait deux changements dans un meme commit.
+function addStepTo(ul, msg){
+  ul.querySelectorAll('li.cur').forEach(li=>{
+    li.classList.remove('cur'); li.querySelector('.dot').innerHTML=ICON_CHECK;
+  });
+  const li=document.createElement('li'); li.className='cur';
+  li.innerHTML='<span class="dot">'+ICON_DOT+'</span><span>'+esc(msg)+'</span>';
+  ul.appendChild(li); ul.scrollTop=ul.scrollHeight;
+}
+
+// ═══════════════ Low-content ═══════════════
+// carteLowContent est PURE (aucun acces au DOM) : c'est ce qui la rend testable pour de
+// vrai, en l'appelant et en regardant ce qu'elle produit. Un test qui cherche une chaine
+// dans le fichier prouve qu'elle est ecrite, jamais qu'elle est affichee (5.26).
+//
+// TROIS lectures a l'envers ou a expliquer, chacune marquee `v-bad` :
+//  - VARIANTES : eleve = MAUVAIS (ferme de variantes). C'est le piege n1 du depot,
+//    transpose ici -- une jauge coloree uniformement ferait recommander les pires rayons.
+//  - PRIX sous 9,99 EUR : redevance 50 % au lieu de 60 %. Un auteur qui ignore le bareme
+//    verrait "7,99 EUR" comme un bon prix.
+//  - REDEVANCE negative : le seul cas ou la reponse est "ne publie pas ca".
+function mesure(cle, valeur, opts){
+  const o = opts || {};
+  const inconnu = valeur === null || valeur === undefined;
+  const v = inconnu
+    ? '<span class="v mut">non mesuré</span>'
+    : '<span class="v">' + valeur + '</span>';
+  const note = o.note ? '<span class="note">' + o.note + '</span>' : '';
+  const bad = (!inconnu && o.bad) ? ' v-bad' : '';
+  return '<div class="lc-m' + bad + '"><span class="k">' + esc(cle) + '</span>' + v + note + '</div>';
+}
+
+function carteLowContent(r){
+  const n = r.niche || {};
+  const nm = !r.concurrence_mesuree;
+
+  const badges = [];
+  if((r.risques||[]).indexOf('norme_a_verifier') >= 0)
+    badges.push('<span class="lc-badge norme" title="Contenu impose par une regle : le verdict doit citer sa source">normé</span>');
+  if(n.format_cle === 'other')
+    badges.push('<span class="lc-badge other">hors taxonomie : ' + esc(n.other_libelle || '?') + '</span>');
+  if((r.risques||[]).indexOf('saisonnier') >= 0)
+    badges.push('<span class="lc-badge">saisonnier</span>');
+  if(n.source === 'ideation')
+    badges.push('<span class="lc-badge" title="Proposee par l\'IA : la demande n\'est pas confirmee">demande non confirmée</span>');
+
+  // part indie : "non mesuree" et JAMAIS 0 %. Zero pour cent se lirait "rayon tenu par
+  // des editeurs installes", donc "n\'y va pas" -- une conclusion, la ou il n\'y a
+  // qu\'une absence de lecture (5.10).
+  const indie = mesure('Part indie',
+    r.part_indie == null ? null : fmtPct(r.part_indie),
+    {note: r.n_editeur_inconnu
+      ? r.n_editeur_inconnu + ' éditeur(s) illisible(s), exclus du calcul'
+      : 'part des livres du top publiés via KDP'});
+
+  const nv = r.n_variantes_quasi_identiques;
+  const variantes = mesure('Variantes', nv == null ? null : nv,
+    {bad: nv >= 6, note: 'élevé = mauvais : même intérieur, plusieurs couvertures'});
+
+  const prix = mesure('Prix médian',
+    r.prix_median == null ? null : fmtEur(r.prix_median),
+    {bad: r.prix_median != null && r.prix_sous_seuil_60pct,
+     note: r.prix_median == null
+       ? 'aucun prix lisible : taux de redevance inconnu'
+       : (r.prix_sous_seuil_60pct
+          ? 'sous 9,99 € : redevance 50 % au lieu de 60 %'
+          : 'au-dessus de 9,99 € : redevance 60 %')});
+
+  const red = mesure('Redevance estimée',
+    r.redevance_estimee == null ? null : fmtEur(r.redevance_estimee),
+    {bad: r.redevance_estimee != null && r.redevance_estimee < 2,
+     note: 'par vente, coût d\'impression déduit'});
+
+  const trad = mesure('Éditeurs installés',
+    r.part_editeurs_traditionnels == null ? null : fmtPct(r.part_editeurs_traditionnels),
+    {bad: r.part_editeurs_traditionnels != null && r.part_editeurs_traditionnels > 0.5,
+     note: 'Hachette, Larousse, Exacompta…'});
+
+  const bsr = mesure('BSR meilleur', r.bsr_best == null ? null : fmt(r.bsr_best),
+    {note: r.bsr_top_avg == null ? '' : 'moyenne ' + fmt(r.bsr_top_avg)});
+
+  const alerte = nm
+    ? '<p class="lc-nm"><strong>Concurrence non mesurée.</strong> La recherche Amazon n\'a '
+      + 'pas répondu : les compteurs valent zéro faute de mesure, pas parce que le rayon '
+      + 'est vide. Score non exploitable — à relancer.</p>'
+    : '';
+
+  return '<article class="lc-carte">'
+    + '<div class="lc-tete">'
+    + '<span class="pill ' + (nm ? 'n' : grade(r.global_score)) + '">'
+    + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
+    + '<h3>' + esc(n.niche || n.requete_amazon || '—') + '</h3></div>'
+    + '<div class="lc-req">« ' + esc(n.requete_amazon || '') + ' »</div>'
+    + (badges.length ? '<div class="lc-badges">' + badges.join('') + '</div>' : '')
+    + alerte
+    + '<div class="lc-mesures">' + indie + variantes + prix + red + trad + bsr + '</div>'
+    + '<div class="verdictslot" aria-live="polite">' + verdictSlot(r) + '</div>'
+    + '</article>';
+}
+
+const formLc=$('#form-lc'), runLcBtn=$('#run-lc'), runLcLabel=$('#run-lc-label'),
+      progressLc=$('#progress-lc'), stepsLc=$('#steps-lc'), resultsLc=$('#results-lc'),
+      gridLc=$('#grid-lc'), rcountLc=$('#rcount-lc'), emptyLc=$('#empty-lc'),
+      errboxLc=$('#errbox-lc'), lcFormat=$('#lc-format');
+let esLc=null;
+
+// Selecteur peuple depuis la taxonomie (source de verite unique), groupe par famille.
+// Jamais une liste en dur : elle se perimerait a la premiere taxo v2.
+fetch('/api/lowcontent/formats').then(r=>r.json()).then(list=>{
+  const familles = {};
+  list.forEach(f => { (familles[f.famille] = familles[f.famille] || []).push(f); });
+  lcFormat.innerHTML = '<option value="">Tous les formats</option>'
+    + Object.keys(familles).sort().map(fam =>
+        '<option disabled>── ' + esc(fam) + ' ──</option>'
+        + familles[fam].map(f =>
+            '<option value="' + esc(f.cle) + '">' + esc(f.label)
+            + (f.norme ? ' (normé)' : '') + '</option>').join('')
+      ).join('');
+}).catch(()=>{ lcFormat.innerHTML='<option value="">(formats indisponibles)</option>'; });
+
+function renderLc(rows){
+  gridLc.innerHTML = (rows||[]).map(carteLowContent).join('');
+  rcountLc.textContent = rows.length
+    ? rows.length + ' niche(s) analysée(s)' : 'aucune niche';
+  gridLc.querySelectorAll('.lc-carte').forEach((carte, i) => {
+    brancherActionsLc(rows[i], carte);
+  });
+  emptyLc.style.display='none'; resultsLc.classList.add('on');
+}
+
+// Meme discipline que brancherActions cote non-fiction : UN SEUL site de branchement,
+// re-appele apres injection du verdict. Deux sites divergeraient, et c'est exactement ce
+// qui a laisse des boutons morts dans cette interface.
+function brancherActionsLc(r, carte){
+  const vBtn = carte.querySelector('.btn-verdict');
+  if(vBtn) vBtn.addEventListener('click', ev => {
+    ev.stopPropagation(); loadVerdictLc(r, carte, vBtn);
+  });
+  const pdfBtn = carte.querySelector('.btn-pdf');
+  if(pdfBtn) pdfBtn.addEventListener('click', ev => { ev.stopPropagation(); downloadPdf(r); });
+}
+
+async function loadVerdictLc(r, carte, btn){
+  btn.disabled = true; btn.setAttribute('aria-busy','true');
+  btn.textContent = 'Analyse en cours…';
+  try{
+    // `type` est OBLIGATOIRE : sans lui, le serveur valide le corps comme une ScoredNiche
+    // non-fiction et rend une 400.
+    const rep = await fetch('/api/verdict', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type: 'lowcontent', ...r})});
+    if(!rep.ok){
+      const d = await rep.json().catch(()=>({}));
+      throw new Error(rep.status===429
+        ? 'Limite d\'analyses atteinte pour ce mois-ci. Rien n\'a ete lance.'
+        : (d.detail || 'Analyse indisponible.'));
+    }
+    r.verdict = await rep.json();
+    carte.querySelector('.verdictslot').innerHTML = verdictSlot(r);
+    brancherActionsLc(r, carte);
+  }catch(e){
+    btn.disabled = false; btn.removeAttribute('aria-busy');
+    btn.textContent = 'Analyser cette niche (~10 s)';
+    const p = carte.querySelector('.vask p');
+    if(p) p.textContent = String(e.message || e);
+  }
+}
+
+const VUE_LC = {
+  cle: 'ia-niches-job-lowcontent',
+  avant(){
+    if(esLc) esLc.close();
+    stepsLc.innerHTML=''; gridLc.innerHTML=''; resultsLc.classList.remove('on');
+    errboxLc.classList.remove('on'); errboxLc.textContent='';
+    emptyLc.style.display='none'; progressLc.classList.add('on');
+    runLcBtn.disabled=true; runLcLabel.textContent='Scout en cours…';
+    const ic=runLcBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
+  },
+  flux(e){ esLc=e; },
+  viderEtapes(){ stepsLc.innerHTML=''; },
+  etape(m){ addStepTo(stepsLc, m); },
+  resultat(d){ renderLc(d); },
+  erreur(m){ errboxLc.textContent='Erreur : '+m; errboxLc.classList.add('on'); },
+  apres(){
+    progressLc.classList.remove('on');
+    runLcBtn.disabled=false; runLcLabel.textContent='Lancer le scout low-content';
+    const sp=runLcBtn.querySelector('.spin');
+    if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
+    if(!gridLc.children.length && !errboxLc.classList.contains('on'))
+      emptyLc.style.display='block';
+  },
+};
+
+formLc.addEventListener('submit', e => {
+  e.preventDefault();
+  lancerTravail('lowcontent', {
+    seed: $('#lc-seed').value.trim(),
+    format_cle: lcFormat.value || '',
+    n_search: Number($('#lc-search').value),
+    inclure_saisonnier: $('#lc-saison').checked,
+  }, VUE_LC);
+});
+
+brancherPresets('preset-lc', 'lowcontent', '#lc-search');
+reprendreTravail(VUE_LC);
 
 // ================= Travaux asynchrones =================
 // L'interface passe par POST /api/jobs puis se raccroche au flux du travail, au lieu de
@@ -1165,15 +1473,20 @@ function reprendreTravail(vue){
 // ================= Fiction =================
 const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>';
 
-const tabNf=$('#tab-nf'), tabFic=$('#tab-fic'), viewNf=$('#view-nf'), viewFic=$('#view-fic');
+const tabNf=$('#tab-nf'), tabFic=$('#tab-fic'), tabLc=$('#tab-lc'),
+      viewNf=$('#view-nf'), viewFic=$('#view-fic'), viewLc=$('#view-lc');
+// Table (onglet, vue) plutot qu'une cascade de booleens : a deux onglets un `nf ? : `
+// passait, a trois il devient faux des qu'on en ajoute un quatrieme.
+const ONGLETS = [['nf', tabNf, viewNf], ['fic', tabFic, viewFic], ['lc', tabLc, viewLc]];
 function switchTab(which){
-  const nf = which==='nf';
-  tabNf.classList.toggle('active', nf); tabNf.setAttribute('aria-selected', nf);
-  tabFic.classList.toggle('active', !nf); tabFic.setAttribute('aria-selected', !nf);
-  viewNf.hidden = !nf; viewFic.hidden = nf;
+  ONGLETS.forEach(([cle, tab, vue]) => {
+    const actif = cle === which;
+    tab.classList.toggle('active', actif);
+    tab.setAttribute('aria-selected', actif);
+    vue.hidden = !actif;
+  });
 }
-tabNf.addEventListener('click', ()=>switchTab('nf'));
-tabFic.addEventListener('click', ()=>switchTab('fic'));
+ONGLETS.forEach(([cle, tab]) => tab.addEventListener('click', () => switchTab(cle)));
 
 const formFic=$('#form-fic'), runFicBtn=$('#run-fic'), runFicLabel=$('#run-fic-label'),
       progressFic=$('#progress-fic'), stepsFic=$('#steps-fic'), resultsFic=$('#results-fic'),

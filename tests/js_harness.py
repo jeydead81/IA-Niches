@@ -27,6 +27,30 @@ def _source_js() -> str:
     return "\n".join(re.findall(r"<script[^>]*>(.*?)</script>", html, re.S))
 
 
+def _declaration(nom: str, src: str) -> str | None:
+    """Une déclaration `const x = …;`, y compris quand elle court sur plusieurs lignes.
+
+    Première version : une regex mono-ligne. Elle tronquait `fmtDec`, dont la flèche tient
+    sur deux lignes — node recevait une expression coupée et levait une SyntaxError qui
+    n'avait rien à voir avec le code testé. On accumule donc les lignes jusqu'à ce que les
+    parenthèses, crochets et accolades soient équilibrés."""
+    m = re.search(r"^\s*(?:const|let|var)\s+" + re.escape(nom) + r"\s*=", src, re.M)
+    if not m:
+        return None
+    lignes = src[m.start():].splitlines()
+    acc, prof = [], 0
+    for ligne in lignes:
+        acc.append(ligne)
+        for c in ligne:
+            if c in "([{":
+                prof += 1
+            elif c in ")]}":
+                prof -= 1
+        if prof <= 0 and ligne.rstrip().endswith(";"):
+            return chr(10).join(acc).strip()
+    return None
+
+
 def extraire_fonction(nom: str, src: str | None = None) -> str:
     """Rend le texte complet de `function <nom>(…){…}` par comptage d'accolades.
 
@@ -37,12 +61,11 @@ def extraire_fonction(nom: str, src: str | None = None) -> str:
     # Les helpers du fichier sont ecrits en `const x = ... ;` sur UNE ligne (esc, fmt...),
     # les fonctions de rendu en `function x(){...}` multi-lignes. On accepte les deux
     # plutot que d'imposer un style au fichier de production pour le confort du test.
-    une_ligne = re.search(r"^\s*(?:const|let|var)\s+" + re.escape(nom) + r"\s*=.*$",
-                          src, re.M)
+    une_ligne = _declaration(nom, src)
     m = re.search(r"(?:async\s+)?function\s+" + re.escape(nom) + r"\s*\(", src)
     if not m:
         if une_ligne:
-            return une_ligne.group(0).strip()
+            return une_ligne
         raise AssertionError(f"fonction JS « {nom} » introuvable dans web/index.html")
     i = src.index("{", m.end() - 1)
     prof = 0
