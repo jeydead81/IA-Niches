@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from bsr_source import resolve_bsrs
 from cache import Cache
-from cost_tracker import CostTracker
+from cost_tracker import CostTracker, PlafondCoutAtteint, dataforseo_cost_usd
 from models import ScoredNiche
 from niche_ideator import generate_niches as _generate_niches
 from niche_validator import validate_niches as _validate_niches
@@ -76,11 +76,21 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
     # Phase A — concurrence Amazon par niche (search, caché par mot-clé)
     per_niche = []          # (validation, SearchResult|None, [asins top-n])
     all_asins: list[str] = []
+    n_non_traitees = 0
     for i, v in enumerate(shortlist, 1):
         q = v.requete_amazon or v.niche
         progress(f"[{i}/{len(shortlist)}] Concurrence Amazon « {q} »…")
         sr = cache.get_search(q, loc, lang) if cache else None
         if sr is None:
+            # Le plafond se vérifie AVANT l'appel, et seulement sur un défaut de cache :
+            # une niche servie par le cache ne coûte rien, l'arrêter serait arbitraire.
+            # Vérifier APRÈS coup signalerait un dépassement déjà payé.
+            try:
+                cost.verifier(dataforseo_cost_usd(1, getattr(provider, "priority", 2)))
+            except PlafondCoutAtteint as e:
+                n_non_traitees = len(shortlist) - i + 1
+                progress(f"  ⚠ {e}")
+                break
             try:
                 sr = provider.search(q, books_only=books_only)
                 cost.add_dataforseo(1, getattr(provider, "priority", 2))
@@ -94,10 +104,18 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
         all_asins.extend(asins)
 
     # Phase B — BSR global (batché, dédup + cache)
-    progress(f"Récupération des BSR ({len(set(all_asins))} livres uniques)…")
-    bsr_map = resolve_bsrs(all_asins, source=bsr_source, provider=provider,
-                           fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
-                           bsr_priority=bsr_priority, cost=cost, bsr_pause=bsr_pause)
+    bsr_map = {}
+    try:
+        cost.verifier()
+        progress(f"Récupération des BSR ({len(set(all_asins))} livres uniques)…")
+        bsr_map = resolve_bsrs(all_asins, source=bsr_source, provider=provider,
+                               fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
+                               bsr_priority=bsr_priority, cost=cost, bsr_pause=bsr_pause)
+    except PlafondCoutAtteint as e:
+        # Sans BSR, `bsr_stats` rend crit1/2/3 à False : aucun bonus « place à prendre »
+        # n'est accordé sur une absence de mesure. Le rayon ressort donc prudent, pas
+        # flatteur — c'est l'invariant §5.29, pas un effet de bord.
+        progress(f"  ⚠ {e} — BSR non récupérés, niches scorées sans classement.")
 
     # Phase C — scoring
     pairs = []          # (ScoredNiche, SearchResult|None)
@@ -127,7 +145,15 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
     # coût reste intégralement mesuré dans `cost` et imputé côté serveur — c'est
     # l'AFFICHAGE qui disparaît, pas la comptabilité. La CLI, elle, l'imprime toujours
     # plus bas : c'est l'outil de contrôle du développeur, pas l'écran du client.
-    progress(f"Scout terminé ({b['dataforseo_calls']} recherches Amazon).")
+    if n_non_traitees:
+        # Un rapport partiel MUET se lit comme un rapport complet : l'auteur croirait que
+        # les niches manquantes ont été écartées sur mesure, alors qu'elles n'ont jamais
+        # été regardées. On dit le nombre, pas seulement le fait.
+        progress(f"Scout terminé — RAPPORT PARTIEL sur {len(scored)} niche(s) : "
+                 f"{n_non_traitees} niche(s) non traitée(s), plafond de coût atteint "
+                 f"({b['dataforseo_calls']} recherches Amazon).")
+    else:
+        progress(f"Scout terminé ({b['dataforseo_calls']} recherches Amazon).")
     return scored
 
 

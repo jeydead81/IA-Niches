@@ -19,7 +19,7 @@ import argparse
 from dotenv import load_dotenv
 
 from cache import CLASSIFICATION_TTL_S
-from cost_tracker import CostTracker
+from cost_tracker import CostTracker, PlafondCoutAtteint, dataforseo_cost_usd
 from fiction_autocomplete import probe_niche as _probe_niche
 from fiction_classifier import DEFAULT_MODEL as _CLASSIFIER_MODEL
 from fiction_classifier import classify_books as _classify_books
@@ -89,7 +89,17 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     # DÉJÀ PAYÉS des niches précédentes ne sont pas perdus (CLAUDE.md §10.11).
     par_niche: list[tuple] = []          # [(niche, search_param, [asins])]
     n_niches_echouees = 0
+    n_non_traitees = 0
     for i, niche in enumerate(niches, 1):
+        # Plafond vérifié AVANT de payer, et prédictivement : le tarif d'une SERP est
+        # connu (COST_PER_CALL_USD), donc rien n'oblige à la payer pour découvrir
+        # qu'elle franchissait la ligne.
+        try:
+            cost.verifier(dataforseo_cost_usd(1, 2))
+        except PlafondCoutAtteint as e:
+            n_non_traitees = len(niches) - i + 1
+            progress(f"  ⚠ {e}")
+            break
         progress(f"[{i}/{len(niches)}] SERP « {niche.query} »…")
         try:
             sp, asins = serp_fn(niche, n_top=n_top, depth=depth, cost=cost, version=version)
@@ -177,7 +187,15 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
                  f"payés conservés.")
     b = cost.breakdown()
     # Même raison que scout_master : pas de montant sur le canal qui alimente l'écran.
-    progress(f"Scout fiction terminé ({b['dataforseo_calls']} recherches Amazon).")
+    if n_non_traitees:
+        # Dire le NOMBRE, pas seulement le fait : un rapport partiel muet se lit comme un
+        # rapport complet, et l'auteur croirait que les trios manquants ont été écartés
+        # sur mesure alors qu'ils n'ont jamais été regardés (§5.29, règle 3).
+        progress(f"Scout fiction terminé — RAPPORT PARTIEL sur {len(rapports)} trio(s) : "
+                 f"{n_non_traitees} trio(s) non traité(s), plafond de coût atteint "
+                 f"({b['dataforseo_calls']} recherches Amazon).")
+    else:
+        progress(f"Scout fiction terminé ({b['dataforseo_calls']} recherches Amazon).")
     return rapports
 
 
