@@ -2,6 +2,8 @@
 Le Plan 2 y ajoutera SearchResult, ScoredNiche."""
 import unicodedata
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -22,6 +24,35 @@ class NicheCandidate(BaseModel):
     rationale: str                          # pourquoi c'est une bonne niche livre (1 phrase)
     categorie: str                          # ex. "santé", "développement personnel", "histoire"
     risques: list[str] = Field(default_factory=list)  # flags (TOS, expert pointu, saisonnier suspecté…)
+
+
+class LowContentNiche(NicheCandidate):
+    """Une niche LOW-CONTENT : un trio format x theme x public sur une requete reelle.
+
+    Herite de `NicheCandidate` pour une raison precise, pas par commodite : la phase 2
+    gratuite du scout non-fiction (`niche_validator.validate_niches`) consomme des
+    `NicheCandidate` et n'a pas besoin d'etre touchee. Heriter plutot que dupliquer, c'est
+    reutiliser le gate gratuit tel quel -- celui qui garantit qu'aucune niche non validee
+    ne coute un appel payant.
+
+    `source` distingue deux choses qui ne se lisent PAS pareil :
+    - "autocomplete" : la requete vient de l'arbre, donc des gens la tapent vraiment ;
+    - "ideation" : le modele l'a proposee, c'est une hypothese qu'Amazon n'a pas confirmee.
+    Les confondre effacerait la distinction qui justifie tout le mecanisme low-content.
+
+    `other_libelle` joue le meme role que `TropeClassification.other` : une requete
+    inclassable n'est pas un dechet, c'est LE signal qui fera evoluer la taxonomie en v2.
+    La jeter perdrait l'information la plus utile du run."""
+    format_cle: str = "other"              # cle de la taxo LC, ou "other"
+    other_libelle: str = ""                # rempli seulement si format_cle == "other"
+    theme: str = ""
+    public: str = ""
+    source: Literal["autocomplete", "ideation"] = "autocomplete"
+    # Position dans l'arbre d'autocomplete. Zero est ici une valeur JUSTE pour une niche
+    # issue de l'ideation (elle n'a pas ete trouvee dans une traine), pas une mesure
+    # manquante deguisee : c'est `source` qui dit laquelle des deux on regarde.
+    profondeur_autocomplete: int = 0
+    n_enfants_autocomplete: int = 0
 
 
 class NicheList(BaseModel):
@@ -145,6 +176,67 @@ class ScoredNiche(BaseModel):
     # donnee, la reclasser par BSR ou par prix effacerait ce qu'Amazon montre a l'acheteur.
     top_books: list[TopBook] = Field(default_factory=list)
     verdict: NicheVerdict | None = None    # rempli pour le top-N (gate coût)
+
+
+class LowContentScored(BaseModel):
+    """Une niche low-content entierement evaluee, sur QUATRE axes.
+
+    Deux axes de plus qu'en non-fiction, parce que deux questions n'y existent pas :
+    - RENTABILITE : sous 9,99 EUR de prix catalogue, KDP verse 50 % au lieu de 60 %, et le
+      cout d'impression se deduit ensuite. Un rayon a 6,99 EUR peut etre demande et ne
+      rien rapporter.
+    - FAISABILITE : un carnet quadrille et un cahier d'activites illustre ne se produisent
+      pas dans le meme monde. Le non-fiction n'a pas ce probleme (tout est du texte).
+
+    Trois champs peuvent valoir None, et c'est LE point du modele. `0.0` sur `part_indie`
+    voudrait dire "aucun livre indie dans ce rayon" -- une mesure, et une mauvaise
+    nouvelle. `None` dit "aucun editeur n'a pu etre lu" -- une absence. Le scoring
+    n'applique aucun bonus ni malus sur None (5.10), et l'ecran doit le dire au lieu
+    d'afficher un zero."""
+    niche: LowContentNiche
+
+    # scores (0-10)
+    global_score: float = 0.0
+    demande: float = 0.0
+    penetration: float = 0.0
+    rentabilite: float = 0.0
+    faisabilite: float = 0.0
+    priorite: str = ""
+
+    # demande
+    demand_autocomplete: int = 0
+    n_organic: int = 0
+    n_sponsored: int = 0
+    n_concurrents_cibles: int = 0
+
+    # penetration -- l'asymetrie du rayon low-content
+    n_variantes_quasi_identiques: int = 0
+    part_indie: float | None = None                    # None = aucun editeur lu
+    part_editeurs_traditionnels: float | None = None
+    n_editeur_inconnu: int = 0                         # sur combien la part NE porte pas
+    part_moins_12_mois: float | None = None
+
+    # rentabilite
+    prix_median: float | None = None
+    prix_sous_seuil_60pct: bool = False                # drapeau de bareme, pas un jugement
+    redevance_estimee: float | None = None
+    pages_median: int | None = None
+
+    # BSR (memes criteres 4.1 qu'en non-fiction)
+    bsr_best: int | None = None
+    bsr_top_avg: int | None = None
+    bsr_worst: int | None = None
+    criteres_bsr_ok: bool = False
+    total_reviews: int | None = None
+
+    # Comme en non-fiction : False = la SERP n'a pas repondu, pas "rayon vide".
+    concurrence_mesuree: bool = False
+
+    top_books: list[TopBook] = Field(default_factory=list)
+    # Contrairement au non-fiction ou `risques` est un champ MORT (4.2), il voyage ici
+    # jusqu'au score : ip_marque et tos valent -2 sur le global, saisonnier -1.
+    risques: list[str] = Field(default_factory=list)
+    verdict: NicheVerdict | None = None
 
 
 class NicheValidation(BaseModel):
