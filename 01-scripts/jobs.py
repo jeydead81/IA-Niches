@@ -34,6 +34,9 @@ class Job(BaseModel):
     erreur: str | None = None
     cree_le: float
     fini_le: float | None = None
+    # None = ligne anterieure a la colonne (migration) : l'appelant retombe alors
+    # sur `cree_le` plutot que de la traiter comme active a l'instant.
+    maj_le: float | None = None
 
 
 class JobStore:
@@ -55,9 +58,19 @@ class JobStore:
                 " cout TEXT,"
                 " erreur TEXT,"
                 " cree_le REAL NOT NULL,"
-                " fini_le REAL"
+                " fini_le REAL,"
+                # Derniere activite CONNUE. C'est elle, et non l'age, qui fait l'orphelin :
+                # un run fiction dure 10 a 15 minutes, le declarer mort sur son seul age
+                # tuerait des runs vivants et perdrait un travail deja paye.
+                " maj_le REAL"
                 ")"
             )
+            # Migration d'une base ANTERIEURE a cette colonne. Baptiste a deja un jobs.db :
+            # sans ce rattrapage, le serveur planterait au demarrage sur SA base et jamais
+            # sur une base neuve -- donc jamais en test.
+            colonnes = {r[1] for r in cx.execute("PRAGMA table_info(jobs)")}
+            if "maj_le" not in colonnes:
+                cx.execute("ALTER TABLE jobs ADD COLUMN maj_le REAL")
 
     def _conn(self):
         cx = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
@@ -78,7 +91,8 @@ class JobStore:
 
     def start(self, job_id: str) -> None:
         with self._conn() as cx:
-            cx.execute("UPDATE jobs SET statut='en_cours' WHERE id=?", (job_id,))
+            cx.execute("UPDATE jobs SET statut='en_cours', maj_le=? WHERE id=?",
+                       (self.now(), job_id))
 
     def append_progress(self, job_id: str, msg: str) -> None:
         """Ajoute un message et borne la liste aux `max_progress` derniers — un run de
@@ -90,8 +104,8 @@ class JobStore:
             prog = json.loads(row[0])
             prog.append(msg)
             prog = prog[-self.max_progress:]
-            cx.execute("UPDATE jobs SET progression=? WHERE id=?",
-                       (json.dumps(prog, ensure_ascii=False), job_id))
+            cx.execute("UPDATE jobs SET progression=?, maj_le=? WHERE id=?",
+                       (json.dumps(prog, ensure_ascii=False), self.now(), job_id))
 
     def finish(self, job_id: str, resultat, cout: dict) -> None:
         with self._conn() as cx:
@@ -110,31 +124,83 @@ class JobStore:
                  self.now(), job_id),
             )
 
+    def claim_next(self) -> "Job | None":
+        """Reserve ATOMIQUEMENT le plus ancien travail en attente, ou rend None.
+
+        Deux workers qui prendraient le meme job le paieraient DEUX fois : deux fois les
+        SERP, deux fois les tokens. C'est le seul endroit du depot ou une course coute de
+        l'argent reel -- d'ou BEGIN IMMEDIATE, qui prend le verrou d'ecriture AVANT le
+        SELECT. Sans lui, deux processus lisent la meme ligne libre puis l'ecrivent tous
+        les deux, et SQLite ne s'y oppose pas."""
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                row = cx.execute(
+                    "SELECT id FROM jobs WHERE statut='en_attente' "
+                    "ORDER BY cree_le ASC LIMIT 1").fetchone()
+                if row is None:
+                    cx.execute("COMMIT")
+                    return None
+                jid = row[0]
+                # `maj_le` est pose DES la reservation : un job a peine reclame n'a pas
+                # encore logue sa premiere etape, et serait vu orphelin par le worker
+                # suivant.
+                cx.execute("UPDATE jobs SET statut='en_cours', maj_le=? WHERE id=?",
+                           (self.now(), jid))
+                cx.execute("COMMIT")
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
+        return self.get(jid)
+
+    def derniere_activite(self, job_id: str) -> float | None:
+        j = self.get(job_id)
+        if j is None:
+            return None
+        # Repli sur `cree_le` pour les lignes anterieures a la colonne : les traiter comme
+        # "actives a l'instant" les rendrait immortelles.
+        return j.maj_le if j.maj_le is not None else j.cree_le
+
+    def orphelins(self, depuis_s: float = 1800) -> list["Job"]:
+        """Travaux `en_cours` sans le moindre signe de vie depuis `depuis_s`.
+
+        C'est l'ABSENCE DE PROGRESSION qui fait l'orphelin, pas l'age. Un run fiction dure
+        10 a 15 minutes : trier sur l'anciennete tuerait des runs vivants."""
+        limite = self.now() - depuis_s
+        with self._conn() as cx:
+            rows = cx.execute(
+                "SELECT id, user_id, type, params, statut, progression, resultat, cout, "
+                "erreur, cree_le, fini_le, maj_le FROM jobs "
+                "WHERE statut='en_cours' AND COALESCE(maj_le, cree_le) < ? "
+                "ORDER BY cree_le ASC", (limite,)).fetchall()
+        return [self._row_to_job(r) for r in rows]
+
     # ── lecture ──
     @staticmethod
     def _row_to_job(row: tuple) -> Job:
         (jid, user_id, type_, params, statut, progression, resultat, cout, erreur,
-         cree_le, fini_le) = row
+         cree_le, fini_le, maj_le) = row
         return Job(
             id=jid, user_id=user_id, type=type_, params=json.loads(params),
             statut=statut, progression=json.loads(progression),
             resultat=json.loads(resultat) if resultat is not None else None,
             cout=json.loads(cout) if cout is not None else None,
-            erreur=erreur, cree_le=cree_le, fini_le=fini_le,
+            erreur=erreur, cree_le=cree_le, fini_le=fini_le, maj_le=maj_le,
         )
 
     def get(self, job_id: str) -> Job | None:
         with self._conn() as cx:
             row = cx.execute(
                 "SELECT id, user_id, type, params, statut, progression, resultat, cout, "
-                "erreur, cree_le, fini_le FROM jobs WHERE id=?", (job_id,)
+                "erreur, cree_le, fini_le, maj_le FROM jobs WHERE id=?", (job_id,)
             ).fetchone()
         return self._row_to_job(row) if row else None
 
     def list_jobs(self, user_id: str = "local", limit: int | None = None) -> list[Job]:
         """Les plus récents d'abord (recence = cree_le décroissant)."""
         sql = ("SELECT id, user_id, type, params, statut, progression, resultat, cout, "
-               "erreur, cree_le, fini_le FROM jobs WHERE user_id=? ORDER BY cree_le DESC")
+               "erreur, cree_le, fini_le, maj_le FROM jobs WHERE user_id=? ORDER BY cree_le DESC")
         params: tuple = (user_id,)
         if limit is not None:
             sql += " LIMIT ?"

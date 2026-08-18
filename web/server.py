@@ -64,6 +64,17 @@ _USAGE_DB = _ROOT / "99-logs" / "usage.db"
 _HISTORY_DB = _ROOT / "99-logs" / "history.db"
 _USERS_DB = _ROOT / "99-logs" / "comptes.db"
 
+def _mode_jobs() -> str:
+    """"thread" (defaut) = le serveur execute lui-meme ; "worker" = il se contente
+    d'empiler, un processus worker prendra le relais.
+
+    Le DEFAUT reste "thread" : sur le poste de Baptiste il n'y a pas de second processus,
+    et exiger d'en lancer un casserait l'usage local du jour au lendemain. Lu a CHAQUE
+    appel et non a l'import : une constante figee a l'import rendrait la variable
+    intestable et surtout non modifiable sans redemarrage."""
+    return "worker" if (os.getenv("JOBS_MODE") or "").strip().lower() == "worker" else "thread"
+
+
 COOKIE_SESSION = "ia_niches_session"
 
 # Bornes des paramètres de volume. Le plafond mensuel compte des ANALYSES, pas des
@@ -453,11 +464,11 @@ def _consigner_lowcontent(results, user_id: str) -> None:
     for r in results:
         if not r.concurrence_mesuree:
             continue
-        h.enregistrer(r.niche.niche, {
+        h.enregistrer(user_id, "lowcontent", r.niche.niche, {
             "global_score": r.global_score, "demande": r.demande,
             "penetration": r.penetration, "rentabilite": r.rentabilite,
             "bsr_best": r.bsr_best, "n_concurrents_cibles": r.n_concurrents_cibles,
-        }, user_id=user_id)
+        })
 
 
 def _consigner_fiction(rapports, user_id: str) -> None:
@@ -669,6 +680,12 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
             b = cost.breakdown()
             _imputer(user_id, type_, b["usd"], n_analyses=1)
             job_store.fail(job_id, _erreur_publique(e), cout=b)
+
+    if _mode_jobs() == "worker":
+        # Empile SEULEMENT. Sans ce garde, serveur ET worker executeraient le meme job :
+        # deux fois les SERP, deux fois les tokens. `claim_next` protege de la course entre
+        # deux workers, mais c'est ici qu'on decide QUI travaille.
+        return {"id": job_id}
 
     threading.Thread(target=worker, daemon=True).start()
     return {"id": job_id}

@@ -141,3 +141,35 @@ def test_un_type_de_verdict_inconnu_rend_400(tmp_path, monkeypatch):
     client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
     r = client.post("/api/verdict", json={"type": "fiction", "niche": "x"})
     assert r.status_code == 400
+
+
+def test_l_historique_low_content_est_reellement_ecrit(tmp_path, monkeypatch):
+    """Test ajouté après un bug RÉEL : `_consigner_lowcontent` appelait
+    `enregistrer(niche, metriques, user_id=…)` alors que la signature est
+    `enregistrer(user_id, type_, niche, metriques)` — un TypeError à chaque run.
+
+    Il est passé inaperçu parce que la niche factice du test précédent avait
+    `concurrence_mesuree=False` (le défaut pessimiste du modèle), donc la boucle sautait
+    l'appel. Le chemin d'écriture n'était jamais exercé. Ici la niche est MESURÉE."""
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    from history import NicheHistory
+    from models import LowContentNiche, LowContentScored
+
+    def faux_run(seed=None, format_cle=None, progress=None, cost=None, **kw):
+        n = LowContentNiche(niche="carnet suivi glycémie",
+                            requete_amazon="carnet suivi glycemie", rationale="r",
+                            categorie="santé", format_cle="journal_suivi",
+                            theme="glycémie", public="adulte")
+        return [LowContentScored(niche=n, global_score=7.4, demande=7.0,
+                                 penetration=7.0, rentabilite=7.0, bsr_best=8214,
+                                 n_concurrents_cibles=6, concurrence_mesuree=True)]
+
+    monkeypatch.setattr(server, "run_lowcontent_scout", faux_run)
+    r = client.post("/api/jobs", json={"type": "lowcontent", "seed": "carnet"})
+    job = _attendre_job(client, r.json()["id"])
+    assert job["statut"] == "termine", job.get("erreur")
+
+    user_id = client.get("/api/auth/moi").json()["user_id"]
+    passages = NicheHistory(server._HISTORY_DB).historique(user_id, "carnet suivi glycémie")
+    assert len(passages) == 1
+    assert passages[0]["metriques"]["global_score"] == 7.4
