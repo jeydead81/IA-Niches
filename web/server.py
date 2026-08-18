@@ -190,6 +190,32 @@ def _contraintes_fiction(sous_genre: str, tropes, decor, libre) -> ContraintesTr
 _LOG = logging.getLogger("ia-niches")
 
 
+def _verifier_config_prod() -> None:
+    """Refuse de demarrer en production avec une source de BSR intenable en datacenter.
+
+    BSR_SOURCE=scrape (le DEFAUT) lit les fiches Amazon depuis une IP residentielle :
+    gratuit sur le poste de Baptiste, bloque depuis un hebergeur. Et l'echec y est MUET --
+    resolve_bsrs attrape l'exception par ASIN et rend None, parce qu'un echec ne doit
+    jamais couler un run (5.29). Consequence en prod : le service ne plante pas, il rend
+    des rapports d'apparence normale dont TOUS les BSR manquent, donc des rayons qui se
+    lisent comme depourvus de classement. C'est la regle 3 industrialisee.
+
+    Refuser de demarrer est la seule issue lisible : une alerte au premier run arriverait
+    apres avoir facture une analyse fausse."""
+    if (os.getenv("APP_ENV") or "").strip().lower() != "prod":
+        return
+    src = (os.getenv("BSR_SOURCE") or "scrape").strip().lower()
+    if src != "dataforseo":
+        raise RuntimeError(
+            f"APP_ENV=prod exige BSR_SOURCE=dataforseo (recu : « {src} »). Le "
+            f"scraping des fiches Amazon suppose une IP residentielle : depuis un "
+            f"datacenter il echoue en silence et rend des rapports sans aucun BSR, qui "
+            f"se lisent comme des rayons sans classement.")
+
+
+_verifier_config_prod()
+
+
 def _erreur_publique(e: BaseException) -> str:
     """Le texte d'une exception ne sort JAMAIS vers le client.
 
