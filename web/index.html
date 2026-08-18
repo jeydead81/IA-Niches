@@ -128,6 +128,19 @@
   .btn-act:hover{background:var(--primary-600)}
   .btn-kdp{background:#fff;color:var(--primary);border:1px solid var(--primary)}
   .btn-kdp:hover{background:#EFF6FF}
+  .presets{display:flex;gap:6px;flex-wrap:wrap}
+  .preset{position:relative}
+  .preset input{position:absolute;opacity:0;width:0;height:0}
+  .preset span{display:block;border:1px solid var(--border);border-radius:8px;
+    padding:6px 12px;cursor:pointer;background:#fff;font-size:12.5px;line-height:1.25}
+  .preset span b{display:block;font-weight:600;color:var(--heading)}
+  .preset span i{font-style:normal;font-size:11.5px;color:var(--text-muted)}
+  .preset input:checked + span{border-color:var(--primary);background:#EFF6FF}
+  .preset input:focus-visible + span{outline:2px solid var(--primary);outline-offset:2px}
+  .avance{margin-top:2px}
+  .avance summary{font-size:12px;color:var(--text-muted);cursor:pointer}
+  .avance summary:hover{color:var(--primary)}
+  .avance .field{margin-top:8px}
   .btn-act:disabled{background:var(--text-muted);cursor:progress}
   .vask{background:#fff;border:1px dashed var(--border);border-radius:10px;
     padding:12px 14px;margin-bottom:14px}
@@ -463,15 +476,31 @@
              dollar et donne au tri gratuit (autocomplete) un meilleur vivier. Le poste qui
              coûte vraiment, c'est le nombre de niches ANALYSÉES. -->
         <div class="field">
-          <label for="search">Niches à analyser<span class="champ-aide" title="Une dizaine d'idées sont toujours proposées par l'IA. Ce réglage fixe combien d'entre elles seront réellement confrontées à Amazon : c'est lui qui pèse sur la durée du run et sur votre consommation du mois.">?</span></label>
-          <input type="number" id="search" value="4" min="1" max="20" />
+          <label>Profondeur d'analyse</label>
+          <div class="presets" id="presets-nf" role="radiogroup" aria-label="Profondeur d'analyse">
+            <label class="preset"><input type="radio" name="preset-nf" value="rapide" />
+              <span><b>Rapide</b><i>~2 min</i></span></label>
+            <label class="preset"><input type="radio" name="preset-nf" value="standard" checked />
+              <span><b>Standard</b><i>~4 min</i></span></label>
+            <label class="preset"><input type="radio" name="preset-nf" value="approfondi" />
+              <span><b>Approfondi</b><i>~7 min</i></span></label>
+          </div>
         </div>
+        <!-- Le chiffre exact reste accessible : les presets simplifient le cas courant,
+             ils ne retirent pas la main a qui teste des volumes precis. -->
+        <details class="avance">
+          <summary>Réglages avancés</summary>
+          <div class="field">
+            <label for="search">Niches à analyser<span class="champ-aide" title="Une dizaine d'idées sont toujours proposées par l'IA. Ce réglage fixe combien d'entre elles seront réellement confrontées à Amazon : c'est lui qui pèse sur la durée du run.">?</span></label>
+            <input type="number" id="search" value="6" min="1" max="20" />
+          </div>
+        </details>
         <button class="run" id="run" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
           <span id="run-label">Lancer le scout</span>
         </button>
       </form>
-      <p class="hint">« À analyser » = nombre de niches réellement confrontées à la concurrence Amazon. Le tri par la barre de recherche, lui, est gratuit et illimité. Un run prend 2 à 3 min.</p>
+      <p class="hint">La profondeur fixe combien de niches sont réellement confrontées à la concurrence Amazon. Le tri en amont, lui, est gratuit et illimité — élargir le vivier ne change pas la note de demande, seulement quelles niches sont testées.</p>
     </div>
 
     <div class="panel progress" id="progress">
@@ -518,9 +547,23 @@
           </select>
         </div>
         <div class="field">
-          <span class="lbl-gloss"><label for="fic-n">Trios</label><button type="button" class="gloss" data-term="Trio" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Trio ? (aide)">?</button></span>
-          <input type="number" id="fic-n" value="8" min="3" max="15" />
+          <span class="lbl-gloss"><label>Profondeur d'analyse</label><button type="button" class="gloss" data-term="Trio" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Trio ? (aide)">?</button></span>
+          <div class="presets" id="presets-fic" role="radiogroup" aria-label="Profondeur d'analyse">
+            <label class="preset"><input type="radio" name="preset-fic" value="rapide" />
+              <span><b>Rapide</b><i>~5 min</i></span></label>
+            <label class="preset"><input type="radio" name="preset-fic" value="standard" checked />
+              <span><b>Standard</b><i>~8 min</i></span></label>
+            <label class="preset"><input type="radio" name="preset-fic" value="approfondi" />
+              <span><b>Approfondi</b><i>~12 min</i></span></label>
+          </div>
         </div>
+        <details class="avance">
+          <summary>Réglages avancés</summary>
+          <div class="field">
+            <label for="fic-n">Trios</label>
+            <input type="number" id="fic-n" value="5" min="3" max="15" />
+          </div>
+        </details>
         <button class="run" id="run-fic" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
           <span id="run-fic-label">Lancer le scout fiction</span>
@@ -985,6 +1028,45 @@ form.addEventListener('submit',e=>{
   lancerTravail('scout', {seed:$('#seed').value.trim(), n_search:Number($('#search').value)}, VUE_NF);
 });
 
+
+
+// Presets. Un champ « Niches a analyser » a 4 demandait a l'utilisateur un arbitrage qu'il
+// n'a pas les moyens de faire : il ne sait pas ce que « 4 » coute en temps, et le montant
+// ne lui est plus montre (4165efb). Trois noms remplacent le chiffre par la seule chose
+// qu'il peut reellement arbitrer -- combien de temps il accepte d'attendre.
+//
+// Les durees sont des ORDRES DE GRANDEUR mesures en live (latence DataForSEO 85-251 s par
+// SERP en non-fiction ; file ASIN ~250 s payee UNE fois par run en fiction), pas des
+// garanties : une file lente les double sans que rien ne soit casse.
+//
+// Ces valeurs sont bornees cote serveur par MAX_RECHERCHES / MAX_NICHES_FICTION. Un preset
+// au-dessus rendrait une 400 au clic, sur un choix propose par l'interface elle-meme :
+// tests/test_ux_presets.py tient les deux fichiers ensemble.
+const PRESETS = {
+  "scout":   {"rapide":     {"n": 3,  "duree": "~2 min"},
+              "standard":   {"n": 6,  "duree": "~4 min"},
+              "approfondi": {"n": 10, "duree": "~7 min"}},
+  "fiction": {"rapide":     {"n": 3,  "duree": "~5 min"},
+              "standard":   {"n": 5,  "duree": "~8 min"},
+              "approfondi": {"n": 8,  "duree": "~12 min"}}
+};
+
+// Le preset ECRIT dans le champ avance plutot que de le court-circuiter : un seul endroit
+// lit la valeur au moment du lancement, donc les deux commandes ne peuvent pas diverger.
+// L'utilisateur qui deplie les reglages voit exactement ce que son preset a choisi.
+function brancherPresets(nomRadio, cleScout, champ){
+  const input = document.querySelector(champ);
+  document.querySelectorAll('input[name="' + nomRadio + '"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      if(radio.checked && input) input.value = PRESETS[cleScout][radio.value].n;
+    });
+  });
+  const coche = document.querySelector('input[name="' + nomRadio + '"]:checked');
+  if(coche && input) input.value = PRESETS[cleScout][coche.value].n;
+}
+
+brancherPresets('preset-nf', 'scout', '#search');
+brancherPresets('preset-fic', 'fiction', '#fic-n');
 
 // ================= Travaux asynchrones =================
 // L'interface passe par POST /api/jobs puis se raccroche au flux du travail, au lieu de
