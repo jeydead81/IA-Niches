@@ -1,0 +1,33 @@
+{
+  "_source": "RELEVE, jamais calcule ni estime. Coûts d'impression : page d'aide KDP « Coût d'impression des livres brochés » (topic G201834340). Taux de redevance : page « Redevances des livres brochés » (topic G201834330). Les deux relevées le 2026-08-18 pour le marketplace amazon.fr en EUR, format de coupe STANDARD.",
+  "source_url_couts": "https://kdp.amazon.com/fr_FR/help/topic/G201834340",
+  "source_url_redevance": "https://kdp.amazon.com/fr_FR/help/topic/G201834330",
+  "date_releve": "2026-08-18",
+  "_avertissement": "Ces barèmes sont ceux d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé. Une date de relevé vieille de plus d'un an doit être re-vérifiée avant de présenter une redevance à un utilisateur. Le format LARGE (grand format) a ses propres coûts, non relevés ici : redevance_estimee ne couvre que le format standard.",
+  "marketplace": "fr",
+  "devise": "EUR",
+  "cout_fixe": 0.75,
+  "encres": {
+    "bw": {
+      "label": "Encre noire, papier blanc ou crème",
+      "pages_min": 24,
+      "pages_max": 828,
+      "seuil_cout_fixe_seul": 110,
+      "cout_par_page": 0.012
+    },
+    "couleur_standard": {
+      "label": "Couleur standard",
+      "pages_min": 72,
+      "pages_max": 600,
+      "seuil_cout_fixe_seul": 0,
+      "cout_par_page": 0.024
+    }
+  },
+  "redevance": {
+    "_note": "Barème PAR PALIER de prix catalogue, propre aux marketplaces EUR. Ce n'est PAS la règle 35/70 % du Kindle : elle ne s'applique qu'aux ebooks et ne doit jamais être confondue avec celle-ci.",
+    "seuil_taux_haut": 9.99,
+    "taux_bas": 0.50,
+    "taux_haut": 0.60,
+    "formule": "(taux x prix catalogue) - cout d'impression = redevance"
+  }
+}

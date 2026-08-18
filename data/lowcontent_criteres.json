@@ -1,0 +1,23 @@
+{
+  "_statut": "HYPOTHESES DOCUMENTEES, pas des mesures. Aucun de ces seuils n'a encore été calibré sur un jeu de validation — c'est l'objet du chunk G1 (Spearman >= 0,5, aucun « mort » en vert). Jusque-là, ils sont là pour être discutés et corrigés, pas pour être cités comme des critères établis.",
+  "_regle": "Le chunk G recalibre CE FICHIER, jamais le code. Un seuil qui migre dans lowcontent_scoring.py redevient invisible et non discutable.",
+  "date": "2026-08-18",
+
+  "bsr_crit1_max": 10000,
+  "bsr_crit2_moyenne_max": 50000,
+  "bsr_crit3_place_a_prendre_min": 50000,
+  "_bsr": "Repris TELS QUELS de scoring.py §4.1, sans adaptation. Rien ne dit qu'un rayon low-content se lit avec les mêmes bornes qu'un rayon de non-fiction — c'est justement ce que G1 doit trancher. Les reprendre à l'identique donne un point de départ comparable plutôt qu'un seuil inventé.",
+
+  "variantes_max": 6,
+  "_variantes": "Au-delà, le rayon est usiné par des fermes de variantes (même intérieur, dix couvertures). Un auteur seul n'y gagne pas en publiant la onzième.",
+
+  "cibles_max": 40,
+  "part_indie_bonne": 0.5,
+  "part_trad_alerte": 0.5,
+  "part_recents_afflux": 0.6,
+
+  "seuil_prix_60pct": 9.99,
+  "redevance_min_bonne": 2.0,
+  "prix_median_faible": 6.0,
+  "_prix": "seuil_prix_60pct est un FAIT de barème relevé chez Amazon (voir kdp_print_costs.json), pas un seuil calibrable : ne pas le bouger en calibration."
+}
