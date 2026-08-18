@@ -1,0 +1,875 @@
+{
+  "version": "fr_v1",
+  "marketplace": "fr",
+  "formats": {
+    "journal_suivi": {
+      "label": "Journal / carnet de suivi",
+      "famille": "carnets",
+      "patterns": [
+        "carnet de suivi {theme}",
+        "journal de {theme}",
+        "suivi {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        6.99,
+        12.99
+      ]
+    },
+    "planner_non_date": {
+      "label": "Planner non daté",
+      "famille": "carnets",
+      "patterns": [
+        "planner {theme}",
+        "agenda non daté {theme}",
+        "organiseur {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        160
+      ],
+      "prix_typique": [
+        7.99,
+        13.99
+      ]
+    },
+    "carnet_notes_thematique": {
+      "label": "Carnet de notes thématique",
+      "famille": "carnets",
+      "patterns": [
+        "carnet {theme}",
+        "cahier de notes {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "carnet_recettes": {
+      "label": "Carnet de recettes à remplir",
+      "famille": "carnets",
+      "patterns": [
+        "carnet de recettes {theme}",
+        "cahier de recettes {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        7.99,
+        13.99
+      ]
+    },
+    "log_book": {
+      "label": "Log book (hobby / pro)",
+      "famille": "carnets",
+      "patterns": [
+        "carnet de {theme}",
+        "cahier de {theme}",
+        "{theme} carnet"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        7.99,
+        12.99
+      ]
+    },
+    "livre_or": {
+      "label": "Livre d'or",
+      "famille": "carnets",
+      "patterns": [
+        "livre d'or {theme}",
+        "livre d'or pour {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        80,
+        120
+      ],
+      "prix_typique": [
+        8.99,
+        15.99
+      ]
+    },
+    "journal_guide": {
+      "label": "Journal guidé (prompts quotidiens)",
+      "famille": "carnets",
+      "patterns": [
+        "journal guidé {theme}",
+        "journal {theme} 90 jours"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        120,
+        200
+      ],
+      "prix_typique": [
+        8.99,
+        14.99
+      ]
+    },
+    "carnets_a_completer": {
+      "label": "Carnet à compléter (naissance, grossesse, voyage, lecture)",
+      "famille": "carnets",
+      "patterns": [
+        "carnet de {theme}",
+        "album {theme} à compléter"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        160
+      ],
+      "prix_typique": [
+        9.99,
+        16.99
+      ]
+    },
+    "budget_finance": {
+      "label": "Suivi budget / dépenses / épargne",
+      "famille": "carnets",
+      "patterns": [
+        "carnet de budget {theme}",
+        "suivi dépenses {theme}",
+        "cahier de comptes {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        6.99,
+        11.99
+      ]
+    },
+    "carnets_organisation": {
+      "label": "Mots de passe, adresses, anniversaires",
+      "famille": "carnets",
+      "patterns": [
+        "répertoire {theme}",
+        "carnet de {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        130
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "registres_reglementaires": {
+      "label": "Registre réglementaire (personnel, sécurité ERP, HACCP, accidents, main courante, police brocanteur, copropriété)",
+      "famille": "pro",
+      "patterns": [
+        "registre {theme}",
+        "registre du {theme}",
+        "registre de {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": true,
+      "pages": [
+        80,
+        150
+      ],
+      "prix_typique": [
+        9.99,
+        19.99
+      ]
+    },
+    "carnets_pro_obligatoires": {
+      "label": "Carnet pro obligatoire (livre des recettes micro-entrepreneur, carnet d'entretien, carnet de bord VTC, relevé de températures)",
+      "famille": "pro",
+      "patterns": [
+        "livre des {theme}",
+        "carnet de {theme}",
+        "registre {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": true,
+      "pages": [
+        80,
+        150
+      ],
+      "prix_typique": [
+        9.99,
+        17.99
+      ]
+    },
+    "outils_enseignant": {
+      "label": "Cahier de l'enseignant / cahier d'appel / journal de bord",
+      "famille": "pro",
+      "patterns": [
+        "cahier de l'enseignant {theme}",
+        "carnet de bord {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        180
+      ],
+      "prix_typique": [
+        9.99,
+        16.99
+      ]
+    },
+    "coloriage_adulte": {
+      "label": "Coloriage adulte",
+      "famille": "coloriage",
+      "patterns": [
+        "coloriage adulte {theme}",
+        "livre de coloriage {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        6.99,
+        11.99
+      ]
+    },
+    "coloriage_enfant": {
+      "label": "Coloriage enfant",
+      "famille": "coloriage",
+      "patterns": [
+        "coloriage {theme}",
+        "livre de coloriage enfant {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "dessin_par_numeros": {
+      "label": "Dessin / coloriage par numéros",
+      "famille": "coloriage",
+      "patterns": [
+        "coloriage par numéro {theme}",
+        "coloriage magique {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        6.99,
+        10.99
+      ]
+    },
+    "points_a_relier": {
+      "label": "Points à relier",
+      "famille": "coloriage",
+      "patterns": [
+        "points à relier {theme}",
+        "relier les points {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "pixel_art": {
+      "label": "Pixel art / dessin quadrillé",
+      "famille": "coloriage",
+      "patterns": [
+        "pixel art {theme}",
+        "dessin pixel {theme}"
+      ],
+      "effort": 2,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "cahier_dessin_vierge": {
+      "label": "Sketchbook / manga vierge / storyboard",
+      "famille": "coloriage",
+      "patterns": [
+        "carnet de dessin {theme}",
+        "sketchbook {theme}",
+        "planche manga vierge {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "mots_meles": {
+      "label": "Mots mêlés",
+      "famille": "grilles",
+      "patterns": [
+        "mots mêlés {theme}",
+        "mots mêlés géants {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        6.99,
+        11.99
+      ]
+    },
+    "mots_croises_fleches": {
+      "label": "Mots croisés / mots fléchés",
+      "famille": "grilles",
+      "patterns": [
+        "mots croisés {theme}",
+        "mots fléchés {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        6.99,
+        11.99
+      ]
+    },
+    "mots_codes": {
+      "label": "Mots codés",
+      "famille": "grilles",
+      "patterns": [
+        "mots codés {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        6.99,
+        10.99
+      ]
+    },
+    "sudoku": {
+      "label": "Sudoku",
+      "famille": "grilles",
+      "patterns": [
+        "sudoku {theme}",
+        "sudoku géant {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        160
+      ],
+      "prix_typique": [
+        5.99,
+        10.99
+      ]
+    },
+    "kakuro_nonogrammes": {
+      "label": "Kakuro / nonogrammes",
+      "famille": "grilles",
+      "patterns": [
+        "kakuro {theme}",
+        "nonogramme {theme}",
+        "picross {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        6.99,
+        11.99
+      ]
+    },
+    "labyrinthes": {
+      "label": "Labyrinthes",
+      "famille": "grilles",
+      "patterns": [
+        "labyrinthe {theme}",
+        "labyrinthes {theme}"
+      ],
+      "effort": 2,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        80,
+        130
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "cherche_et_trouve": {
+      "label": "Cherche et trouve",
+      "famille": "grilles",
+      "patterns": [
+        "cherche et trouve {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        100
+      ],
+      "prix_typique": [
+        7.99,
+        12.99
+      ]
+    },
+    "jeu_des_differences": {
+      "label": "Jeu des différences",
+      "famille": "grilles",
+      "patterns": [
+        "jeu des différences {theme}",
+        "trouve les différences {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        6.99,
+        10.99
+      ]
+    },
+    "enigmes_casse_tetes": {
+      "label": "Énigmes, casse-têtes, logique",
+      "famille": "jeux_esprit",
+      "patterns": [
+        "énigmes {theme}",
+        "casse-tête {theme}",
+        "jeux de logique {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        160
+      ],
+      "prix_typique": [
+        7.99,
+        12.99
+      ]
+    },
+    "quiz_culture": {
+      "label": "Quiz, culture générale, tests",
+      "famille": "jeux_esprit",
+      "patterns": [
+        "quiz {theme}",
+        "questions de culture générale {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        160
+      ],
+      "prix_typique": [
+        7.99,
+        12.99
+      ]
+    },
+    "jeux_a_ecrire": {
+      "label": "Jeux à deux (bataille navale, morpion, petit bac)",
+      "famille": "jeux",
+      "patterns": [
+        "cahier de jeux {theme}",
+        "jeux à deux {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "jeux_conversation": {
+      "label": "Questions et défis (couple, famille, soirée)",
+      "famille": "jeux",
+      "patterns": [
+        "questions {theme}",
+        "jeu de questions {theme}",
+        "cartes conversation {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        8.99,
+        14.99
+      ]
+    },
+    "cahier_activites_enfant": {
+      "label": "Cahier d'activités enfant",
+      "famille": "enfant",
+      "patterns": [
+        "cahier d'activités {theme}",
+        "livre d'activités {theme}"
+      ],
+      "effort": 3,
+      "illustration": true,
+      "norme": false,
+      "pages": [
+        60,
+        110
+      ],
+      "prix_typique": [
+        6.99,
+        11.99
+      ]
+    },
+    "cahiers_scolaires": {
+      "label": "Cahier de vacances, écriture cursive, graphisme, tables",
+      "famille": "enfant",
+      "patterns": [
+        "cahier de vacances {theme}",
+        "cahier d'exercices {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        80,
+        130
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "cahier_ecriture": {
+      "label": "Cahier d'écriture / graphisme",
+      "famille": "enfant",
+      "patterns": [
+        "cahier d'écriture {theme}",
+        "apprendre à écrire {theme}"
+      ],
+      "effort": 2,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        80,
+        120
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "cahier_musique": {
+      "label": "Portées / tablatures vierges, répertoire",
+      "famille": "specialises",
+      "patterns": [
+        "cahier de musique {theme}",
+        "tablature vierge {theme}",
+        "portées vierges {theme}"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        150
+      ],
+      "prix_typique": [
+        5.99,
+        9.99
+      ]
+    },
+    "carnet_papier_technique": {
+      "label": "Dot grid, quadrillé, isométrique, millimétré",
+      "famille": "specialises",
+      "patterns": [
+        "carnet {theme}",
+        "cahier {theme} pointillés"
+      ],
+      "effort": 1,
+      "illustration": false,
+      "norme": false,
+      "pages": [
+        100,
+        160
+      ],
+      "prix_typique": [
+        5.99,
+        8.99
+      ]
+    }
+  },
+  "note_formats": "`norme: true` = le contenu est fixé par une règle EXTERNE (Code du travail pour le registre du personnel, HACCP, ERP…). Piège de lecture : « normé » ne veut pas dire « difficile ». Le contenu étant imposé, la production est SIMPLE — d'où un effort de 1. C'est la CONFORMITÉ qui est exigeante, et c'est pourquoi le verdict doit citer la source réglementaire attendue dans `spec_interieur` (E7) : un registre incomplet prend des avis à une étoile. Toute requête inclassable donne `format_cle=\"other\"` + `other_libelle`, JAMAIS un format deviné.",
+  "familles_themes": {
+    "sante": [
+      "glycémie",
+      "tension",
+      "migraine",
+      "sommeil",
+      "poids",
+      "douleur",
+      "allergies",
+      "traitement",
+      "kinésithérapie",
+      "ménopause"
+    ],
+    "sport": [
+      "musculation",
+      "course à pied",
+      "natation",
+      "cyclisme",
+      "yoga",
+      "crossfit",
+      "escalade",
+      "randonnée",
+      "golf",
+      "pêche"
+    ],
+    "animaux": [
+      "chien",
+      "chat",
+      "cheval",
+      "poules",
+      "aquarium",
+      "reptiles",
+      "apiculture",
+      "élevage",
+      "chiot",
+      "vétérinaire"
+    ],
+    "jardin_nature": [
+      "potager",
+      "permaculture",
+      "semis",
+      "verger",
+      "bonsaï",
+      "plantes d'intérieur",
+      "champignons",
+      "ornithologie"
+    ],
+    "cuisine": [
+      "pâtisserie",
+      "boulangerie",
+      "conserves",
+      "fromage",
+      "bière",
+      "vin",
+      "barbecue",
+      "batch cooking",
+      "sans gluten"
+    ],
+    "famille_parentalite": [
+      "grossesse",
+      "naissance",
+      "allaitement",
+      "sommeil bébé",
+      "diversification",
+      "adolescent",
+      "école à la maison"
+    ],
+    "travail_pro": [
+      "personnel",
+      "sécurité",
+      "HACCP",
+      "accidents du travail",
+      "main courante",
+      "entretien véhicule",
+      "VTC",
+      "copropriété",
+      "micro-entreprise",
+      "chantier"
+    ],
+    "spiritualite_bien_etre": [
+      "gratitude",
+      "méditation",
+      "rêves",
+      "tarot",
+      "astrologie",
+      "affirmations",
+      "sobriété"
+    ],
+    "loisirs_collections": [
+      "philatélie",
+      "numismatique",
+      "vinyles",
+      "whisky",
+      "modélisme",
+      "couture",
+      "tricot",
+      "généalogie"
+    ],
+    "voyage": [
+      "road trip",
+      "camping-car",
+      "randonnée itinérante",
+      "croisière",
+      "japon",
+      "islande",
+      "van life"
+    ]
+  },
+  "publics": [
+    "adulte",
+    "senior",
+    "enfant_3_6",
+    "enfant_6_10",
+    "ado",
+    "femme",
+    "homme",
+    "couple",
+    "professionnel"
+  ],
+  "editeurs_traditionnels": [
+    "hachette",
+    "larousse",
+    "marabout",
+    "solar",
+    "leduc",
+    "first",
+    "exacompta",
+    "quo vadis",
+    "oxford",
+    "clairefontaine",
+    "moleskine",
+    "leuchtturm",
+    "paperblanks",
+    "usborne",
+    "fleurus",
+    "auzou",
+    "nathan",
+    "bordas",
+    "hatier",
+    "gallimard",
+    "flammarion",
+    "albin michel",
+    "eyrolles",
+    "dunod",
+    "mango",
+    "glenat",
+    "hugo",
+    "play bac",
+    "deux coqs d'or",
+    "hemma",
+    "lito",
+    "piccolia"
+  ],
+  "marqueurs_indie": [
+    "independently published",
+    "auto-edition",
+    "autoedition",
+    "auto edition",
+    "independant publishing"
+  ],
+  "saisonnalite": [
+    "noel",
+    "halloween",
+    "paques",
+    "saint-valentin",
+    "rentree",
+    "agenda 2026",
+    "agenda 2027",
+    "calendrier 2026",
+    "calendrier 2027",
+    "fete des meres",
+    "fete des peres",
+    "vacances d'ete",
+    "avent"
+  ]
+}
