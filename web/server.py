@@ -14,6 +14,7 @@ Lancer :  uvicorn server:app --reload   (depuis le dossier web/)
    ou     python web/server.py
 """
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -21,6 +22,7 @@ import threading
 import time
 from pathlib import Path
 from urllib.parse import quote
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
@@ -183,6 +185,27 @@ def _contraintes_fiction(sous_genre: str, tropes, decor, libre) -> ContraintesTr
         raise HTTPException(status_code=400,
                             detail=f"contrainte hors taxonomie : {inconnus or c.decor}")
     return c
+
+
+_LOG = logging.getLogger("ia-niches")
+
+
+def _erreur_publique(e: BaseException) -> str:
+    """Le texte d'une exception ne sort JAMAIS vers le client.
+
+    Le message d'une erreur réseau porte régulièrement l'URL appelée, et l'URL DataForSEO
+    porte les identifiants HTTP Basic : une panne de fournisseur suffisait donc à afficher
+    un secret à l'écran, sans qu'aucune ligne du code n'ait « logué un secret ». Le champ
+    `erreur` d'un job est lu par DEUX chemins (GET /api/jobs/{id} et le flux SSE) : il doit
+    être assaini à la source, pas à l'affichage.
+
+    Le client reçoit une RÉFÉRENCE, pas un silence — sans elle, un utilisateur qui signale
+    « ça a planté » ne donne rien de raccrochable à une ligne de log. Même famille que
+    `_corps_json` (§2.7) : un chemin non prévu ne renseigne ni l'utilisateur, ni l'attaquant.
+    """
+    ref = uuid4().hex[:8]
+    _LOG.exception("incident %s", ref, exc_info=e)
+    return f"Erreur interne (ref {ref})"
 
 
 def _verifier_plafond(user_id: str, n_analyses: int = 1) -> None:
@@ -549,7 +572,7 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
             b = cost.breakdown()
             _imputer(user_id, type_, b["usd"], n_analyses=1)
-            job_store.fail(job_id, f"{type(e).__name__}: {e}", cout=b)
+            job_store.fail(job_id, _erreur_publique(e), cout=b)
 
     threading.Thread(target=worker, daemon=True).start()
     return {"id": job_id}
