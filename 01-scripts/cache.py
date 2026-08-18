@@ -11,6 +11,7 @@ from pathlib import Path
 from models import BsrInfo, EnrichedBook, SearchResult, TropeClassification
 
 BOOK_TTL_S = 7 * 24 * 3600     # 7 jours : rayon fiction, moins volatil que le BSR seul
+AUTOCOMPLETE_TTL_S = 7 * 24 * 3600  # arbre de completions : bouge a l'echelle de la saison
 # Une classification de blurb est DÉTERMINISTE pour un (livre, taxonomie, modèle, prompt)
 # donné : le texte de la quatrième de couverture ne bouge quasiment jamais. TTL long — la
 # clé porte déjà tout ce qui peut invalider le résultat.
@@ -119,6 +120,23 @@ class Cache:
     @staticmethod
     def _book_key(asin: str, location: int) -> str:
         return f"book:{_schema_tag()}:{location}:{asin}"
+
+    @staticmethod
+    def _autocomplete_key(prefixe: str, marketplace: str) -> str:
+        """Pas d'empreinte de schema ici, contrairement aux quatre autres cles : la valeur
+        est une liste de CHAINES, pas un modele pydantic. Il n'y a pas de champ a ajouter,
+        donc rien qui puisse servir un objet ampute en silence (5.14)."""
+        return f"ac:{marketplace}:{' '.join((prefixe or '').lower().split())}"
+
+    def get_autocomplete(self, prefixe: str, marketplace: str = "fr") -> list[str] | None:
+        """None = jamais sonde. Une liste VIDE est une reponse : Amazon a ete interroge
+        et n'a rien complete. Confondre les deux ferait re-payer la sonde a chaque run
+        sur toutes les feuilles de l'arbre -- c'est-a-dire sur la majorite des noeuds."""
+        return self.get(self._autocomplete_key(prefixe, marketplace))
+
+    def set_autocomplete(self, prefixe: str, suggestions: list[str], ttl_s: float,
+                         marketplace: str = "fr") -> None:
+        self.set(self._autocomplete_key(prefixe, marketplace), list(suggestions), ttl_s)
 
     def get_bsr(self, asin: str, location: int) -> BsrInfo | None:
         d = self.get(self._bsr_key(asin, location))
