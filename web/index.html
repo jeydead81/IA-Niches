@@ -123,11 +123,24 @@
   .vangle{font-size:13.5px;color:var(--heading);margin:2px 0}
   .vangle .sous{color:var(--text-muted);font-weight:400}
   .vrow{font-size:12.5px;color:var(--text-muted);margin:3px 0}
-  .btn-pdf{font-family:var(--sans);font-weight:600;font-size:12.5px;color:#fff;cursor:pointer;
+  .btn-act{font-family:var(--sans);font-weight:600;font-size:12.5px;color:#fff;cursor:pointer;
     background:var(--primary);border:none;border-radius:8px;padding:7px 14px;margin-top:8px}
-  .btn-pdf:hover{background:var(--primary-600)}
+  .btn-act:hover{background:var(--primary-600)}
   .btn-kdp{background:#fff;color:var(--primary);border:1px solid var(--primary)}
   .btn-kdp:hover{background:#EFF6FF}
+  .btn-act:disabled{background:var(--text-muted);cursor:progress}
+  .vask{background:#fff;border:1px dashed var(--border);border-radius:10px;
+    padding:12px 14px;margin-bottom:14px}
+  .vask p{margin:0 0 4px;font-size:13px;color:var(--text-muted)}
+  .ctab{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:14px}
+  .ctab th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;
+    color:var(--text-muted);font-weight:600;padding:0 8px 5px 0;
+    border-bottom:1px solid var(--border)}
+  .ctab td{padding:6px 8px 6px 0;border-bottom:1px solid var(--border);vertical-align:top}
+  .ctab td.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+  .ctab a{color:var(--primary);text-decoration:none}
+  .ctab a:hover{text-decoration:underline}
+  .ctab .nm{color:var(--text-muted);font-style:italic}
 
   /* Mots-clés KDP — 7 emplacements copiables UN PAR UN : l'auteur les colle dans les
      7 champs distincts du formulaire KDP, un bloc unique l'obligerait à découper. */
@@ -659,6 +672,47 @@ function verdictGrade(v){
   return s==='go' ? 'g' : s==='no-go' ? 'r' : 'a';
 }
 
+// Le verdict est DEMANDE, pas pre-genere. n_verdict=0 par defaut cote moteur : les
+// verdicts pesaient 78 % du cout d'un run, payes pour les 3 premieres niches alors que
+// l'auteur n'en lit qu'une. verdictSlot rend donc l'un ou l'autre etat, JAMAIS le vide --
+// c'est exactement ce vide qui rendait /api/verdict, /api/pdf et /api/kdp-keywords
+// inatteignables depuis l'interface (CLAUDE.md 5.26).
+//
+// Fonction PURE (aucun acces au DOM) : c'est ce qui la rend testable pour de vrai, en
+// l'appelant et en regardant ce qu'elle produit -- un test qui cherche une chaine dans le
+// fichier ne peut pas distinguer un bouton affiche d'un bouton mort.
+function verdictSlot(r){
+  if(r && r.verdict) return verdictBlock(r);
+  // Le libelle porte le TEMPS et jamais le montant (commit 4165efb) : un cout affiche
+  // freine l'exploration, alors que la duree fixe une attente.
+  return '<div class="vask">'
+    + '<p>Analyse editoriale non demandee pour cette niche.</p>'
+    + '<button type="button" class="btn-act btn-verdict">Analyser cette niche (~10 s)</button>'
+    + '</div>';
+}
+
+// Les concurrents du top, avec de quoi les juger. top_asins n'affichait que des
+// identifiants : « B0C3K9 » ne dit rien a un auteur sur ce qu'il devrait battre.
+// Un BSR inconnu s'affiche « non mesure » et JAMAIS 0 : zero est le MEILLEUR classement
+// possible, l'afficher pour une donnee absente inverserait completement la lecture (5.10).
+function blocConcurrents(r){
+  const livres = (r && r.top_books) || [];
+  if(!livres.length)
+    return '<p class="dl">Top livres concurrents</p><p class="mut">\u2014 aucun concurrent '
+         + 'connu : la recherche Amazon n\'a rien rendu pour cette niche. Ce n\'est pas '
+         + 'un rayon vide, c\'est une donnee absente.</p>';
+  const lignes = livres.map(b => ''
+    + '<tr><td><a href="' + esc(b.url) + '" target="_blank" rel="noopener">'
+    + esc(b.title || b.asin) + '</a></td>'
+    + '<td class="n">' + (b.price==null ? '<span class="nm">\u2014</span>' : fmtEur(b.price)) + '</td>'
+    + '<td class="n">' + (b.rating==null ? '<span class="nm">\u2014</span>' : b.rating) + '</td>'
+    + '<td class="n">' + (b.reviews_count==null ? '<span class="nm">\u2014</span>' : fmt(b.reviews_count)) + '</td>'
+    + '<td class="n">' + (b.bsr==null ? '<span class="nm">non mesure</span>' : fmt(b.bsr)) + '</td></tr>').join('');
+  return '<p class="dl">Top livres concurrents (organiques)</p>'
+    + '<table class="ctab"><thead><tr><th>Titre</th><th>Prix</th><th>Note</th>'
+    + '<th>Avis</th><th>BSR</th></tr></thead><tbody>' + lignes + '</tbody></table>';
+}
+
 function verdictBlock(r){
   const v=r.verdict;
   if(!v) return '';
@@ -679,10 +733,53 @@ function verdictBlock(r){
       </div>
       <p class="vfacteur"><strong>Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
       ${angleHtml}
-      <button type="button" class="btn-pdf">Télécharger le PDF</button>
-      <button type="button" class="btn-pdf btn-kdp">Mots-clés KDP</button>
+      <button type="button" class="btn-act btn-pdf">Télécharger le PDF</button>
+      <button type="button" class="btn-act btn-kdp">Mots-clés KDP</button>
       <div class="kdpslot"></div>
     </div>`;
+}
+
+// Verdict a la demande. Un seul appel, sur LA niche que l'auteur a choisie -- c'est tout
+// le sens du gate de cout : /api/verdict impute n_analyses=0 parce qu'il complete une
+// analyse deja comptee, mais il exige quand meme une marge sous le plafond.
+async function loadVerdict(r, det, btn){
+  btn.disabled = true; btn.textContent = 'Analyse en cours\u2026';
+  try{
+    const rep = await fetch('/api/verdict', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(r)});
+    if(!rep.ok){
+      // 429 = plafond mensuel. Le dire comme une LIMITE, jamais comme une panne : rien
+      // n'a ete depense, et c'est le rythme qui bloque, pas le service.
+      const d = await rep.json().catch(()=>({}));
+      throw new Error(rep.status===429
+        ? 'Limite d\'analyses atteinte pour ce mois-ci. Rien n\'a ete lance.'
+        : (d.detail || 'Analyse indisponible.'));
+    }
+    r.verdict = await rep.json();
+    const slot = det.querySelector('.verdictslot');
+    slot.innerHTML = verdictSlot(r);
+    brancherActions(r, det);          // le bloc vient d'etre remplace : re-brancher
+  }catch(e){
+    btn.disabled = false;
+    btn.textContent = 'Analyser cette niche (~10 s)';
+    const p = det.querySelector('.vask p');
+    if(p) p.textContent = String(e.message || e);
+  }
+}
+
+// UN SEUL endroit ou les boutons du bloc verdict sont branches. Ils naissent DEUX fois :
+// au rendu de la ligne, puis apres l'injection du verdict. Deux sites de branchement
+// divergeraient -- et c'est exactement ce genre de divergence qui a laisse des boutons
+// morts dans cette interface.
+function brancherActions(r, det){
+  const vBtn = det.querySelector('.btn-verdict');
+  if(vBtn) vBtn.addEventListener('click', ev=>{ ev.stopPropagation(); loadVerdict(r, det, vBtn); });
+  const pdfBtn = det.querySelector('.btn-pdf');
+  if(pdfBtn) pdfBtn.addEventListener('click', ev=>{ ev.stopPropagation(); downloadPdf(r); });
+  const kdpBtn = det.querySelector('.btn-kdp');
+  if(kdpBtn) kdpBtn.addEventListener('click', ev=>{
+    ev.stopPropagation(); loadKdp(r, det.querySelector('.kdpslot'), kdpBtn);
+  });
 }
 
 // ── Les 7 mots-clés backend KDP ────────────────────────────────────────────────────
@@ -847,7 +944,6 @@ function render(rows){
       <td>${ICON_CHEV}</td>`;
     const det=document.createElement('tr'); det.className='detail';
     const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
-    const asins=(r.top_asins||[]).map(a=>`<a class="asin" href="https://www.amazon.fr/dp/${esc(a)}" target="_blank" rel="noopener">${esc(a)}</a>`).join('')||'<span class="mut">—</span>';
     const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
         La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
         et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
@@ -857,9 +953,9 @@ function render(rows){
         ${blocSuggestions(r)}
         ${blocPrix(r)}
         <div class="histslot"></div>
-        ${verdictBlock(r)}
+        <div class="verdictslot">${verdictSlot(r)}</div>
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
-        <p class="dl">Top livres concurrents (ASIN → fiche)</p><div class="asins">${asins}</div>
+        ${blocConcurrents(r)}
       </div></td>`;
     let histCharge=false;
     tr.addEventListener('click',()=>{
@@ -870,12 +966,7 @@ function render(rows){
         histCharge=true; loadHistorique(r.niche, det.querySelector('.histslot'));
       }
     });
-    const pdfBtn=det.querySelector('.btn-pdf');
-    if(pdfBtn) pdfBtn.addEventListener('click',ev=>{ev.stopPropagation();downloadPdf(r);});
-    const kdpBtn=det.querySelector('.btn-kdp');
-    if(kdpBtn) kdpBtn.addEventListener('click',ev=>{
-      ev.stopPropagation(); loadKdp(r, det.querySelector('.kdpslot'), kdpBtn);
-    });
+    brancherActions(r, det);
     tbody.appendChild(tr); tbody.appendChild(det);
   });
   empty.style.display='none'; results.classList.add('on');
