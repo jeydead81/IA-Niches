@@ -43,6 +43,7 @@ from kdp_keywords import generer_mots_cles  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
+from devis import PLAFOND_DEPASSE, verifier_devis  # noqa: E402
 from models import LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
@@ -65,6 +66,13 @@ _JOBS_DB = _ROOT / "99-logs" / "jobs.db"
 _USAGE_DB = _ROOT / "99-logs" / "usage.db"
 _HISTORY_DB = _ROOT / "99-logs" / "history.db"
 _USERS_DB = _ROOT / "99-logs" / "comptes.db"
+
+def _plafond_usd_par_run() -> float | None:
+    """Le plafond de cout par run, lu a CHAQUE appel (jamais fige a l'import : il doit
+    pouvoir changer sans redemarrage, et rester testable)."""
+    from cost_tracker import _plafond_par_defaut
+    return _plafond_par_defaut()
+
 
 def _mode_jobs() -> str:
     """"thread" (defaut) = le serveur execute lui-meme ; "worker" = il se contente
@@ -101,7 +109,14 @@ COOKIE_SESSION = "ia_niches_session"
 IDEES_PAR_RUN = 10
 MAX_IDEES = 30
 MAX_RECHERCHES = 20
-MAX_NICHES_FICTION = 20
+# 11 et non 20 : c'est le plus grand nombre de trios dont le devis (devis.py) tient sous
+# PLAFOND_USD_PAR_RUN. Au-dela, le run atteindrait le plafond en cours de route et rendrait
+# un rapport PARTIEL a quelqu'un qui a paye son plafond entier -- ce qui se lit comme une
+# arnaque, pas comme une protection. La fiction est le seul scout concerne : elle paie
+# 12 ASIN ET une classification de quatrieme de couverture PAR NICHE.
+# test_devis.py tient cette borne et le plafond ensemble ; ne pas la relever sans relever
+# le plafond, sinon la promesse "jamais de rapport partiel" tombe en silence.
+MAX_NICHES_FICTION = 11
 # Meme borne que le non-fiction : le poste qui coute est le nombre de niches
 # CONFRONTEES a Amazon, pas le nombre de requetes lues dans l'arbre (gratuit).
 MAX_RECHERCHES_LC = 20
@@ -652,6 +667,15 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
             detail=f"plafond mensuel atteint pour l'utilisateur « {user_id} »")
 
     params = {k: v for k, v in body.items() if k not in ("type", "user_id")}
+    # DEVIS AVANT DEPENSE. Le plafond en cours de run s'arretait proprement, mais rendait
+    # quand meme un rapport TRONQUE a quelqu'un qui avait paye son plafond entier -- et
+    # rien ne l'avait prevenu avant qu'il clique. On refuse donc en amont, en disant quel
+    # volume tiendrait. Le plafond en cours de run reste, comme filet de dernier recours
+    # (panne, tempete de retries, tarif qui change chez le fournisseur).
+    try:
+        verifier_devis(type_, params, plafond=_plafond_usd_par_run())
+    except PLAFOND_DEPASSE as e:
+        raise HTTPException(status_code=400, detail=str(e))
     # Bornes validées AVANT de créer le job : levée depuis le thread détaché, la 400
     # arriverait après un 202 déjà rendu, donc invisible pour le client.
     _valider_volumes(type_, params)
