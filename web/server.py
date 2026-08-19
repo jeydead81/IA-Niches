@@ -149,6 +149,55 @@ MAX_RECHERCHES_LC = 20
 MAX_LONGUEUR_GRAINE = 80
 
 
+# Limiteur de debit sur les endpoints payants A LA PIECE (/api/verdict,
+# /api/kdp-keywords, /api/dossier avec mots-cles). Ils imputent n_analyses=0 -- et c'est
+# juste, ils COMPLETENT une analyse deja comptee -- mais la consequence est qu'ils sont
+# INATTEIGNABLES par le plafond mensuel : 200 verdicts coutent 5,60 $ sans qu'aucun garde
+# ne bronche.
+#
+# C'EST UN GARDE-FOU, PAS UNE GRILLE TARIFAIRE, exactement comme PLAFOND_ANALYSES_MENSUEL
+# dont le docstring dit deja « garde-fou contre l'utilisateur a 500 analyses, pas une
+# grille tarifaire ». Il n'engage AUCUNE decision commerciale : quand le modele
+# d'abonnement existera, il le remplacera ou le laissera comme filet.
+#
+# Le defaut est ANCRE, pas invente : une analyse rend jusqu'a MAX_RECHERCHES niches, et un
+# utilisateur peut legitimement vouloir un verdict sur chacune. Deux analyses entieres
+# decortiquees d'affilee, c'est 40 appels. Au-dela dans la MEME heure, ce n'est plus
+# quelqu'un qui lit des resultats.
+TYPES_A_LA_PIECE = ("verdict", "kdp", "kdp_keywords", "dossier")
+DEBIT_FENETRE_S = 3600
+DEBIT_APPELS_MAX_DEFAUT = 2 * MAX_RECHERCHES
+
+
+def _debit_max() -> int:
+    """Lu a chaque appel. 0 desactive explicitement ; une valeur illisible retombe sur le
+    defaut plutot que d'ouvrir la vanne en silence."""
+    try:
+        return int(os.getenv("DEBIT_APPELS_MAX", "") or DEBIT_APPELS_MAX_DEFAUT)
+    except ValueError:
+        return DEBIT_APPELS_MAX_DEFAUT
+
+
+def _reserver_appel(user_id: str, type_: str) -> int:
+    """Verifie le debit PUIS reserve, en une seule porte d'entree pour les trois endpoints.
+
+    429 et non 400 : ce n'est pas la requete qui est fautive, c'est le rythme. Distinguer
+    les deux permet a l'utilisateur de comprendre qu'il lui suffit d'attendre.
+
+    Un appel REFUSE ne reserve rien : sinon un client qui insiste se verrouillerait
+    lui-meme de plus en plus longtemps, ce qui punirait l'impatience plutot que l'abus."""
+    maxi = _debit_max()
+    m = UsageMeter(_USAGE_DB)
+    if maxi > 0 and m.compter(user_id, TYPES_A_LA_PIECE, DEBIT_FENETRE_S) >= maxi:
+        raise HTTPException(
+            status_code=429,
+            detail=f"trop d'analyses a la piece en une heure ({maxi} maximum). Ce n'est "
+                   f"pas votre demande qui pose probleme, c'est le rythme : attendez "
+                   f"quelques minutes et reessayez. Rien n'a ete depense.")
+    return m.reserver(user_id, type_)
+
+
+
 def _plafond_analyses_mensuel() -> int | None:
     """Plafond mensuel glissant PAR utilisateur — garde-fou contre la queue de distribution
     (l'utilisateur à 500 analyses), pas une grille tarifaire. Défaut prudent : pas de
@@ -863,11 +912,12 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
     # déjà payée, d'où n_analyses=0 à l'imputation) mais il EXIGE une marge : un compte au
     # plafond ne doit pas pouvoir continuer à faire tourner le LLM indéfiniment.
     _verifier_plafond(user_id)
+    ligne = _reserver_appel(user_id, "verdict")
     cost = CostTracker()
     fabrique = (generate_lowcontent_verdict if type_ == "lowcontent"
                 else generate_verdict)
     verdict = fabrique(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
-    UsageMeter(_USAGE_DB).enregistrer(user_id, "verdict", cost.total_usd(), n_analyses=0)
+    UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
     return {**verdict.model_dump(), "_cout": cost.breakdown()}
 
 
@@ -895,11 +945,12 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
         scored = ScoredNiche.model_validate(await request.json())
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
-    _verifier_plafond(user_id)          # même raisonnement que /api/verdict
+    _verifier_plafond(user_id)
+    ligne = _reserver_appel(user_id, "kdp_keywords")          # même raisonnement que /api/verdict
     cost = CostTracker()
     mots = generer_mots_cles(scored, titre=scored.niche,
                              on_usage=lambda i, o, m: cost.add_llm(m, i, o))
-    UsageMeter(_USAGE_DB).enregistrer(user_id, "kdp_keywords", cost.total_usd(), n_analyses=0)
+    UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
     return {**mots.model_dump(), "_cout": cost.breakdown()}
 
 
@@ -940,7 +991,10 @@ async def api_dossier(request: Request, user_id: str = Depends(utilisateur_coura
         # Appel LLM facture. Il n'entame pas le quota d'ANALYSES (il complete une analyse
         # deja comptee) mais il EXIGE une marge : un compte au plafond ne doit pas pouvoir
         # continuer a faire tourner le LLM.
+        # La reservation vit DANS ce bloc : un dossier sans mots-cles ne depense rien,
+        # et le brider serait gratuit en cout mais couteux en usage.
         _verifier_plafond(user_id)
+        ligne = _reserver_appel(user_id, "dossier")
         cost = CostTracker()
         try:
             mots = generer_mots_cles(scored, titre=titre,
@@ -948,8 +1002,7 @@ async def api_dossier(request: Request, user_id: str = Depends(utilisateur_coura
         except Exception as e:  # noqa: BLE001 — le document reste utile sans eux (5.29)
             _LOG.warning("mots-cles indisponibles pour le dossier : %s", e)
             mots = None
-        UsageMeter(_USAGE_DB).enregistrer(user_id, "dossier", cost.total_usd(),
-                                          n_analyses=0)
+        UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
 
     with tempfile.TemporaryDirectory() as d:
         chemin = build_dossier_pdf(scored, f"{d}/dossier.pdf", mots_cles=mots,

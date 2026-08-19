@@ -68,6 +68,44 @@ class UsageMeter:
             ).fetchone()
         return UsageResume(n_analyses=row[0], cout_usd=row[1])
 
+    def compter(self, user_id: str, types, fenetre_s: float) -> int:
+        """Nombre d'appels d'un des `types` sur la fenetre GLISSANTE.
+
+        Glissante et non calendaire : un seau qui se vide a heure fixe se contourne en
+        attendant l'heure ronde. Aucun stockage nouveau -- la table porte deja `type` et
+        `horodatage`, il suffisait de les lire."""
+        types = tuple(types)
+        if not types:
+            return 0
+        cutoff = self.now() - fenetre_s
+        trous = ",".join("?" * len(types))
+        with self._conn() as cx:
+            row = cx.execute(
+                f"SELECT COUNT(*) FROM usage WHERE user_id=? AND horodatage>=? "
+                f"AND type IN ({trous})", (user_id, cutoff, *types)).fetchone()
+        return int(row[0])
+
+    def reserver(self, user_id: str, type: str) -> int:
+        """Inscrit l'appel AVANT qu'il ne soit paye, a cout nul. Rend l'identifiant de
+        ligne, a solder ensuite.
+
+        Sans reservation, dix requetes concurrentes passent toutes le controle avant que
+        la premiere ne soit enregistree : le limiteur ne brideait que le rythme d'un
+        client sequentiel, c'est-a-dire personne. `n_analyses=0` reste juste -- ces appels
+        COMPLETENT une analyse deja comptee, ils n'en consomment pas une seconde."""
+        with self._conn() as cx:
+            cur = cx.execute(
+                "INSERT INTO usage (user_id, type, cout_usd, n_analyses, horodatage) "
+                "VALUES (?, ?, 0.0, 0, ?)", (user_id, type, self.now()))
+            return int(cur.lastrowid)
+
+    def solder(self, ligne_id: int, cout_usd: float) -> None:
+        """Inscrit le cout REEL sur une reservation. Une reservation jamais soldee reste a
+        zero dollar : elle consomme du debit (l'appel a bien eu lieu) sans facturer ce qui
+        n'a pas ete depense."""
+        with self._conn() as cx:
+            cx.execute("UPDATE usage SET cout_usd=? WHERE id=?", (cout_usd, ligne_id))
+
     def autorise(self, user_id: str, n_analyses: int = 1) -> bool:
         """Vérifié AVANT de dépenser. Sans plafond configuré : toujours autorisé (mais
         l'usage reste journalisé via enregistrer(), jamais un silence sur la dépense)."""
