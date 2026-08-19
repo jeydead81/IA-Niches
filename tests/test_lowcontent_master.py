@@ -276,3 +276,61 @@ def test_les_requetes_hors_taxonomie_sont_recapitulees():
          ideate=_ideate_fige([_niche("carnet de rituels lunaires", format_cle="other",
                                      other_libelle="grimoire")]))
     assert "hors taxonomie" in " ".join(etapes).lower()
+
+
+# ── Double facturation ─────────────────────────────────────────────────────────
+
+def test_le_BSR_est_lu_dans_l_enrichissement_et_non_re_paye():
+    """Bug REEL de la premiere version. `enrich_asins` parse DEJA le BSR de chaque fiche
+    (fiction_books.parse_enriched_book) ; appeler `resolve_bsrs` juste apres sur la MEME
+    union re-payait chaque ASIN une seconde fois quand BSR_SOURCE=dataforseo.
+
+    A la borne serveur (20 niches x 6 ASIN), ca faisait 240 ASIN factures au lieu de 120 :
+    0,80 $ au lieu de 0,44 $, sur un plafond de 0,60 $. Le gaspillage etait invisible --
+    rien dans le rapport ne montrait qu'un ASIN avait ete paye deux fois."""
+    appels_bsr = []
+
+    def bsr_espion(asin):
+        appels_bsr.append(asin)
+        from models import BsrInfo
+        return BsrInfo(rank_livres=8000, asin=asin)
+
+    def enrich_avec_bsr(asins, **kw):
+        return {a: EnrichedBook(asin=a, title=f"T{a}", bsr=7777,
+                                publisher="Independently published",
+                                publication_date="2026-06-01", price=11.99, pages=120)
+                for a in asins}
+
+    out = _run(enrich_fn=enrich_avec_bsr, fetch_bsr_fn=bsr_espion)
+    assert appels_bsr == []                       # aucun second passage paye
+    assert out[0].bsr_best == 7777                # ...et le BSR vient bien de la fiche
+
+
+def test_les_ASIN_non_enrichis_sont_les_seuls_a_etre_re_sondes():
+    """L'enrichissement ne rend QUE les ASIN exploitables (un payload atypique est absent
+    du dict). Ceux-la, et eux seuls, valent un second passage — sinon on perdrait leur
+    classement alors qu'il est encore recuperable."""
+    demandes = []
+
+    def bsr_espion(asin):
+        demandes.append(asin)
+        from models import BsrInfo
+        return BsrInfo(rank_livres=5000, asin=asin)
+
+    def enrich_partiel(asins, **kw):
+        # un seul ASIN exploitable sur les trois de la premiere niche
+        garde = list(asins)[:1]
+        return {a: EnrichedBook(asin=a, title="T", bsr=1234) for a in garde}
+
+    _run(enrich_fn=enrich_partiel, fetch_bsr_fn=bsr_espion)
+    assert demandes and all(d not in ("car0",) for d in demandes[:0] or [])
+    assert len(demandes) < 6                      # pas la totalite de l'union
+
+
+def test_sans_aucun_enrichissement_le_BSR_reste_recuperable():
+    """Enrichissement en panne : on ne renonce pas au classement, qui a son propre canal
+    (scrape gratuit en local). Un echec partiel ne doit pas en entrainer un second."""
+    from models import BsrInfo
+    out = _run(enrich_fn=lambda asins, **kw: {},
+               fetch_bsr_fn=lambda a: BsrInfo(rank_livres=4242, asin=a))
+    assert out[0].bsr_best == 4242

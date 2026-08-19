@@ -199,20 +199,35 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
         except Exception as e:  # noqa: BLE001
             progress(f"  ⚠ enrichissement indisponible ({e}) — éditeurs non lus.")
 
-    # BSR, sur les seuls ASIN du top de chaque niche (même canal que le non-fiction).
-    bsr_map = {}
-    try:
-        cost.verifier()
-        bsr_map = resolve_bsrs(union[:len(union)], source=bsr_source, provider=provider,
-                               fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
-                               cost=cost, bsr_pause=bsr_pause)
-    except PlafondCoutAtteint as e:
-        progress(f"  ⚠ {e} — BSR non récupérés.")
-    except Exception as e:  # noqa: BLE001
-        progress(f"  ⚠ BSR indisponibles ({e}).")
-    rangs = {a: info.rank_livres for a, info in (bsr_map or {}).items()
-             if info and info.rank_livres}
-    subcats = {a: (info.subcategories or []) for a, info in (bsr_map or {}).items() if info}
+    # ── BSR : LU DANS L'ENRICHISSEMENT, jamais re-payé ──
+    # `enrich_asins` parse déjà le BSR de chaque fiche (`parse_enriched_book`). Appeler
+    # `resolve_bsrs` sur la même union re-facturait CHAQUE ASIN une seconde fois quand
+    # BSR_SOURCE=dataforseo : à la borne serveur, 240 ASIN au lieu de 120, soit 0,80 $ au
+    # lieu de 0,44 $ sur un plafond de 0,60 $. Le gaspillage était invisible — rien dans le
+    # rapport ne montrait qu'un ASIN avait été payé deux fois.
+    rangs = {a: b.bsr for a, b in enrichis.items() if b and b.bsr}
+    subcats = {}
+
+    # Seuls les ASIN que l'enrichissement n'a PAS rendus valent un second passage : un
+    # payload atypique est absent du dict (jamais une entrée factice), et leur classement
+    # reste récupérable par le canal BSR — gratuit en local. Renoncer pour eux perdrait une
+    # mesure encore atteignable ; les redemander TOUS ferait payer deux fois les autres.
+    manquants = [a for a in union if a not in rangs]
+    if manquants:
+        try:
+            cost.verifier()
+            progress(f"Classement de {len(manquants)} livre(s) non enrichi(s)…")
+            bsr_map = resolve_bsrs(manquants, source=bsr_source, provider=provider,
+                                   fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
+                                   cost=cost, bsr_pause=bsr_pause)
+            rangs.update({a: info.rank_livres for a, info in (bsr_map or {}).items()
+                          if info and info.rank_livres})
+            subcats.update({a: (info.subcategories or [])
+                            for a, info in (bsr_map or {}).items() if info})
+        except PlafondCoutAtteint as e:
+            progress(f"  ⚠ {e} — classement des livres non enrichis abandonné.")
+        except Exception as e:  # noqa: BLE001
+            progress(f"  ⚠ classement indisponible ({e}).")
 
     # ── Phase 5 — scoring ──
     out: list[LowContentScored] = []
