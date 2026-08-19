@@ -35,7 +35,7 @@ from models import LowContentScored
 from niche_validator import validate_niches as _validate_niches
 from search_providers import get_provider
 
-_SEARCH_TTL_S = 10 * 24 * 3600
+_SEARCH_TTL_S = 15 * 24 * 3600
 
 
 def _noop(_msg: str) -> None:

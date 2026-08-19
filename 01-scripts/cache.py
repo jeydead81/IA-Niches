@@ -10,8 +10,12 @@ from pathlib import Path
 
 from models import BsrInfo, EnrichedBook, SearchResult, TropeClassification
 
-BOOK_TTL_S = 7 * 24 * 3600     # 7 jours : rayon fiction, moins volatil que le BSR seul
-AUTOCOMPLETE_TTL_S = 7 * 24 * 3600  # arbre de completions : bouge a l'echelle de la saison
+BOOK_TTL_S = 15 * 24 * 3600    # 15 jours. Le cache est MUTUALISE entre tous les comptes : allonger sa duree
+# multiplie mecaniquement l'economie, et c'est gratuit au sens propre. Ce qu'on
+# echange, c'est de la fraicheur -- mais le produit compare des ORDRES DE GRANDEUR
+# (sous 10 000, sous 50 000, au-dela), pas un classement a la journee, et un rayon
+# ne change pas de tranche en deux semaines.
+AUTOCOMPLETE_TTL_S = 15 * 24 * 3600  # traine de requetes : bouge a l'echelle de la saison
 # Une classification de blurb est DÉTERMINISTE pour un (livre, taxonomie, modèle, prompt)
 # donné : le texte de la quatrième de couverture ne bouge quasiment jamais. TTL long — la
 # clé porte déjà tout ce qui peut invalider le résultat.

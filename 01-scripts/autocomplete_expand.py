@@ -24,10 +24,10 @@ from dataclasses import dataclass
 
 from amazon_autocomplete import fetch_suggestions as _fetch_suggestions
 
-# 7 jours : une traîne de requêtes bouge à l'échelle de la saison, pas de la journée.
-# Aligné sur le cache livre (BOOK_TTL_S) plutôt que sur le cache BSR (3 j), qui suit un
-# classement quotidien — ici on met en cache ce que les gens CHERCHENT, pas un rang.
-AUTOCOMPLETE_TTL_S = 7 * 24 * 3600
+# 15 jours, comme les autres caches courants. Une traîne de requêtes bouge à l'échelle de
+# la saison, pas de la journée : ce qu'on met en cache ici, c'est ce que les gens
+# CHERCHENT, et ça ne se renouvelle pas en deux semaines.
+AUTOCOMPLETE_TTL_S = 15 * 24 * 3600
 
 # Plafond par défaut. À 0,4 s de pause, 80 sondes = ~32 s : la limite haute de ce qu'on
 # peut faire attendre avant une phase payante qui, elle, dure des minutes.

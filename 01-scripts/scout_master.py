@@ -24,7 +24,7 @@ def _noop(_msg: str) -> None:
     pass
 
 
-_SEARCH_TTL_S = 10 * 24 * 3600     # 10 jours
+_SEARCH_TTL_S = 15 * 24 * 3600
 
 
 def run_scout(seed: str | None = None, signals: dict | None = None,

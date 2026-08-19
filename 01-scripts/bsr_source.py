@@ -6,7 +6,11 @@ import time
 
 from amazon_product import fetch_bsr as _scrape_bsr
 
-BSR_TTL_S = 3 * 24 * 3600      # 3 jours : le classement bouge, mais réutilisable court terme
+BSR_TTL_S = 15 * 24 * 3600     # 15 jours. Le cache est MUTUALISE entre tous les comptes : allonger sa duree
+# multiplie mecaniquement l'economie, et c'est gratuit au sens propre. Ce qu'on
+# echange, c'est de la fraicheur -- mais le produit compare des ORDRES DE GRANDEUR
+# (sous 10 000, sous 50 000, au-dela), pas un classement a la journee, et un rayon
+# ne change pas de tranche en deux semaines.
 
 
 def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=None,
