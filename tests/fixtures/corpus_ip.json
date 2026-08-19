@@ -1,0 +1,1480 @@
+{
+ "doivent_etre_bloquees": [
+  {
+   "requete": "coloriage pat'patrouille à imprimer",
+   "marque": "Pat'Patrouille",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "coloriage pat’patrouille gratuit",
+   "marque": "Pat'Patrouille",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "cahier de coloriage pat-patrouille",
+   "marque": "Pat'Patrouille",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "coloriage patpatrouille à imprimer",
+   "marque": "Pat'Patrouille",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier d'activités paw-patrol",
+   "marque": "Paw Patrol",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "cahier d'activités t’choupi 3 ans",
+   "marque": "T'choupi",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "coloriage tchoupi à imprimer",
+   "marque": "T'choupi",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de vacances tchoupi maternelle",
+   "marque": "T'choupi",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage winnie l’ourson bébé",
+   "marque": "Winnie l'Ourson",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "cahier de coloriage winnie à imprimer",
+   "marque": "Winnie l'Ourson",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage dora l’exploratrice gratuit",
+   "marque": "Dora l'exploratrice",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "carnet de coloriage dora à imprimer",
+   "marque": "Dora l'exploratrice",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage minions à imprimer",
+   "marque": "Les Minions",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "cahier de coloriage minion jaune",
+   "marque": "Les Minions",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage reine des neiges à imprimer",
+   "marque": "La Reine des Neiges",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "cahier de coloriage reine des neiges 2",
+   "marque": "La Reine des Neiges",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "mots mêlés schtroumpfs pour enfants",
+   "marque": "Les Schtroumpfs",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "coloriage schtroumpf à imprimer",
+   "marque": "Les Schtroumpfs",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage petit nicolas à imprimer",
+   "marque": "Le Petit Nicolas",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "coloriage sam pompier à imprimer",
+   "marque": "Sam le Pompier",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "coloriage pokemons à imprimer",
+   "marque": "Pokémon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "livre de coloriage legos",
+   "marque": "LEGO",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier d'activités legoland",
+   "marque": "LEGO / Legoland",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet de voyage disneyland paris à remplir",
+   "marque": "Disney / Disneyland",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage oui oui à imprimer",
+   "marque": "Oui-Oui",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "coloriage hello-kitty à imprimer",
+   "marque": "Hello Kitty",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de notes hellokitty",
+   "marque": "Hello Kitty",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage peppa à imprimer",
+   "marque": "Peppa Pig",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage peppapig",
+   "marque": "Peppa Pig",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage mon petit poney à imprimer",
+   "marque": "My Little Pony",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage lady bug à imprimer",
+   "marque": "Miraculous Ladybug",
+   "mutation": "espace"
+  },
+  {
+   "requete": "coloriage pj masks à imprimer",
+   "marque": "Pyjamasques / PJ Masks",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage pyjamasque",
+   "marque": "Pyjamasques",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage gabby's dollhouse à imprimer",
+   "marque": "Gabby et la maison magique",
+   "mutation": "possessif"
+  },
+  {
+   "requete": "coloriage gabby dollhouse maison magique",
+   "marque": "Gabby et la maison magique",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage masha michka à imprimer",
+   "marque": "Masha et Michka",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage barbapapas à imprimer",
+   "marque": "Barbapapa",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage playmobils",
+   "marque": "Playmobil",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage barbies à imprimer",
+   "marque": "Barbie",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage mickeys",
+   "marque": "Mickey",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage pokemons",
+   "marque": "pokemon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet de dessin pokémons pour enfant",
+   "marque": "pokemon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier d'activites pikatchu",
+   "marque": "pikachu",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage one-piece",
+   "marque": "one piece",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet onepiece luffy",
+   "marque": "one piece",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "livre de coloriage one peace",
+   "marque": "one piece",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage luffy chapeau de paille",
+   "marque": "one piece",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier d'activites dragonball z",
+   "marque": "dragon ball",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage dragon-ball super",
+   "marque": "dragon ball",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "cahier de coloriage sangoku",
+   "marque": "goku",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage vegeta",
+   "marque": "dragon ball",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage narutos pour enfants",
+   "marque": "naruto",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage demonslayer",
+   "marque": "demon slayer",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet demon-slayer a remplir",
+   "marque": "demon slayer",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "coloriage tanjiro et nezuko",
+   "marque": "demon slayer",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage jujutsu-kaisen",
+   "marque": "jujutsu kaisen",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet jujutsukaisen",
+   "marque": "jujutsu kaisen",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage my-hero-academia",
+   "marque": "my hero academia",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet myheroacademia",
+   "marque": "my hero academia",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage boku no hero academia",
+   "marque": "my hero academia",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "cahier de coloriage l’attaque des titans",
+   "marque": "l'attaque des titans",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "cahier de coloriage attaque des titans",
+   "marque": "l'attaque des titans",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "cahier de coloriage shingeki no kyojin",
+   "marque": "l'attaque des titans",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage sailormoon",
+   "marque": "sailor moon",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage sailor-moon",
+   "marque": "sailor moon",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de notes deathnote",
+   "marque": "death note",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet death-note a remplir",
+   "marque": "death note",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "cahier de coloriage spy-x-family",
+   "marque": "spy x family",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet spyxfamily anya",
+   "marque": "spy x family",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage chainsawman",
+   "marque": "chainsaw man",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet chainsaw-man denji",
+   "marque": "chainsaw man",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "cahier de coloriage hunterxhunter",
+   "marque": "hunter x hunter",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier tokyo-ghoul",
+   "marque": "tokyo ghoul",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "cahier de coloriage beyblades",
+   "marque": "beyblade",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage digimons",
+   "marque": "digimon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage yugioh",
+   "marque": "yu-gi-oh",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet yu gi oh cartes",
+   "marque": "yu-gi-oh",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier de coloriage fairytail",
+   "marque": "fairy tail",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet fairy-tail",
+   "marque": "fairy tail",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "cahier de coloriage le voyage de chihiro",
+   "marque": "ghibli",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage star-wars",
+   "marque": "Star Wars",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet starwars a personnaliser",
+   "marque": "Star Wars",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage stars wars enfant 5 ans",
+   "marque": "Star Wars",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage dark vador",
+   "marque": "Star Wars (Dark Vador)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage bebe yoda pour enfant",
+   "marque": "Star Wars / The Mandalorian (Grogu, Bebe Yoda)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet harry-potter",
+   "marque": "Harry Potter",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "journal intime harrypotter fille",
+   "marque": "Harry Potter",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet gryffondor",
+   "marque": "Harry Potter (Gryffondor)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de textes serpentard",
+   "marque": "Harry Potter (Serpentard)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet seigneur des anneaux",
+   "marque": "Le Seigneur des Anneaux",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "cahier de coloriage lord of the rings",
+   "marque": "Le Seigneur des Anneaux",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de croquis terre du milieu",
+   "marque": "Le Seigneur des Anneaux (Terre du Milieu)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage hobbits",
+   "marque": "Le Hobbit",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage spider man 3 ans",
+   "marque": "Spider-Man",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier d'activites spider man garcon 4 ans",
+   "marque": "Spider-Man",
+   "mutation": "espace"
+  },
+  {
+   "requete": "coloriage l'homme araignee",
+   "marque": "Spider-Man",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage iron-man",
+   "marque": "Iron Man (Marvel)",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "coloriage bat man enfant",
+   "marque": "Batman",
+   "mutation": "espace"
+  },
+  {
+   "requete": "carnet gotham city",
+   "marque": "Batman (Gotham)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage jurassic parc",
+   "marque": "Jurassic Park",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet jurassic world dinosaures",
+   "marque": "Jurassic Park / Jurassic World",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de notes strangerthings",
+   "marque": "Stranger Things",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "journal intime stranger-things",
+   "marque": "Stranger Things",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "coloriage la famille addams",
+   "marque": "La Famille Addams / Mercredi Addams",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet mercredi adams",
+   "marque": "Mercredi Addams",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage squid games",
+   "marque": "Squid Game",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet squidgame",
+   "marque": "Squid Game",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet casa de papel",
+   "marque": "La Casa de Papel",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "agenda casa del papel",
+   "marque": "La Casa de Papel",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet le trone de fer",
+   "marque": "Game of Thrones (titre francais)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage games of thrones",
+   "marque": "Game of Thrones",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage scooby doo a imprimer",
+   "marque": "Scooby-Doo",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier de coloriage scoobydoo",
+   "marque": "Scooby-Doo",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage toystory",
+   "marque": "Toy Story",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage buzz l'eclair",
+   "marque": "Toy Story (Buzz l'Eclair)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage roi lion maternelle",
+   "marque": "Le Roi Lion",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "coloriage simba bebe lion",
+   "marque": "Le Roi Lion (Simba)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage moi, moche et mechant",
+   "marque": "Moi, moche et mechant / Les Minions",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage pokémons pour enfant",
+   "marque": "Pokémon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "livre d'activités pokémons à imprimer",
+   "marque": "Pokémon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet de dresseur pokemons 100 pages",
+   "marque": "Pokémon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage pikachus pour enfants",
+   "marque": "Pikachu",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage pikatchu facile à colorier",
+   "marque": "Pikachu",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier d'activités picachu maternelle",
+   "marque": "Pikachu",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage amongus à imprimer",
+   "marque": "Among Us",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de dessin among-us",
+   "marque": "Among Us",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "livre de coloriage pacman rétro",
+   "marque": "Pac-Man",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier d'activités pac man",
+   "marque": "Pac-Man",
+   "mutation": "espace"
+  },
+  {
+   "requete": "coloriage packman pour enfant",
+   "marque": "Pac-Man",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de scores supermario",
+   "marque": "Super Mario (Nintendo)",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage mariokart pour enfants",
+   "marque": "Mario Kart (Nintendo)",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage mariobros",
+   "marque": "Mario Bros (Nintendo)",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage fortnight",
+   "marque": "Fortnite",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de notes fort nite pour ado",
+   "marque": "Fortnite",
+   "mutation": "espace"
+  },
+  {
+   "requete": "livre de coloriage mine craft",
+   "marque": "Minecraft",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier d'activités mine-craft",
+   "marque": "Minecraft",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de coloriage minecrafts",
+   "marque": "Minecraft",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage roblocks",
+   "marque": "Roblox",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de notes gta5",
+   "marque": "GTA (Grand Theft Auto)",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet de scores gtav",
+   "marque": "GTA (Grand Theft Auto)",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet gamer ps5 à remplir",
+   "marque": "PlayStation",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de notes play station 5",
+   "marque": "PlayStation",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier de coloriage x box",
+   "marque": "Xbox",
+   "mutation": "espace"
+  },
+  {
+   "requete": "coloriage animal-crossing",
+   "marque": "Animal Crossing (Nintendo)",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de suivi animalcrossing",
+   "marque": "Animal Crossing (Nintendo)",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage league of legend",
+   "marque": "League of Legends",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet de scores leagueoflegends",
+   "marque": "League of Legends",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage callofduty à imprimer",
+   "marque": "Call of Duty",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet de notes call-of-duty",
+   "marque": "Call of Duty",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de notes over watch",
+   "marque": "Overwatch",
+   "mutation": "espace"
+  },
+  {
+   "requete": "coloriage sonik le hérisson",
+   "marque": "Sonic (Sega)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de scores yugioh",
+   "marque": "Yu-Gi-Oh",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "carnet de collection yu gi oh",
+   "marque": "Yu-Gi-Oh",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier d'activités bey blade",
+   "marque": "Beyblade",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier de coloriage digimons",
+   "marque": "Digimon",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet de collection jeux nintendos",
+   "marque": "Nintendo",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet de coloriage paris saint germain",
+   "marque": "Paris Saint-Germain",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de supporter paris sg",
+   "marque": "Paris Saint-Germain",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de notes olympique marseille",
+   "marque": "Olympique de Marseille",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "coloriage maillot real de madrid",
+   "marque": "Real Madrid",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier d'activites fc barcelona",
+   "marque": "FC Barcelone",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de coloriage barca",
+   "marque": "FC Barcelone",
+   "mutation": "autre"
+  },
+  {
+   "requete": "mots meles ligue des champions",
+   "marque": "Champions League",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de suivi tennis roland garros",
+   "marque": "Roland-Garros",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de stats ligue1 football",
+   "marque": "Ligue 1",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "cahier de coloriage jo paris 2024",
+   "marque": "Jeux Olympiques",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de coloriage coupe du monde de football 2026",
+   "marque": "Coupe du Monde FIFA",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage cr7 football",
+   "marque": "Cristiano Ronaldo",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage neymar jr football",
+   "marque": "Neymar",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage coca cola bouteille",
+   "marque": "Coca-Cola",
+   "mutation": "espace"
+  },
+  {
+   "requete": "cahier d'activites cocacola",
+   "marque": "Coca-Cola",
+   "mutation": "agglutine"
+  },
+  {
+   "requete": "coloriage canette de coca",
+   "marque": "Coca-Cola",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de coloriage mcdonalds",
+   "marque": "McDonald's",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "coloriage mcdonald’s frites",
+   "marque": "McDonald's",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "cahier de coloriage mcdonald’s happy meal",
+   "marque": "McDonald's",
+   "mutation": "apostrophe"
+  },
+  {
+   "requete": "cahier de coloriage mc donald's",
+   "marque": "McDonald's",
+   "mutation": "espace"
+  },
+  {
+   "requete": "coloriage mcdo pour enfant",
+   "marque": "McDonald's",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage bonbons haribos",
+   "marque": "Haribo",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "carnet de coloriage baskets nikes",
+   "marque": "Nike",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "cahier de coloriage addidas",
+   "marque": "Adidas",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage voitures ferraris et lamborghinis",
+   "marque": "Ferrari / Lamborghini",
+   "mutation": "pluriel"
+  },
+  {
+   "requete": "coloriage lambo pour ado",
+   "marque": "Lamborghini",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage tik tok",
+   "marque": "TikTok",
+   "mutation": "espace"
+  },
+  {
+   "requete": "carnet de youtubeur pour enfant",
+   "marque": "YouTube",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de coloriage insta stories",
+   "marque": "Instagram",
+   "mutation": "autre"
+  },
+  {
+   "requete": "coloriage sac vuitton pour ado",
+   "marque": "Louis Vuitton",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "carnet de coloriage moto harley davidson",
+   "marque": "Harley-Davidson",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "coloriage iphone 15 pour ado",
+   "marque": "Apple iPhone",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de coloriage nutela",
+   "marque": "Nutella",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de fan taylor-swift",
+   "marque": "Taylor Swift",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "journal intime swifties",
+   "marque": "Taylor Swift",
+   "mutation": "autre"
+  },
+  {
+   "requete": "planner eras tour concert",
+   "marque": "Taylor Swift (The Eras Tour)",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage black pink",
+   "marque": "Blackpink",
+   "mutation": "espace"
+  },
+  {
+   "requete": "carnet de fan bangtan boys kpop",
+   "marque": "BTS",
+   "mutation": "autre"
+  },
+  {
+   "requete": "carnet de paroles des beatles",
+   "marque": "The Beatles",
+   "mutation": "determinant"
+  },
+  {
+   "requete": "carnet de coloriage mickael jackson",
+   "marque": "Michael Jackson",
+   "mutation": "autre"
+  },
+  {
+   "requete": "cahier de coloriage michael-jackson",
+   "marque": "Michael Jackson",
+   "mutation": "trait-union"
+  },
+  {
+   "requete": "carnet de fan johnny halliday",
+   "marque": "Johnny Hallyday",
+   "mutation": "autre"
+  }
+ ],
+ "doivent_passer": [
+  {
+   "requete": "carnet de méditation om",
+   "piege": "om — sigle volontairement absent de la liste, à ne jamais ajouter"
+  },
+  {
+   "requete": "cahier de vacances cm2 vers la 6ème",
+   "piege": "sigles courts type cm2/mu — entrées de moins de trois lettres"
+  },
+  {
+   "requete": "livre de coloriage ours polaire et banquise",
+   "piege": "petit ours brun réduit à « ours »"
+  },
+  {
+   "requete": "carnet de suivi bébé petit format",
+   "piege": "petit ours brun / le petit nicolas réduits à « petit »"
+  },
+  {
+   "requete": "carnet d'apiculteur reine des abeilles",
+   "piege": "la reine des neiges dé-ancrée puis réduite à « reine »"
+  },
+  {
+   "requete": "coloriage bonhomme de neige et flocons",
+   "piege": "la reine des neiges réduite à « neige »/« neiges »"
+  },
+  {
+   "requete": "cahier d'activités sur les pompiers pour enfants",
+   "piege": "sam le pompier dé-ancré de son déterminant puis réduit à « pompier »"
+  },
+  {
+   "requete": "carnet de coloriage magique cp ce1",
+   "piege": "gabby et la maison magique réduit à « magique »"
+  },
+  {
+   "requete": "carnet de coloriage poney club",
+   "piege": "my little pony traduit en « poney » / mon petit poney réduit"
+  },
+  {
+   "requete": "livre de coloriage papillons et coccinelles",
+   "piege": "ladybug traduit en « coccinelle »"
+  },
+  {
+   "requete": "cahier de coloriage princesses et châteaux",
+   "piege": "disney élargi à « princesse » par association"
+  },
+  {
+   "requete": "coloriage mandala éléphant et lion",
+   "piege": "le roi lion dé-ancré puis réduit à « lion »"
+  },
+  {
+   "requete": "carnet de notes étoiles et constellations",
+   "piege": "star wars réduit à « star »/« étoile »"
+  },
+  {
+   "requete": "cahier de coloriage super héros pour garçon",
+   "piege": "avengers / marvel élargis à « super héros »"
+  },
+  {
+   "requete": "mots mêlés sur les héros de la mythologie",
+   "piege": "my hero academia réduit à « hero »/« héros »"
+  },
+  {
+   "requete": "carnet de coloriage voitures anciennes",
+   "piege": "cars disney réduit à « cars »/« voitures »"
+  },
+  {
+   "requete": "cahier d'activités sur les dinosaures",
+   "piege": "jurassic park élargi à « dinosaure »"
+  },
+  {
+   "requete": "coloriage félins panthère et lynx",
+   "piege": "black panther réduit à « panther »/« panthère »"
+  },
+  {
+   "requete": "carnet de voyage à barcelone à remplir",
+   "piege": "fc barcelone réduit à « barcelone »"
+  },
+  {
+   "requete": "carnet de croquis paris monuments",
+   "piege": "paris saint-germain réduit à « paris »"
+  },
+  {
+   "requete": "carnet de naissance personnalisé prénom Nicolas",
+   "piege": "le petit nicolas dé-ancré puis réduit au prénom « nicolas »"
+  },
+  {
+   "requete": "cahier d’écriture cursive grande section",
+   "piege": "apostrophe typographique U+2019 — la normalisation ne doit pas créer de faux positif"
+  },
+  {
+   "requete": "journal de bord de mon potager d’été",
+   "piege": "apostrophe typographique U+2019 + agglutination éventuelle des mots"
+  },
+  {
+   "requete": "coloriage animaux de la ferme maternelle",
+   "piege": "élargissement aux univers jeunesse (bluey, peppa pig) par thème « ferme/maternelle »"
+  },
+  {
+   "requete": "cahier de coloriage dragons pour enfants",
+   "piege": "dragon ball"
+  },
+  {
+   "requete": "carnet de notes de lecture a remplir",
+   "piege": "death note"
+  },
+  {
+   "requete": "bloc notes quadrille 5x5 a5",
+   "piege": "death note"
+  },
+  {
+   "requete": "cahier de coloriage super heros pour garcon",
+   "piege": "my hero academia"
+  },
+  {
+   "requete": "carnet de suivi des phases de la lune",
+   "piege": "sailor moon"
+  },
+  {
+   "requete": "carnet de bord marin navigation",
+   "piege": "sailor moon"
+  },
+  {
+   "requete": "carnet de chasse a remplir",
+   "piege": "hunter x hunter"
+  },
+  {
+   "requete": "planner digital annuel a imprimer",
+   "piege": "digimon"
+  },
+  {
+   "requete": "carnet de recettes poke bowl",
+   "piege": "pokemon"
+  },
+  {
+   "requete": "cahier de dessin manga vierge a5",
+   "piege": "manga (style, pas une marque)"
+  },
+  {
+   "requete": "cahier d'ecriture japonais kanji debutant",
+   "piege": "kimetsu / animation japonaise"
+  },
+  {
+   "requete": "carnet de voyage tokyo a remplir",
+   "piege": "tokyo ghoul"
+  },
+  {
+   "requete": "cahier d'activites mythologie grecque titans",
+   "piege": "l'attaque des titans"
+  },
+  {
+   "requete": "carnet de recettes de famille a completer",
+   "piege": "spy x family"
+  },
+  {
+   "requete": "cahier de coloriage fees et licornes",
+   "piege": "fairy tail"
+  },
+  {
+   "requete": "cahier de coloriage pirates pour enfants",
+   "piege": "one piece"
+  },
+  {
+   "requete": "carnet d'entretien tronconneuse",
+   "piege": "chainsaw man"
+  },
+  {
+   "requete": "cahier de coloriage toupies",
+   "piege": "beyblade"
+  },
+  {
+   "requete": "carnet d'agent secret pour enfant",
+   "piege": "spy x family"
+  },
+  {
+   "requete": "cahier seyes 96 pages grand format",
+   "piege": "terme technique low-content, aucun mot de marque"
+  },
+  {
+   "requete": "carnet pointille dot grid a5 bullet journal",
+   "piege": "bullet / dot grid, jargon low-content"
+  },
+  {
+   "requete": "grilles de sudoku vierges a remplir",
+   "piege": "jeu de logique generique, proche des cahiers sous licence"
+  },
+  {
+   "requete": "cahier de partitions musique vierge",
+   "piege": "note / death note"
+  },
+  {
+   "requete": "mots meles grand format seniors",
+   "piege": "format low-content generique"
+  },
+  {
+   "requete": "papier millimetre a4 cahier",
+   "piege": "terme technique, aucun mot de marque"
+  },
+  {
+   "requete": "carnet de meditation om et yoga",
+   "piege": "om — sigle volontairement absent de la liste (Olympique de Marseille), cas documente dans exclusions_ip.md"
+  },
+  {
+   "requete": "coloriage bonhomme de neige maternelle",
+   "piege": "om en sous-chaine dans « bonhomme » (cas cite dans le docstring de terme_ip) ; « la reine des neiges » reduite a « neiges »"
+  },
+  {
+   "requete": "cahier de vacances CM2 vers la 6eme",
+   "piege": "cm2 — l'autre exemple de faux positif par sous-chaine cite dans ip_filter.py"
+  },
+  {
+   "requete": "cahier de coloriage mandala anti-stress",
+   "piege": "« iron man » / « spider-man » reduits a « man », qui est une sous-chaine de « mandala »"
+  },
+  {
+   "requete": "carnet de storyboard pour dessinateur",
+   "piege": "« toy story » reduit a « story »"
+  },
+  {
+   "requete": "cahier de coloriage araignees et insectes halloween",
+   "piege": "« homme araignee » (variante Spider-Man) reduite a « araignee »"
+  },
+  {
+   "requete": "carnet de jardinage terre et potager",
+   "piege": "« terre du milieu » reduite a « terre »"
+  },
+  {
+   "requete": "carnet de recettes de famille a remplir",
+   "piege": "« la famille addams » reduite a « famille »"
+  },
+  {
+   "requete": "carnet personnalise prenom Louis",
+   "piege": "« louis vuitton » reduit a « louis » — les carnets au prenom sont une niche low-content majeure"
+  },
+  {
+   "requete": "carnet d'entretien pour voiture",
+   "piege": "« cars disney » reduit a « cars »"
+  },
+  {
+   "requete": "livre d'activites scoubidous et bracelets bresiliens",
+   "piege": "« scoubidou » ajoute comme variante francaise de Scooby-Doo — or le scoubidou est un vrai loisir creatif"
+  },
+  {
+   "requete": "coloriage galette des rois maternelle",
+   "piege": "« le roi lion » reduit a « roi » ; « la reine des neiges » reduite a « reine »"
+  },
+  {
+   "requete": "carnet astrologie signe du lion",
+   "piege": "« le roi lion » reduit a « lion » — le Lion est aussi un signe du zodiaque"
+  },
+  {
+   "requete": "cahier de coloriage dinosaures pour enfant",
+   "piege": "« jurassic park / jurassic parc » elargi a « dinosaure »"
+  },
+  {
+   "requete": "cahier de coloriage serpents et reptiles",
+   "piege": "« serpentard » compare en sous-chaine attrape « serpent »"
+  },
+  {
+   "requete": "cahier de graphisme maternelle PS MS GS",
+   "piege": "psg (3 lettres, deja dans la liste) et « playstation » abrege en « ps » — PS/MS/GS sont les sections de maternelle"
+  },
+  {
+   "requete": "carnet de voyage parcs nationaux de France",
+   "piege": "« jurassic parc » reduit a « parc »"
+  },
+  {
+   "requete": "coloriage chevaliers chateau fort et trone",
+   "piege": "« le trone de fer » reduit a « trone »"
+  },
+  {
+   "requete": "agenda scolaire semainier lundi mardi mercredi",
+   "piege": "« mercredi addams » reduit a « mercredi » — le jour de la semaine est omnipresent dans les planners"
+  },
+  {
+   "requete": "cahier de coloriage super heros a creer soi-meme",
+   "piege": "« marvel » / « avengers » elargis a « super heros »"
+  },
+  {
+   "requete": "cahier de coloriage trains et chemin de fer",
+   "piege": "« le trone de fer » reduit a « fer »"
+  },
+  {
+   "requete": "cahier de coloriage etoiles et constellations",
+   "piege": "« star wars » elargi a « star » / « etoile »"
+  },
+  {
+   "requete": "mots croisés faciles gros caractères",
+   "piege": "animal crossing (crossing / croisés)"
+  },
+  {
+   "requete": "carnet de poche ligné à emporter",
+   "piege": "pokemon (poke / poche)"
+  },
+  {
+   "requete": "cahier d'activités marionnettes à doigts",
+   "piege": "mario (sous-chaîne de marionnettes)"
+  },
+  {
+   "requete": "bloc-notes quadrillé A5 lot de 3",
+   "piege": "roblox (blox / blocs) et normalisation du trait d'union"
+  },
+  {
+   "requete": "coloriage avions supersoniques pour enfants",
+   "piege": "sonic (sous-chaîne de supersoniques)"
+  },
+  {
+   "requete": "carnet de bord station de ski",
+   "piege": "playstation (station)"
+  },
+  {
+   "requete": "carnet d'affirmations positives valorisantes",
+   "piege": "valorant (valorisantes)"
+  },
+  {
+   "requete": "cahier de coloriage châteaux forts",
+   "piege": "fortnite / fortnight (fort)"
+  },
+  {
+   "requete": "carnet de coloriage légendes et mythologie celtique",
+   "piege": "league of legends (legends / légendes)"
+  },
+  {
+   "requete": "carnet de scores de belote et de poker",
+   "piege": "pokemon (poker en correspondance approchée)"
+  },
+  {
+   "requete": "carnet de projets loisirs créatifs et craft",
+   "piege": "minecraft (craft)"
+  },
+  {
+   "requete": "carnet de suivi de ma box mensuelle",
+   "piege": "xbox (box, une fois l'espace de « x box » normalisé)"
+  },
+  {
+   "requete": "carnet A5 couverture souple pack de 4",
+   "piege": "pac-man (pack / pac man)"
+  },
+  {
+   "requete": "cahier de vacances CM2 vers la 6ème",
+   "piege": "sigles courts et chiffres accolés (gta5, cm2) si l'on relâche les frontières de mot"
+  },
+  {
+   "requete": "carnet de méditation om et mantras",
+   "piege": "olympique de marseille (om), faux positif déjà documenté dans exclusions_ip.md"
+  },
+  {
+   "requete": "carnet de voyage Marseille en 7 jours",
+   "piege": "olympique de marseille (tête de franchise « marseille » si l'on corrige le déterminant)"
+  },
+  {
+   "requete": "carnet de voyage Barcelone à colorier",
+   "piege": "fc barcelone (tête « barcelone »)"
+  },
+  {
+   "requete": "carnet de voyage Paris à colorier",
+   "piege": "paris saint-germain (tête « paris »)"
+  },
+  {
+   "requete": "cahier de coloriage princesses et reines",
+   "piege": "la reine des neiges (tête « reine » si l'on retire le déterminant)"
+  },
+  {
+   "requete": "coloriage animaux de la ferme pour tout-petits",
+   "piege": "animal crossing (animal / animaux)"
+  },
+  {
+   "requete": "carnet de scores jeux de société",
+   "piege": "jeux olympiques (tête « jeux »)"
+  },
+  {
+   "requete": "cahier de coloriage voitures de course",
+   "piege": "cars disney (tête « cars » / voitures)"
+  },
+  {
+   "requete": "carnet de mots mêlés héros de la mythologie",
+   "piege": "my hero academia (hero / héros)"
+  },
+  {
+   "requete": "carnet de dessin manga pour débutant",
+   "piege": "section manga de la liste (terme de catégorie, pas une marque)"
+  },
+  {
+   "requete": "cahier de coloriage kawaii pour ado",
+   "piege": "hello kitty / sanrio (kawaii assimilé à l'univers de la marque)"
+  },
+  {
+   "requete": "carnet de notes prénom Camille personnalisé",
+   "piege": "prénoms de la liste (elsa, zelda, mario) si l'on filtre les prénoms de personnages"
+  },
+  {
+   "requete": "carnet de meditation om mantra",
+   "piege": "om (Olympique de Marseille)"
+  },
+  {
+   "requete": "journal de yoga om chakras",
+   "piege": "om (Olympique de Marseille)"
+  },
+  {
+   "requete": "coloriage mandala om zen",
+   "piege": "om (Olympique de Marseille)"
+  },
+  {
+   "requete": "coloriage bonhomme de neige",
+   "piege": "om en sous-chaine dans bonhomme (Olympique de Marseille)"
+  },
+  {
+   "requete": "cahier d'activites ps gs maternelle",
+   "piege": "psg si l'espace est ignoree (ps + gs = petite/grande section)"
+  },
+  {
+   "requete": "cahier de revision bts mco",
+   "piege": "bts (BTS = Brevet de Technicien Superieur) -- DEJA BLOQUE aujourd'hui"
+  },
+  {
+   "requete": "carnet de bord bts communication",
+   "piege": "bts (diplome francais) -- DEJA BLOQUE aujourd'hui"
+  },
+  {
+   "requete": "coloriage puma animal sauvage",
+   "piege": "puma (l'animal) -- DEJA BLOQUE aujourd'hui"
+  },
+  {
+   "requete": "livre d'or famille ferrari",
+   "piege": "ferrari (patronyme corse/italien courant) -- DEJA BLOQUE aujourd'hui"
+  },
+  {
+   "requete": "coloriage mythologie grecque nike deesse",
+   "piege": "nike (Nike, deesse de la victoire, accents depouilles) -- DEJA BLOQUE aujourd'hui"
+  },
+  {
+   "requete": "carnet de voyage a madrid",
+   "piege": "real madrid"
+  },
+  {
+   "requete": "carnet de voyage barcelone",
+   "piege": "fc barcelone"
+  },
+  {
+   "requete": "carnet de voyage liverpool",
+   "piege": "liverpool fc"
+  },
+  {
+   "requete": "carnet de voyage munich",
+   "piege": "bayern munich"
+  },
+  {
+   "requete": "carnet de croquis paris",
+   "piege": "paris saint-germain"
+  },
+  {
+   "requete": "carnet de notes lyon",
+   "piege": "olympique lyonnais"
+  },
+  {
+   "requete": "carnet de notes prenom roland",
+   "piege": "roland-garros"
+  },
+  {
+   "requete": "carnet personnalise prenom michael",
+   "piege": "michael jackson"
+  },
+  {
+   "requete": "cahier d'ecriture prenom aya",
+   "piege": "aya nakamura"
+  },
+  {
+   "requete": "cahier de vacances le tour de la france en train",
+   "piege": "tour de france"
+  },
+  {
+   "requete": "carnet d'entrainement de champion",
+   "piege": "champions league"
+  },
+  {
+   "requete": "coloriage basket et ballon de basket",
+   "piege": "nba / nike (baskets)"
+  },
+  {
+   "requete": "planner de match de football amateur",
+   "piege": "ligue 1 / psg"
+  },
+  {
+   "requete": "carnet de recettes au cacao et chocolat",
+   "piege": "coca-cola / nutella"
+  }
+ ]
+}
