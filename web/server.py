@@ -67,6 +67,30 @@ _USAGE_DB = _ROOT / "99-logs" / "usage.db"
 _HISTORY_DB = _ROOT / "99-logs" / "history.db"
 _USERS_DB = _ROOT / "99-logs" / "comptes.db"
 
+# Plafond de runs SIMULTANES en mode thread. Sans lui, le serveur lancait un fil par job
+# sans aucune limite : dix utilisateurs, c'etait dix runs DataForSEO de front et autant
+# d'ecrivains SQLite concurrents. Le job attend son creneau en restant "en_attente" --
+# le marquer "en cours" avant de demarrer montrerait a l'utilisateur une analyse commencee
+# qui ne progresse pas, sans lui dire si elle est bloquee ou seulement lente.
+RUNS_SIMULTANES_DEFAUT = 5
+_CRENEAUX: dict[int, threading.Semaphore] = {}
+_CRENEAUX_VERROU = threading.Lock()
+
+
+def _creneaux() -> threading.Semaphore:
+    """Un semaphore par valeur de limite, cree a la demande. La limite est lue a chaque
+    appel (jamais figee a l'import) pour rester testable et modifiable sans redemarrage."""
+    try:
+        n = int(os.getenv("RUNS_SIMULTANES_MAX", "") or RUNS_SIMULTANES_DEFAUT)
+    except ValueError:
+        n = RUNS_SIMULTANES_DEFAUT
+    n = max(1, n)
+    with _CRENEAUX_VERROU:
+        if n not in _CRENEAUX:
+            _CRENEAUX[n] = threading.Semaphore(n)
+        return _CRENEAUX[n]
+
+
 def _plafond_usd_par_run() -> float | None:
     """Le plafond de cout par run, lu a CHAQUE appel (jamais fige a l'import : il doit
     pouvoir changer sans redemarrage, et rester testable)."""
@@ -686,31 +710,37 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         # Connexion/instance par appel (même pattern que cache.py) : sûr en concurrence,
         # ce thread ne partage aucun objet Python avec la requête qui l'a lancé.
         job_store = JobStore(_JOBS_DB)
-        job_store.start(job_id)
-        cost = CostTracker()
+        # Attend un creneau AVANT de marquer le job demarre : sinon l'utilisateur
+        # verrait une analyse « en cours » qui ne progresse pas, sans savoir si elle
+        # est bloquee ou seulement lente. Tant qu'il attend, son statut reste
+        # « en attente », ce qui est exactement ce qui se passe.
+        with _creneaux():
+            job_store.start(job_id)
+            cost = CostTracker()
 
-        def progress(msg: str) -> None:
-            job_store.append_progress(job_id, msg)
+            def progress(msg: str) -> None:
+                job_store.append_progress(job_id, msg)
 
-        try:
-            resultat = runner(params, progress, cost, user_id)
-            b = cost.breakdown()
-            # L'usage est imputé AVANT de marquer le job terminé. L'ordre inverse ouvrait
-            # une course : un client qui interroge dès qu'il voit « termine » lisait un
-            # compteur pas encore à jour, donc un total périmé juste après son run — et
-            # deux runs lancés coup sur coup pouvaient passer sous un plafond déjà atteint.
-            # « Terminé » doit impliquer « compté ».
-            _imputer(user_id, type_, b["usd"], n_analyses=1)
-            job_store.finish(job_id, resultat, b)
-        except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
-            b = cost.breakdown()
-            _imputer(user_id, type_, b["usd"], n_analyses=1)
-            job_store.fail(job_id, _erreur_publique(e), cout=b)
+            try:
+                resultat = runner(params, progress, cost, user_id)
+                b = cost.breakdown()
+                # L'usage est imputé AVANT de marquer le job terminé. L'ordre inverse ouvrait
+                # une course : un client qui interroge dès qu'il voit « termine » lisait un
+                # compteur pas encore à jour, donc un total périmé juste après son run — et
+                # deux runs lancés coup sur coup pouvaient passer sous un plafond déjà atteint.
+                # « Terminé » doit impliquer « compté ».
+                _imputer(user_id, type_, b["usd"], n_analyses=1)
+                job_store.finish(job_id, resultat, b)
+            except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
+                b = cost.breakdown()
+                _imputer(user_id, type_, b["usd"], n_analyses=1)
+                job_store.fail(job_id, _erreur_publique(e), cout=b)
 
     if _mode_jobs() == "worker":
         # Empile SEULEMENT. Sans ce garde, serveur ET worker executeraient le meme job :
-        # deux fois les SERP, deux fois les tokens. `claim_next` protege de la course entre
-        # deux workers, mais c'est ici qu'on decide QUI travaille.
+        # deux fois les SERP, deux fois les tokens. `claim_next` protege de la course
+        # entre deux workers, mais c'est ICI qu'on decide QUI travaille -- donc avant de
+        # lancer le moindre fil, jamais depuis l'interieur de celui-ci.
         return {"id": job_id}
 
     threading.Thread(target=worker, daemon=True).start()

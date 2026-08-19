@@ -136,9 +136,18 @@ class JobStore:
             cx.isolation_level = None
             cx.execute("BEGIN IMMEDIATE")
             try:
+                # EQUITE D'ABORD, chronologie ensuite. Une file purement
+                # chronologique laisse un utilisateur qui lance cinq analyses occuper
+                # cinq creneaux et faire attendre tout le monde derriere lui. Le plafond
+                # mensuel ne protege pas de ca : il compte des analyses sur trente jours,
+                # pas des creneaux a l'instant t. On sert donc celui qui en occupe le
+                # MOINS, et l'anciennete ne departage qu'a egalite -- l'ordre d'arrivee
+                # n'est pas supprime, il est seulement precede.
                 row = cx.execute(
-                    "SELECT id FROM jobs WHERE statut='en_attente' "
-                    "ORDER BY cree_le ASC LIMIT 1").fetchone()
+                    "SELECT j.id FROM jobs j WHERE j.statut='en_attente' "
+                    "ORDER BY (SELECT COUNT(*) FROM jobs r "
+                    "          WHERE r.statut='en_cours' AND r.user_id = j.user_id) ASC, "
+                    "         j.cree_le ASC LIMIT 1").fetchone()
                 if row is None:
                     cx.execute("COMMIT")
                     return None

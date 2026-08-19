@@ -32,6 +32,7 @@ Lancer :  python 01-scripts/worker.py
 """
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -55,6 +56,25 @@ ORPHELIN_APRES_S = 30 * 60
 # démarre 2 s plus tard ne change rien à un run de 5 minutes, et sonder en boucle serrée
 # ferait tourner un CPU pour rien.
 REPOS_S = 2.0
+
+# Nombre de travaux traites DE FRONT. Un worker sequentiel fait attendre la dixieme
+# analyse fiction deux heures et demie ; a 5 creneaux elle demarre au bout d'un tour.
+# Les runs sont domines par l'ATTENTE reseau (la file ASIN de DataForSEO met ~250 s quel
+# que soit le lot) : des fils y sont peu couteux, ils passent leur temps bloques.
+# ATTENTION, limite NON MESUREE : le vrai plafond depend des quotas DataForSEO et
+# Anthropic du compte, qu'aucun test du depot ne connait. A revoir avec des chiffres le
+# jour ou plusieurs clients tournent vraiment.
+CONCURRENCE_DEFAUT = 5
+
+
+def concurrence_configuree() -> int:
+    """Lue a chaque appel, jamais figee a l'import. Une saisie fautive retombe sur le
+    defaut plutot que de faire planter le service -- meme posture que partout ailleurs."""
+    try:
+        n = int(os.getenv("WORKER_CONCURRENCE", "") or CONCURRENCE_DEFAUT)
+    except ValueError:
+        return CONCURRENCE_DEFAUT
+    return max(1, n)
 
 
 def recuperer_orphelins(store: JobStore, depuis_s: float = ORPHELIN_APRES_S,
@@ -118,21 +138,39 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
     return True
 
 
-def boucle(store: JobStore | None = None, repos_s: float = REPOS_S,
-           max_tours: int | None = None, journal=print) -> None:
-    """Boucle principale. `max_tours` sert aux tests ; en production elle ne s'arrête pas.
-
-    La récupération des orphelins tourne AU DÉMARRAGE : c'est le moment où l'on sait qu'un
-    redémarrage vient d'avoir lieu, donc que des jobs peuvent être restés en l'air."""
-    store = store or JobStore(server._JOBS_DB)
-    n = recuperer_orphelins(store, journal=journal)
-    journal(f"[worker] démarré · {n} travail(aux) orphelin(s) récupéré(s)")
-
+def _fil(store: JobStore, repos_s: float, max_tours: int | None, journal) -> None:
+    """Un fil du pool : reclame, execute, recommence. `claim_next` etant atomique, N fils
+    (ou N processus) ne prendront jamais le meme travail."""
     tours = 0
     while max_tours is None or tours < max_tours:
         tours += 1
         if not executer_un_job(store, journal=journal):
             time.sleep(repos_s)
+
+
+def boucle(store: JobStore | None = None, repos_s: float = REPOS_S,
+           max_tours: int | None = None, journal=print,
+           concurrence: int | None = None) -> None:
+    """Pool de `concurrence` fils. `max_tours` sert aux tests ; en production, sans fin.
+
+    La recuperation des orphelins tourne AU DEMARRAGE, avant d'ouvrir les fils : c'est le
+    moment ou l'on sait qu'un redemarrage vient d'avoir lieu, donc que des travaux peuvent
+    etre restes en l'air. La faire plus tard les laisserait visibles "en cours" pendant
+    que le pool travaille a cote."""
+    store = store or JobStore(server._JOBS_DB)
+    k = concurrence if concurrence is not None else concurrence_configuree()
+    n = recuperer_orphelins(store, journal=journal)
+    journal(f"[worker] demarre · {k} creneau(x) · {n} travail(aux) orphelin(s) recupere(s)")
+
+    if k == 1:
+        _fil(store, repos_s, max_tours, journal)
+        return
+    fils = [threading.Thread(target=_fil, args=(store, repos_s, max_tours, journal),
+                             daemon=True) for _ in range(k)]
+    for f in fils:
+        f.start()
+    for f in fils:
+        f.join()
 
 
 if __name__ == "__main__":
