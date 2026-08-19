@@ -20,6 +20,8 @@ Phases :
 Invariant §5.29 : un échec n'interrompt jamais le run, il est toujours compté, et il ne se
 lit jamais comme une mesure.
 """
+import os
+
 from dotenv import load_dotenv
 
 from autocomplete_expand import expand as _expand
@@ -212,10 +214,26 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     # payload atypique est absent du dict (jamais une entrée factice), et leur classement
     # reste récupérable par le canal BSR — gratuit en local. Renoncer pour eux perdrait une
     # mesure encore atteignable ; les redemander TOUS ferait payer deux fois les autres.
-    manquants = [a for a in union if a not in rangs]
+    # `not in enrichis`, et NON `not in rangs`. Un livre rendu par l'enrichissement mais
+    # sans BSR lisible (un carnet classe « en Fournitures de bureau », jamais « en
+    # Livres ») repartait en facturation pour un second appel qui, sur le MEME payload, ne
+    # pouvait rien rendre de plus : parse_asin_bsr est strictement plus stricte que
+    # parse_bsr_rank. Gaspillage garanti sterile, et recurrent. Seuls les ASIN ABSENTS du
+    # dict valent d'etre re-sondes -- ce que le docstring disait deja, et que le code
+    # contredisait.
+    manquants = [a for a in union if a not in enrichis]
     if manquants:
         try:
-            cost.verifier()
+            # Plafond PREDICTIF, comme sur la boucle SERP du meme fichier. Appele a 0, il
+            # laissait passer un second lot de 120 ASIN : le plafond etait franchi de
+            # 0,18 $ EN SILENCE, et le devis sous-estime de 45 %. Le tarif est pourtant
+            # parfaitement previsible ici. Le canal scrape reste a 0 : il est gratuit,
+            # rien ne doit le brider.
+            _src = (bsr_source or os.getenv("BSR_SOURCE", "scrape")).strip().lower()
+            _prevu = (dataforseo_cost_usd(len(manquants),
+                                          getattr(provider, "priority", 2))
+                      if fetch_bsr_fn is None and _src == "dataforseo" else 0.0)
+            cost.verifier(_prevu)
             progress(f"Classement de {len(manquants)} livre(s) non enrichi(s)…")
             bsr_map = resolve_bsrs(manquants, source=bsr_source, provider=provider,
                                    fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,

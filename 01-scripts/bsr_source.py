@@ -7,6 +7,11 @@ import time
 from amazon_product import fetch_bsr as _scrape_bsr
 
 BSR_TTL_S = 15 * 24 * 3600     # 15 jours. Le cache est MUTUALISE entre tous les comptes : allonger sa duree
+# Duree de memorisation d'une ABSENCE de classement. Bien plus courte que celle d'un
+# rang : un livre peut entrer au classement a tout moment, et figer 15 jours une
+# non-mesure nous rendrait aveugles a son arrivee. 3 jours tuent le gaspillage sans
+# transformer « pas encore classe » en « jamais classe ».
+ECHEC_BSR_TTL_S = 3 * 24 * 3600
 # multiplie mecaniquement l'economie, et c'est gratuit au sens propre. Ce qu'on
 # echange, c'est de la fraicheur -- mais le produit compare des ORDRES DE GRANDEUR
 # (sous 10 000, sous 50 000, au-dela), pas un classement a la journee, et un rayon
@@ -24,6 +29,12 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
         c = cache.get_bsr(a, location) if cache else None
         if c is not None:
             out[a] = c
+        elif cache is not None and cache.bsr_absent(a, location):
+            # DEJA sonde, sans classement exploitable. On ne saute pas l'appel parce
+            # qu'on ignore le resultat -- on le saute parce qu'on le CONNAIT. C'est toute
+            # la difference entre une non-mesure et une mesure negative (5.10), et c'est
+            # elle qui autorise l'economie.
+            out[a] = None
         else:
             misses.append(a)
 
@@ -52,4 +63,13 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
             for a in misses:
                 if out.get(a) is not None:
                     cache.set_bsr(a, location, out[a], BSR_TTL_S)
+                else:
+                    # ECHEC MEMORISE, et c'est une economie reelle : sans lui, les memes
+                    # ASIN sans classement repartaient en facturation a CHAQUE run,
+                    # indefiniment. Un echec mesure est une information.
+                    # TTL RACCOURCI : un livre peut entrer au classement (il vient d'etre
+                    # publie, ou il vient de vendre). Memoriser l'absence 15 jours nous
+                    # rendrait aveugles a son arrivee ; 3 jours suffisent a tuer le
+                    # gaspillage sans figer une non-mesure.
+                    cache.set_bsr_absent(a, location, ECHEC_BSR_TTL_S)
     return out

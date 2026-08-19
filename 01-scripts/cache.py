@@ -142,6 +142,25 @@ class Cache:
                          marketplace: str = "fr") -> None:
         self.set(self._autocomplete_key(prefixe, marketplace), list(suggestions), ttl_s)
 
+    @staticmethod
+    def _bsr_absent_key(asin: str, location: int) -> str:
+        """Cle SEPAREE de `bsr:`. Ecrire un None dans la cle normale ferait dire au cache
+        « je connais ce livre et il n'a pas de rang » d'une facon impossible a distinguer
+        d'un defaut de cache -- et `get_bsr` rend deja None dans les deux cas."""
+        return f"bsr-absent:{location}:{asin}"
+
+    def bsr_absent(self, asin: str, location: int) -> bool:
+        """True = on a DEJA sonde cet ASIN et il n'avait pas de classement exploitable.
+
+        C'est une MESURE (« sonde, rien trouve »), pas un trou (« jamais sonde »). La
+        distinction est exactement celle de 5.10, et c'est elle qui autorise a ne pas
+        re-payer : on ne saute pas un appel parce qu'on ignore le resultat, on le saute
+        parce qu'on le connait."""
+        return bool(self.get(self._bsr_absent_key(asin, location)))
+
+    def set_bsr_absent(self, asin: str, location: int, ttl_s: float) -> None:
+        self.set(self._bsr_absent_key(asin, location), True, ttl_s)
+
     def get_bsr(self, asin: str, location: int) -> BsrInfo | None:
         d = self.get(self._bsr_key(asin, location))
         return BsrInfo.model_validate(d) if d else None

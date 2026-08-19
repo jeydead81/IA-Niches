@@ -603,6 +603,30 @@ def _run_fiction_job(params: dict, progress, cost, user_id: str) -> list:
 # est celui qu'on RECOMMANDE (il survit à la fermeture de l'onglet et vérifie le plafond),
 # donc c'est précisément lui qui doit alimenter l'historique. Le laisser muet — l'état
 # initial, trouvé en revue — vidait la fonction de sa substance pour l'usage nominal.
+def _borner_texte(nom: str, valeur, maxi: int = MAX_LONGUEUR_GRAINE) -> str:
+    """Borne un texte libre AVANT qu'il n'atteigne un prompt LLM.
+
+    La graine n'etait bornee que sur le chemin low-content. Or ces textes partent dans le
+    prompt d'ideation et se facturent AU TOKEN : un texte de plusieurs milliers de
+    caracteres a ete mesure jusqu'a ~2 $ pour un run dont le devis annoncait 0,08 $. Le
+    devis ne modelise pas la taille des textes de l'utilisateur -- c'est donc la borne qui
+    doit la tenir, pas lui.
+
+    REFUSE plutot que de rogner, comme `_borner` : quelqu'un qui colle un texte de 5 000
+    caracteres doit savoir qu'il ne sera pas analyse, pas decouvrir que seuls ses 80
+    premiers l'ont ete."""
+    if valeur is None:
+        return ""
+    if not isinstance(valeur, str):
+        raise HTTPException(status_code=400,
+                            detail=f"{nom} doit etre du texte (recu : {type(valeur).__name__})")
+    if len(valeur) > maxi:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{nom} doit faire au plus {maxi} caracteres (recu : {len(valeur)})")
+    return valeur
+
+
 def _valider_volumes(type_: str, params: dict) -> None:
     """Valide tout ce qui peut l'être AVANT de créer le job et de rendre 202.
 
@@ -610,17 +634,13 @@ def _valider_volumes(type_: str, params: dict) -> None:
     rendu : l'utilisateur ne verrait qu'un job en échec, sans savoir que c'est sa saisie
     qui est en cause."""
     if type_ == "scout":
+        _borner_texte("seed", params.get("seed"))
         _borner("n_ideas", params.get("n_ideas", params.get("ideas", 12)), MAX_IDEES)
         _borner("n_search", params.get("n_search", params.get("search", 6)),
                 MAX_RECHERCHES)
     elif type_ == "lowcontent":
         _borner("n_search", params.get("n_search", 6), MAX_RECHERCHES_LC)
-        seed = params.get("seed") or ""
-        if not isinstance(seed, str) or len(seed) > MAX_LONGUEUR_GRAINE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"la graine doit faire au plus {MAX_LONGUEUR_GRAINE} caracteres "
-                       f"(recu : {len(seed) if isinstance(seed, str) else type(seed).__name__})")
+        _borner_texte("seed", params.get("seed"))
         # Format valide ICI, pas dans le runner. Levee depuis le thread detache, la 400
         # arriverait apres un 202 deja rendu : l'utilisateur verrait une analyse
         # "lancee" qui rate, sans comprendre que sa saisie etait fautive.
@@ -631,6 +651,7 @@ def _valider_volumes(type_: str, params: dict) -> None:
                 detail=f"format low-content inconnu : \u00ab {cle} \u00bb "
                        f"(dispo : {valid_formats_lc()})")
     elif type_ == "fiction":
+        _borner_texte("libre", params.get("libre"))
         _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
         # Le sous-genre est validé ICI, pas seulement dans le runner. Le flux direct
         # rendait une 400 immédiate ; en ne gardant que le chemin asynchrone, laisser la

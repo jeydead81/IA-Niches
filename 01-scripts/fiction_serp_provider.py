@@ -4,8 +4,12 @@ puis enrichissement BATCHÉ des n_top premiers ASIN, avec cache inter-runs et co
 from fiction_books import parse_enriched_book
 from fiction_taxonomy import node_for, search_param_for
 from models import EnrichedBook, FictionNiche, FictionShelf
+from cache import BOOK_TTL_S
 
-BOOK_TTL_S = 7 * 24 * 3600
+# TTL IMPORTE, jamais redefini. Il l'etait ici a 7 jours pendant que cache.py
+# documentait 15 : deux constantes du meme nom dans deux modules, l'une testee et
+# l'autre appliquee. C'est ce qui a permis au defaut de vivre -- et au test
+# d'harmonisation de passer au vert en surveillant la constante morte.
 
 
 def search_param_for_niche(niche: FictionNiche, version: str = "fr_v1") -> str:
