@@ -124,12 +124,14 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
     try:
         resultat = runner(job.params, progress, cost, job.user_id)
         b = cost.breakdown()
-        _imputer(job.user_id, job.type, b["usd"], 1)
+        # La place a ete prise a la CREATION du job (reservation atomique cote
+        # serveur) : ici on n'inscrit que le cout, sans recompter l'analyse.
+        _imputer(job.user_id, job.type, b["usd"], 0)
         store.finish(job.id, resultat, b)
         journal(f"[worker] job {job.id} terminé ({b['dataforseo_calls']} recherches)")
     except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
         b = cost.breakdown()
-        _imputer(job.user_id, job.type, b["usd"], 1)
+        _imputer(job.user_id, job.type, b["usd"], 0)
         # MÊME assainissement qu'en ligne (A3) : le message d'exception peut porter les
         # identifiants DataForSEO, et le worker écrit dans le MÊME champ que le serveur.
         # Le corriger d'un seul côté laisserait la fuite entière sur l'autre.

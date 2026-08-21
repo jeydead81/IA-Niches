@@ -16,6 +16,11 @@ from pydantic import BaseModel
 FENETRE_GLISSANTE_S = 30 * 24 * 3600     # mensuel glissant, pas calendaire ni cumulatif à vie
 
 
+class PlafondAtteint(RuntimeError):
+    """Le plafond mensuel de l'utilisateur est atteint. Levee DANS la transaction de
+    reservation, donc avant qu'une place n'ait ete prise."""
+
+
 class UsageResume(BaseModel):
     """Usage cumulé d'un utilisateur sur la fenêtre considérée."""
     n_analyses: int = 0
@@ -105,6 +110,49 @@ class UsageMeter:
         n'a pas ete depense."""
         with self._conn() as cx:
             cx.execute("UPDATE usage SET cout_usd=? WHERE id=?", (cout_usd, ligne_id))
+
+    def reserver_analyse(self, user_id: str, type: str, n_analyses: int = 1) -> int:
+        """Verifie le plafond ET prend la place, dans UNE SEULE transaction.
+
+        Le plafond etait verifie AVANT le run et impute APRES -- deux a quinze minutes
+        plus tard. Entre les deux, une rafale de requetes voyait toutes le meme compteur,
+        celui d'avant la premiere : le plafond ne bridait qu'un client qui attend
+        sagement la fin de chaque analyse, c'est-a-dire personne d'interesse a le
+        contourner.
+
+        `BEGIN IMMEDIATE` prend le verrou d'ECRITURE avant de compter. Sans lui, deux
+        processus lisent le meme total puis ecrivent tous les deux, et SQLite ne s'y
+        oppose pas -- meme idiome que `JobStore.claim_next`, pour la meme raison : c'est
+        un des rares endroits du depot ou une course coute de l'argent reel.
+
+        Rend l'identifiant de ligne, a solder avec le cout reel quand le run se termine.
+        Leve `PlafondAtteint` si la place n'est pas disponible."""
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                if self.plafond_analyses is not None:
+                    cutoff = self.now() - self.fenetre_s
+                    row = cx.execute(
+                        "SELECT COALESCE(SUM(n_analyses), 0) FROM usage "
+                        "WHERE user_id=? AND horodatage>=?", (user_id, cutoff)).fetchone()
+                    if row[0] + n_analyses > self.plafond_analyses:
+                        cx.execute("ROLLBACK")
+                        raise PlafondAtteint(
+                            f"plafond mensuel atteint ({self.plafond_analyses} analyses "
+                            f"sur 30 jours glissants)")
+                cur = cx.execute(
+                    "INSERT INTO usage (user_id, type, cout_usd, n_analyses, horodatage) "
+                    "VALUES (?, ?, 0.0, ?, ?)",
+                    (user_id, type, n_analyses, self.now()))
+                ligne = int(cur.lastrowid)
+                cx.execute("COMMIT")
+                return ligne
+            except PlafondAtteint:
+                raise
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
 
     def autorise(self, user_id: str, n_analyses: int = 1) -> bool:
         """Vérifié AVANT de dépenser. Sans plafond configuré : toujours autorisé (mais

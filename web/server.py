@@ -49,7 +49,7 @@ from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
 from categories import suggerer_categories  # noqa: E402
 from jobs import JobStore  # noqa: E402
-from usage import UsageMeter  # noqa: E402
+from usage import PlafondAtteint, UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
 from auth import (EmailDejaPris, EmailInvalide, MAX_INSCRIPTIONS_PAR_CLIENT,  # noqa: E402
                   MotDePasseFaible, SESSION_TTL_S, TropDeTentatives, UserStore)
@@ -754,12 +754,6 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     # est désormais ignorée (elle est retirée de params comme avant, sans jamais être lue).
 
     # Le plafond est vérifié AVANT de dépenser (§4 du plan SaaS), jamais après coup.
-    usage = UsageMeter(_USAGE_DB, plafond_analyses=_plafond_analyses_mensuel())
-    if not usage.autorise(user_id, n_analyses=1):
-        raise HTTPException(
-            status_code=429,
-            detail=f"plafond mensuel atteint pour l'utilisateur « {user_id} »")
-
     params = {k: v for k, v in body.items() if k not in ("type", "user_id")}
     # DEVIS AVANT DEPENSE. Le plafond en cours de run s'arretait proprement, mais rendait
     # quand meme un rapport TRONQUE a quelqu'un qui avait paye son plafond entier -- et
@@ -773,6 +767,22 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     # Bornes validées AVANT de créer le job : levée depuis le thread détaché, la 400
     # arriverait après un 202 déjà rendu, donc invisible pour le client.
     _valider_volumes(type_, params)
+
+    # RESERVATION ATOMIQUE, et elle vient EN DERNIER. `autorise()` puis imputation a la
+    # fin du run laissait entre les deux la duree entiere de l'analyse : une rafale de
+    # requetes voyait toutes le meme compteur, celui d'avant la premiere, et passait en
+    # entier. Ici la place est prise DANS la transaction de controle.
+    #
+    # Placee APRES la validation des volumes et le devis : une saisie fautive ou un run
+    # trop gros est refuse sans consommer d'unite de plafond -- sinon l'utilisateur
+    # paierait ses erreurs de frappe.
+    try:
+        ligne_usage = UsageMeter(
+            _USAGE_DB, plafond_analyses=_plafond_analyses_mensuel()
+        ).reserver_analyse(user_id, type_)
+    except PlafondAtteint as e:
+        raise HTTPException(status_code=429, detail=str(e))
+
     store = JobStore(_JOBS_DB)
     job_id = store.create(type_, params, user_id=user_id)
 
@@ -799,11 +809,16 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
                 # compteur pas encore à jour, donc un total périmé juste après son run — et
                 # deux runs lancés coup sur coup pouvaient passer sous un plafond déjà atteint.
                 # « Terminé » doit impliquer « compté ».
-                _imputer(user_id, type_, b["usd"], n_analyses=1)
+                # SOLDE la reservation : la place a deja ete prise a la creation.
+                # Imputer une seconde ligne consommerait DEUX unites par run.
+                UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
                 job_store.finish(job_id, resultat, b)
             except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
                 b = cost.breakdown()
-                _imputer(user_id, type_, b["usd"], n_analyses=1)
+                # L'argent parti reste compte, et la place reste prise : un echec ne
+                # rembourse pas une unite de plafond, sinon un run qui echoue en boucle
+                # serait gratuit.
+                UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
                 job_store.fail(job_id, _erreur_publique(e), cout=b)
 
     if _mode_jobs() == "worker":
