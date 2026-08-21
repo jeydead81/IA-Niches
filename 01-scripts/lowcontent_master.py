@@ -57,6 +57,18 @@ def _graine(seed: str | None, format_cle: str | None, version: str) -> str:
     return ""
 
 
+def _rang_shortlist(n_enfants: int | None, profondeur: int, demand: int) -> tuple:
+    """Cle de tri de la shortlist -- c'est-a-dire de CE QU'ON PAIE.
+
+    `n_enfants is None` = requete jamais sondee. Elle ne doit pas etre classee derriere une
+    feuille dont on SAIT qu'elle est sterile : on ne sait rien d'elle, ce n'est pas la meme
+    chose que savoir qu'elle est mauvaise. On la place donc au niveau d'un affinage,
+    c'est-a-dire au-dessus d'un zero mesure et en dessous d'un signal reel."""
+    connu = n_enfants is not None
+    valeur = n_enfants if connu else 1
+    return (valeur, profondeur, demand)
+
+
 def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
                          n_ideas: int = 12, n_search: int = 6,
                          n_enrich_per_niche: int = 6, inclure_saisonnier: bool = False,
@@ -125,7 +137,8 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
             NicheValidation(niche=n.niche, requete_amazon=n.requete_amazon,
                             categorie=n.categorie,
                             satellite_keywords=n.satellite_keywords,
-                            demand_score=max(1, n.n_enfants_autocomplete), validated=True)
+                            demand_score=max(1, n.n_enfants_autocomplete or 0),
+                            validated=True)
             for n in niches]
     else:
         progress("Confrontation des propositions à Amazon (autocomplete, gratuit)…")
@@ -146,8 +159,9 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     # décider de ce qu'on paie.
     def _rang(v):
         n = par_requete.get(v.requete_amazon)
-        return (n.n_enfants_autocomplete if n else 0,
-                n.profondeur_autocomplete if n else 0, v.demand_score)
+        return _rang_shortlist(n.n_enfants_autocomplete if n else None,
+                               n.profondeur_autocomplete if n else 0,
+                               v.demand_score)
 
     shortlist = sorted(validees, key=_rang, reverse=True)[:n_search]
     if not shortlist:

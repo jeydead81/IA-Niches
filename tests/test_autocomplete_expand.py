@@ -71,8 +71,10 @@ def test_n_enfants_compte_ce_que_la_requete_a_elle_meme_produit():
     out = expand("livre coloriage", fetch=f, depth=2, alphabet=False, pause=0)
     par_requete = {s.requete: s for s in out}
     assert par_requete["livre coloriage princesse"].n_enfants == 2
-    # feuille : sondée, aucune complétion — 0 mesuré, pas 0 par défaut
-    assert par_requete["livre coloriage princesse licorne 3 ans"].n_enfants == 0
+    # Au DERNIER niveau, la requete n'est jamais sondee : son compteur vaut None, et pas
+    # zero. La version precedente de ce test affirmait « 0 mesure, pas 0 par defaut » --
+    # c'etait faux, et ca encodait le malentendu que ce compteur devait justement eviter.
+    assert par_requete["livre coloriage princesse licorne 3 ans"].n_enfants is None
 
 
 def test_le_mode_alphabet_fait_ressortir_ce_que_le_prefixe_seul_cache():

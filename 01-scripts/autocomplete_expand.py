@@ -44,7 +44,11 @@ class Suggestion:
     requete: str
     parent: str = ""
     profondeur: int = 0
-    n_enfants: int = 0
+    # None = JAMAIS sondee. Zero voudrait dire « sondee, aucune completion », c'est-a-dire
+    # une feuille sterile -- une MESURE. Les requetes du dernier niveau ne sont jamais
+    # interrogees, et celles que le budget a coupees non plus : les rendre a zero les
+    # ferait passer pour steriles, et ce compteur decide de ce qu'on PAIE ensuite.
+    n_enfants: int | None = None
 
 
 def _plat(texte: str) -> str:

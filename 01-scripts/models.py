@@ -52,7 +52,10 @@ class LowContentNiche(NicheCandidate):
     # issue de l'ideation (elle n'a pas ete trouvee dans une traine), pas une mesure
     # manquante deguisee : c'est `source` qui dit laquelle des deux on regarde.
     profondeur_autocomplete: int = 0
-    n_enfants_autocomplete: int = 0
+    # None = requete JAMAIS sondee (fond de l'arbre, budget de sondes epuise). Zero
+    # signifierait « sondee, aucune completion » -- une MESURE. Or ce compteur decide de
+    # ce qu'on PAIE : il est le premier critere de tri de la shortlist.
+    n_enfants_autocomplete: int | None = 0
 
 
 class NicheList(BaseModel):

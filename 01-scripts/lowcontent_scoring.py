@@ -301,9 +301,12 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
     # porte une intention plus forte qu'une requête terminale. `demand_score` seul sature
     # (16 niches sur 30 au-dessus du plafond en non-fiction) ; la position dans l'arbre,
     # elle, discrimine encore.
-    if niche.profondeur_autocomplete >= 2:
+    if (niche.profondeur_autocomplete or 0) >= 2:
         demande += 1
-    if niche.n_enfants_autocomplete >= 3:
+    # `None` = requete JAMAIS sondee (fond de l'arbre, ou budget epuise). Ni bonus ni
+    # malus : une absence de mesure ne se convertit pas davantage en mesure defavorable
+    # qu'en mesure favorable.
+    if (niche.n_enfants_autocomplete or 0) >= 3:
         demande += 1
     if bsr_best is not None:
         demande += 2 if bsr_best < 5_000 else 1 if crit1 else 0
