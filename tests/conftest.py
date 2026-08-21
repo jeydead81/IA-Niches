@@ -20,6 +20,21 @@ def isoler_bases(monkeypatch, server, tmp_path) -> None:
     for attr, nom in (("_JOBS_DB", "jobs.db"), ("_USAGE_DB", "usage.db"),
                       ("_HISTORY_DB", "history.db"), ("_USERS_DB", "comptes.db")):
         monkeypatch.setattr(server, attr, tmp_path / nom)
+    _reinitialiser_creneaux(server)
+
+
+def _reinitialiser_creneaux(server) -> None:
+    """Vide le cache de semaphores de `server`.
+
+    Ces semaphores sont un ETAT GLOBAL DE MODULE, exactement comme les chemins de bases :
+    ils survivent d'un test a l'autre. Un test qui se termine pendant qu'un fil detient
+    encore un creneau laissait la place prise pour les tests SUIVANTS, qui attendaient
+    alors le leur jusqu'a expiration -- des echecs INTERMITTENTS, sur des tests sans
+    rapport avec la concurrence.
+
+    Un test rouge une fois sur dix erode plus la confiance dans la suite qu'il ne protege
+    de quoi que ce soit : c'est deja la lecon de `_attendre_job`."""
+    server._CRENEAUX.clear()
 
 
 def ouvrir_inscriptions(monkeypatch) -> None:

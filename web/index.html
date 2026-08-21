@@ -10,7 +10,7 @@
   :root {
     --primary:#1E40AF; --primary-600:#1D4ED8; --secondary:#3B82F6; --accent:#D97706;
     --bg:#F1F5F9; --surface:#FFFFFF; --muted:#E9EEF6; --border:#E2E8F0;
-    --text:#0F172A; --text-muted:#64748B; --heading:#1E3A8A;
+    --text:#0F172A; --text-muted:#556274; --heading:#1E3A8A; /* 5,7 sur blanc et non 4,76 : tout le texte secondaire etait cale a la decimale sous le seuil AA de 4,5, sur des tailles de 11 a 12,5 px. Un gris legerement eclairci ou un fond de carte modifie le faisait basculer sans que rien ne le signale. */
     --green:#16A34A; --green-bg:#DCFCE7; --amber:#D97706; --amber-bg:#FEF3C7;
     --red:#DC2626; --red-bg:#FEE2E2;
     --mono:'Fira Code',ui-monospace,monospace; --sans:'Fira Sans',system-ui,sans-serif;
@@ -394,6 +394,31 @@
     text-transform:uppercase;letter-spacing:.4px}
 
   footer{margin-top:34px;text-align:center;color:#94A3B8;font-size:12px}
+  /* UN SEUL point de rupture. La page ne CASSAIT pas sur petit ecran -- le tableau
+     scrolle dans son conteneur, le corps ne part jamais en travers -- mais lire sept
+     colonnes en balayant sur 375 px n'est pas une lecture, c'est un dechiffrage.
+     On MASQUE les colonnes secondaires, on ne les perd pas : demande, penetration et
+     sponsorises restent lisibles dans la ligne depliee. Score, niche et BSR suffisent
+     a trier. */
+  @media (max-width: 720px) {
+    body{padding:0 12px 40px}
+    form{flex-direction:column;align-items:stretch}
+    .field,.field.grow{width:100%}
+    .run{width:100%;justify-content:center}
+    .presets{display:grid;grid-template-columns:repeat(3,1fr)}
+    .preset span{text-align:center;padding:8px 6px}
+    thead th:nth-child(3),thead th:nth-child(4),thead th:nth-child(7),
+    tbody td:nth-child(3),tbody td:nth-child(4),tbody td:nth-child(7){display:none}
+    .lc-grid,.fic-grid{grid-template-columns:1fr}
+    .lc-mesures{grid-template-columns:1fr}
+    .tabs{overflow-x:auto}
+    /* La largeur minimale du tableau est calee sur ses HUIT colonnes. Trois etant
+       masquees, elle n'a plus lieu d'etre : la laisser force un balayage horizontal de
+       760 px pour cinq colonnes qui tiendraient presque. */
+    table{min-width:0}
+    .ctab{min-width:0}
+  }
+
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
   /* Consommation du mois (Task U4) — un plafond qui bloque sans qu'on ait pu voir où on
@@ -1626,7 +1651,21 @@ function renderFic(rows){
         <div class="metric"><span class="mlabel">Prix min/méd/max</span><span class="mval">${fmtEur(pmin)} / ${fmtEur(pmed)} / ${fmtEur(pmax)}</span></div>
         <div class="metric"><span class="mlabel">Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
       </div>
-      <div class="fic-verdict">${verdictBlockFic(r.verdict)}</div>`;
+      <div class="fic-verdict">${verdictBlockFic(r.verdict)}</div>
+      <div class="histslot"></div>`;
+    // L'historique fiction etait ECRIT a chaque run (_consigner_fiction) et JAMAIS lu :
+    // la carte n'avait ni emplacement ni appel. L'auteur accumulait une serie qu'aucun
+    // ecran ne lui montrait, et la seule fonction capable de repondre a « est-ce que ca
+    // bouge ? » restait aveugle sur la moitie du produit.
+    //
+    // Charge A L'OUVERTURE, comme en non-fiction : interroger l'historique de dix trios
+    // que l'utilisateur ne depliera jamais, c'est dix requetes pour rien.
+    let histCharge = false;
+    card.addEventListener('click', () => {
+      if (histCharge) return;
+      histCharge = true;
+      loadHistorique(r.niche && r.niche.query, card.querySelector('.histslot'));
+    });
     gridFic.appendChild(card);
   });
   emptyFic.style.display='none'; resultsFic.classList.add('on');

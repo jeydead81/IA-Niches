@@ -47,3 +47,15 @@ def test_les_chemins_de_bases_du_serveur_restent_des_constantes_de_module():
     for nom in BASES:
         assert re.search(rf"^{nom} = _ROOT / ", src, re.M), \
             f"{nom} doit rester une constante Path au niveau du module"
+
+
+def test_le_helper_reinitialise_aussi_l_etat_global_de_module():
+    """Les bases ne sont pas le seul etat partage entre tests. Le cache de semaphores de
+    `server` en est un autre : un test qui se termine pendant qu'un fil detient encore un
+    creneau laissait la place prise pour les suivants, qui echouaient alors par
+    intermittence -- sur des tests sans aucun rapport avec la concurrence.
+
+    Ce test existe parce que ca EST arrive : six echecs sur une execution, zero sur la
+    suivante."""
+    src = (RACINE / "tests" / "conftest.py").read_text("utf-8")
+    assert "_CRENEAUX" in src, "l'etat global des creneaux n'est pas reinitialise"
