@@ -59,15 +59,15 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 
 ## 2. ARCHITECTURE RÉELLE
 
-Application web **locale**, mono-page : FastAPI (`web/server.py`, **1 058 lignes,
-18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-08-19) + un unique
-`web/index.html` de **121 021 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
+Application web **locale**, mono-page : FastAPI (`web/server.py`, **1 086 lignes,
+18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-08-22) + un unique
+`web/index.html` de **118 946 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
 page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
 page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
 externe ».
 
 **Cinq** bases SQLite locales dans `99-logs/` : `df-cache.db`, `jobs.db`, `usage.db`,
-`history.db`, **`comptes.db`**. **44 fichiers `.py`** dans `01-scripts/`.
+`history.db`, **`comptes.db`**. **48 fichiers `.py`** dans `01-scripts/`.
 
 **TROIS** moteurs indépendants coexistent désormais : le **scout non-fiction**, le **scout
 fiction** et le **scout low-content** (§2.11, livré les 2026-08-18/19). Les trois ne se
@@ -443,6 +443,13 @@ ASIN réel vers `EnrichedBook`, gère les formes atypiques observées sans jamai
 **LLM** — `niche_ideator.py` · `niche_verdict.py` · `kdp_keywords.py` · `fiction_ideator.py` ·
 `fiction_classifier.py`. Tous en **tool-use forcé**, jamais de parsing de texte libre.
 
+**Place de marché** — `marketplace.py` (§2.15) : source unique de `location_code`,
+`language_code`, identifiant d'autocomplete et domaine des fiches. `MARKETPLACE=fr` par
+défaut ; toute autre valeur **lève**.
+
+**Notification** — `notification.py` (§2.16) : message de fin d'analyse, éteint par défaut,
+qui ne contient jamais le résultat.
+
 **Infrastructure** — `cache.py` (clé/valeur SQLite **partagé cross-user**, TTL, connexion par
 appel + WAL) · `cost_tracker.py` (coût réel : appels DataForSEO + tokens LLM, grille par modèle)
 · `jobs.py` · `usage.py` · `history.py` (la seule fonction qui répond à « est-ce que ça
@@ -465,7 +472,8 @@ endpoints SSE » qui référence des endpoints **supprimés**. Les `PIEGES`, le 
 
 **Outillage dev** — `fiction_validation.py` + `build_validation_set.py` + `validate_classifier.py`
 (set de ~50 livres, export xlsx pour correction humaine, mesure de l'accord IA/humain contre la
-porte des 80 %) · `demo_free.py` (smoke test CLI des deux canaux gratuits : autocomplete et BSR
+porte des 80 %) · **`lowcontent_validation.py` + `build_lowcontent_validation_set.py`**
+(calibration du scoring low-content, §2.14) · `demo_free.py` (smoke test CLI des deux canaux gratuits : autocomplete et BSR
 scrapé ; couvert par `tests/test_demo_free.py`).
 
 **Entrée CLI, GRATUITE et seulement gratuite** — `launcher.py`, lancé par `IA-Niches.bat`.
@@ -512,9 +520,9 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**878 tests** collectés sur **78 fichiers** `tests/test_*.py`, **878 passés**, aucune erreur de
-collecte (`python -m pytest`, relancé quatre fois de suite le 2026-08-19 — la suite avait
-connu des échecs INTERMITTENTS, cf. §5.33).
+**965 tests** collectés sur **83 fichiers** `tests/test_*.py`, **965 passés**, aucune erreur de
+collecte (`python -m pytest`, relancé le 2026-08-22 ; la suite avait connu des échecs
+INTERMITTENTS, cf. §5.33).
 
 Deux fichiers exercent l'interface pour de vrai plutôt que d'y chercher des chaînes :
 `tests/js_harness.py` extrait les fonctions de rendu PURES de `web/index.html` et les
@@ -529,6 +537,93 @@ Fichiers ajoutés par les derniers commits : `test_auth.py`, `test_server_auth.p
 Deux fichiers testent l'interface en lisant `web/index.html` comme du texte
 (`test_ux_glossaire.py`, `test_ux_kdp_historique.py`) — mais ils vérifient la **présence** des
 chaînes, pas leur **atteignabilité** (§5.26).
+
+### 2.14 Calibration du scoring low-content — `lowcontent_validation.py` (G1)
+
+Les seuils de `data/lowcontent_criteres.json` sont des **HYPOTHÈSES** : `variantes_max=6`,
+`part_indie_bonne=0.5`, `redevance_min_bonne=2.0` n'ont été confrontés à aucun rayon réel.
+Le moteur rend des chiffres cohérents entre eux ; rien ne dit qu'ils correspondent au
+terrain. Ce module produit la mesure qui manque.
+
+**Le protocole INVERSE celui du classifieur fiction, et c'est le point.** En fiction,
+Baptiste CORRIGE des étiquettes que l'IA a produites. Ici il étiquette des requêtes AVANT
+toute analyse (`bonne` / `mauvaise` / `morte`) : son jugement est la référence. Si l'IA
+choisissait les requêtes à juger, on calibrerait le scoring sur lui-même.
+
+Deux modes du CLI : `--gabarit` écrit un classeur pré-découpé par famille (8 familles
+× 4 lignes, liste déroulante sur la colonne d'étiquette) ; `--xlsx` sonde gratuitement
+chaque requête puis lance le run payant **sur ces requêtes-là** et écrit le rapport JSON.
+Plafond de dépense explicite (`--plafond`, 2 $ par défaut). Coût d'un jeu de 30 requêtes :
+~0,15-0,25 $ selon le cache — **estimation, pas une mesure.**
+
+**Porte du plan, conjointe : Spearman ≥ 0,5 ET aucune requête « morte » en 🟢.** Une
+corrélation honnête qui recommande quand même un rayon mort ferait publier dans le vide.
+
+Quatre décisions de mesure :
+
+| Décision | Pourquoi |
+|---|---|
+| Spearman et non Pearson | Les étiquettes sont ORDINALES. L'écart `morte → mauvaise` n'a aucune raison de valoir l'écart `mauvaise → bonne` |
+| Rangs **moyens** sur les ex aequo | Trois étiquettes = des ex aequo partout ; un départage arbitraire mesurerait l'ordre de saisie du fichier |
+| Les niches à `concurrence_mesuree=False` **sortent du calcul** | Leur score a été produit sans bonus ni malus de SERP : les corréler mesurerait du bruit. Comptées et annoncées (`n_non_mesurees`), jamais jetées en silence |
+| `None` exclus des distributions | Moyenner une part indie non mesurée à zéro fausserait exactement le seuil qu'on cherche à régler |
+
+**Mesure que le plan ne demandait pas** : les requêtes perdues AVANT toute dépense (filtre
+IP, saisonnier, gate gratuit). Une « morte » écartée là est le gate qui travaille pour zéro
+centime (`ecartees_correctement`) ; une « bonne » écartée là est un **faux négatif que
+l'utilisateur ne peut PAS voir**, la niche n'apparaissant nulle part
+(`bonnes_perdues_avant_analyse`). Séparées, jamais additionnées. Annoncées fort, mais elles
+**ne ferment pas la porte** — ajouter un critère de son propre chef ferait passer une
+intention pour une règle (§4.2).
+
+**En cas d'échec, on corrige `data/lowcontent_criteres.json` — jamais le code.** Un seuil
+qui migre dans `lowcontent_scoring.py` redevient invisible et non discutable.
+
+### 2.15 Place de marché — `marketplace.py`
+
+Source unique de « sur quelle place de marché travaille-t-on ». La réponse était écrite à
+**neuf endroits** : `location_code=2250` dans les trois orchestrateurs et dans
+`bsr_source`, `language_code="fr_FR"` dans deux, l'identifiant de marketplace et l'hôte
+d'autocomplete dans `amazon_autocomplete`, le domaine des fiches dans `amazon_product` et
+dans les deux constructeurs d'URL de `TopBook`.
+
+**Ce module ne rend PAS le produit multi-marché, et c'est délibéré.** Six choses du dépôt
+sont irréductiblement françaises : les browse nodes de la taxonomie fiction, les libellés
+de rayon comparés au texte d'Amazon (§5.4), les barèmes d'impression KDP relevés en EUROS,
+les mots saisonniers, le corpus du filtre IP et les prompts des cinq modules LLM.
+
+Aucune ne lèverait sur une SERP américaine — elles rendraient des **chiffres** : rayon
+filtré sur un browse node inexistant, redevance au barème européen, filtre saisonnier qui
+cherche « noel » dans « christmas planner ». Faux, plausibles, silencieux. D'où le choix :
+**`MARKETPLACE=com` LÈVE au démarrage**, en listant ce qui manque. `com` est *décrit* (ses
+deux codes DataForSEO sont justes) et déclaré non prêt.
+
+### 2.16 Message de fin d'analyse — `notification.py`
+
+**Éteint par défaut** : il faut `NOTIFICATIONS_EMAIL` **et** `SMTP_HOST`. Une configuration
+à moitié faite n'envoie pas « au mieux », elle n'envoie pas. Aucune dépendance ajoutée
+(`smtplib` + `email.message`, comme `hashlib.scrypt` pour l'authentification).
+
+| Règle | Pourquoi |
+|---|---|
+| Un échec d'envoi ne fait **jamais** échouer un run | Le run a coûté de l'argent réel, son résultat est en base, l'unité de plafond est consommée. Le marquer « en échec » effacerait de l'écran un travail payé et réussi (§5.29) |
+| **Aucun résultat** dans le corps | L'e-mail est un canal en clair, relayé, archivé, indexé chez le fournisseur du destinataire. Les niches trouvées sont ce que l'auteur a payé pour être seul à savoir. Aucun montant non plus (§5.27). `resultat` et `cout_usd` sont dans la signature de `corps_fin_de_job` et **ignorés** : un paramètre absent invite à « juste ajouter le top 3 » |
+| Aucune erreur interne recopiée | Elle peut porter l'URL DataForSEO, donc les identifiants HTTP Basic — même motif que `_erreur_publique` |
+| Aucun secret journalisé | Le mot de passe est retiré de toute ligne de log : une exception de bibliothèque porte régulièrement la ligne d'authentification entière (règle 6) |
+
+Branché sur les **deux** exécuteurs (thread du serveur, pool de `worker.py`) : n'en câbler
+qu'un rendrait la notification dépendante de `JOBS_MODE`, et ce serait invisible — rien à
+l'écran ne distingue « pas de message » de « message pas envoyé ». Deux tests fonctionnels
+vérifient les **deux issues** sur les deux exécuteurs.
+
+La notification part **après** la sortie du créneau de concurrence : le pool n'en tient que
+`RUNS_SIMULTANES_MAX`, et un dialogue SMTP lent (jusqu'à 20 s de délai) les garderait aux
+frais de ceux qui font la queue. L'ordre « compté » / « prévenu » n'a aucune conséquence,
+contrairement à l'ordre « imputé avant terminé » qui reste load-bearing.
+
+L'adresse est relue depuis `comptes.db` au moment de l'envoi plutôt que portée par le job :
+l'y recopier en ferait une donnée personnelle de plus, dupliquée dans une base qui n'en a
+pas besoin.
 
 ---
 
@@ -557,11 +652,15 @@ le PC de Baptiste, **bloqué depuis un datacenter**. En production il faut
 
 ### Variables d'environnement (`.env` uniquement)
 
-**Vingt-quatre** variables sont lues par `os.getenv` dans `01-scripts/` et `web/` (recensement
-exhaustif sur ces deux dossiers, aucun autre `.py` du dépôt n'en lit). `.env.example` en
-documente **treize** : il lui manque toujours `HOST` et `PORT`. **Son propre en-tête annonce
-« ONZE variables » : ce compte est périmé** (les deux variables de sécurité y ont été ajoutées
-depuis) — à corriger. Ce tableau porte les quinze.
+**Trente-trois** variables sont lues par `os.getenv` dans `01-scripts/` et `web/`
+(recensement exhaustif sur ces deux dossiers, aucun autre `.py` du dépôt n'en lit, revérifié
+le 2026-08-22). `.env.example` en documente **vingt-neuf** : il lui manque `HOST`, `PORT`,
+`LOWCONTENT_IDEATOR_MODEL` et `LOWCONTENT_VERDICT_MODEL`. **Son propre en-tête annonce
+« ONZE variables » : ce compte est périmé** — à corriger. Ce tableau porte les trente-trois.
+
+Deux tests tiennent une partie de l'invariant (`tests/test_tutoriel_pdf.py`), mais dans un
+seul sens : **documenté ⇒ lu**. Rien ne vérifie l'inverse, d'où les quatre trous
+ci-dessus.
 
 | Variable | Défaut | Obligatoire |
 |---|---|---|
@@ -580,6 +679,19 @@ depuis) — à corriger. Ce tableau porte les quinze.
 | `KDP_KEYWORDS_MODEL` | `claude-sonnet-5` (`kdp_keywords.py:19`) | non |
 | `FICTION_IDEATOR_MODEL` | `claude-sonnet-5` (`fiction_ideator.py:34`) | non |
 | `FICTION_CLASSIFIER_MODEL` | `claude-sonnet-5` (`fiction_classifier.py:15`). **Ne pas rétrograder** : Haiku 4.5 mesuré à 42 % d'accord contre 80 % requis | non |
+| `LOWCONTENT_IDEATOR_MODEL` | `claude-sonnet-5` (`lowcontent_ideator.py:30`). **Absente de `.env.example`** | non |
+| `LOWCONTENT_VERDICT_MODEL` | `claude-sonnet-5` (`lowcontent_verdict.py:24`). **Absente de `.env.example`** | non |
+| `MARKETPLACE` | `"fr"` (`marketplace.py`). Toute autre valeur **LÈVE**, `"com"` compris : il est décrit et déclaré non prêt (§2.15). Valeur vide → retombe sur `fr`, un `MARKETPLACE=` étant un oubli et non une demande de bascule | non |
+| `APP_ENV` | non défini. `"prod"` déclenche `_verifier_config_prod` (`web/server.py:317`), qui refuse de démarrer sur une configuration dangereuse en exposition | non |
+| `JOBS_MODE` | `"thread"` (`web/server.py:110`). `"worker"` fait que `POST /api/jobs` **empile seulement** : sans ce garde, serveur ET worker exécuteraient le même job — deux fois les SERP, deux fois les tokens | non |
+| `RUNS_SIMULTANES_MAX` | `5` (`RUNS_SIMULTANES_DEFAUT`, `web/server.py:76`). Nombre de créneaux d'exécution simultanés. C'est un plafond de CHARGE, pas de dépense | non |
+| `PLAFOND_USD_PAR_RUN` | `0.60` (`cost_tracker.py`). Plafond **prédictif** : `verifier(cout_prevu)` refuse AVANT de dépenser, il n'interrompt pas au milieu. Combiné au devis préalable, c'est ce qui empêche un rapport partiel facturé | non |
+| `DEBIT_APPELS_MAX` | `2 × MAX_RECHERCHES` = **40 par heure et par utilisateur** (`web/server.py:170`). **Garde-fou, PAS un palier tarifaire** : le modèle économique n'étant pas fixé, la valeur est ancrée sur ce que le produit sait faire, pas sur ce qu'on veut vendre | non |
+| `WORKER_CONCURRENCE` | `5` (`CONCURRENCE_DEFAUT`, `worker.py:67`). Taille du pool de `worker.py` | non |
+| `WORKER_REPOS_S` | `2.0` (`worker.py:58`). Attente entre deux tentatives de `claim_next` quand la file est vide | non |
+| `NOTIFICATIONS_EMAIL` | non défini = **ÉTEINT**. Et il ne suffit pas : sans `SMTP_HOST`, rien ne part (§2.16) | non |
+| `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` / `_TLS` | port `587`, TLS actif. `SMTP_FROM` retombe sur `SMTP_USER`. Port non entier → repli sur 587 | non |
+| `BASE_URL` | non définie → le message de fin part **sans lien** plutôt qu'avec un lien mort : rien dans le code ne connaît le nom de domaine, il n'y a pas de déploiement | non |
 
 Les `REDDIT_*` **ne sont plus lues nulle part** : les modules qui les lisaient ont été supprimés
 (commit `eaa20b2`). Plus aucun résidu côté `.py`.
@@ -920,7 +1032,22 @@ Section critique. Chacun a coûté un bug réel.
 - **Réinitialisation de mot de passe, vérification d'adresse e-mail, changement d'e-mail,
   suppression de compte, rôles ou administration** : aucun de ces chemins n'est codé. Un mot de
   passe perdu est un compte perdu ; `INSCRIPTIONS_OUVERTES` se règle par `.env`, pas par une
-  interface.
+  interface. **Nuance depuis `notification.py`** : un e-mail SORTANT existe désormais (message
+  de fin d'analyse, §2.16), éteint par défaut. Ça ne rend ni l'adresse vérifiée, ni le mot de
+  passe récupérable — le seul envoi codé est transactionnel et ne porte aucun lien d'action.
+- **Support d'une autre place de marché qu'`amazon.fr`** : `marketplace.py` rassemble les
+  neuf codages en dur, et `MARKETPLACE=com` **lève** au démarrage. Six choses du dépôt sont
+  irréductiblement françaises (§2.15). Ne pas lire ce module comme un support multi-marché :
+  il rend le manque explicite, il ne le comble pas.
+- **Mentions légales, politique de confidentialité et CGV SERVIES** : les quatre documents
+  existent en **brouillon** dans `docs/pages-publiques/`, ancrés sur le code, mais aucun
+  endpoint ne les sert et chacun porte des `[[A COMPLETER : … ]]` (identité légale,
+  hébergeur, prix, délai de rétractation). `tests/test_pages_publiques.py` verrouille le
+  lien : dès qu'une route sert un de ces fichiers, il ne doit plus rester un marqueur.
+- **Calibration du scoring low-content** : l'outillage existe (§2.14), **la mesure non**.
+  Les seuils de `data/lowcontent_criteres.json` restent des hypothèses tant que Baptiste n'a
+  pas rempli le gabarit et fait tourner `build_lowcontent_validation_set.py --xlsx`. Ne
+  jamais citer ces seuils comme des critères établis.
 - **Scrapingdog** : aucun code, aucune clé, aucun appel. Côté `.py`, le mot ne subsiste que
   dans le docstring de `cost_tracker.py:2`. Il subsiste en revanche dans des fichiers non
   exécutables encore versionnés (`README.md`, `ROADMAP.md`, `docs/superpowers/**`) et une

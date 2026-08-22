@@ -406,6 +406,32 @@ droit de définir des directives relatives au sort de vos données après votre 
 **Il faut être franc sur la manière de les exercer : le produit n'offre aujourd'hui aucune
 fonction en libre-service.**
 
+### Message de fin d'analyse
+
+Si l'exploitant a configuré un serveur d'envoi, votre adresse e-mail sert **en outre** à
+vous prévenir qu'une analyse que vous avez lancée est terminée ou s'est interrompue. Ce
+message est **transactionnel** : il fait suite à une action que vous avez déclenchée, et
+il n'y a ni newsletter, ni relance commerciale, ni envoi que vous n'ayez pas provoqué.
+
+Ce que ce message contient : le moteur concerné, l'issue (terminée ou interrompue), la
+référence de l'analyse, et le cas échéant un lien vers l'application.
+
+**Ce qu'il ne contient jamais** : le contenu de votre analyse. Ni les niches trouvées, ni
+les scores, ni les titres relevés, ni le moindre montant. L'e-mail est un canal en clair,
+relayé et archivé chez votre fournisseur de messagerie : les résultats de vos analyses ne
+transitent pas par là. Le message d'erreur technique d'une analyse interrompue n'y est pas
+davantage recopié.
+
+**Cette fonction est éteinte par défaut.** Elle exige deux réglages simultanés du côté de
+l'exploitant ; à défaut, aucun message n'est envoyé et votre adresse ne sert qu'à vous
+identifier à la connexion.
+
+[[A COMPLETER : indiquer si cette fonction est activée sur cette instance, et si oui, le
+prestataire d'envoi utilisé (hébergeur du serveur SMTP) — il devient sous-traitant au sens
+du RGPD et doit figurer au tableau des sous-traitants ci-dessus]]
+
+---
+
 Ce qui **n'existe pas** dans le code, et qu'il serait mensonger d'annoncer :
 
 - **aucune suppression de compte en libre-service** — il n'existe aucun bouton, aucun
