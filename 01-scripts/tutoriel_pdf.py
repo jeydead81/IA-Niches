@@ -91,6 +91,18 @@ ENV_VARS = [
                               "utilisateur, un compte de plus est un plafond neuf : "
                               "l'inscription libre offrait une depense illimitee a un "
                               "anonyme. Le PREMIER compte passe toujours (amorcage)."),
+    ("NOTIFICATIONS_EMAIL", "Drapeau du message de fin d'analyse. ETEINT par defaut, et "
+                            "il ne suffit PAS : sans SMTP_HOST rien ne part. Une "
+                            "configuration a moitie faite n'envoie pas « au mieux », "
+                            "elle n'envoie pas."),
+    ("SMTP_HOST / _PORT / _USER / _PASSWORD / _FROM / _TLS",
+     "Serveur d'envoi. Port 587 et STARTTLS par defaut. Le message ne contient JAMAIS "
+     "les niches trouvees ni le moindre montant : l'e-mail est un canal en clair, "
+     "relaye et archive chez le fournisseur du destinataire. Un envoi qui echoue ne "
+     "fait jamais echouer un run -- il a coute de l'argent reel et son resultat est "
+     "en base."),
+    ("BASE_URL", "Racine publique, utilisee UNIQUEMENT pour le lien du message de fin. "
+                 "Absente, le message part sans lien plutot qu'avec un lien mort."),
     ("MARKETPLACE", "'fr' par defaut (amazon.fr). 'com' est DECRIT mais pas pret et "
                     "LEVE au demarrage : les codes DataForSEO seraient justes, mais les "
                     "browse nodes, les baremes KDP en euros, les mots saisonniers, le "

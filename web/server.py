@@ -44,6 +44,7 @@ from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from devis import PLAFOND_DEPASSE, verifier_devis  # noqa: E402
+from notification import notifier_fin_de_job
 from models import LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
@@ -325,6 +326,24 @@ def _verifier_config_prod() -> None:
 
 
 _verifier_config_prod()
+
+
+def _notifier(user_id: str, type_: str, statut: str, job_id: str,
+              journal=None) -> None:
+    """Prévient l'auteur que son analyse est finie. Ne lève JAMAIS.
+
+    L'adresse est relue depuis `comptes.db` au moment de l'envoi plutôt que portée par le
+    job : le job ne stocke qu'un `user_id`, et y recopier une adresse en ferait une
+    donnée personnelle de plus, dupliquée dans une base qui n'en a pas besoin.
+
+    Un compte absent (`"local"`, compte supprimé) ne notifie personne et ne lève pas —
+    l'analyse a bien eu lieu, elle est en base, et l'écran la montre."""
+    try:
+        compte = UserStore(_COMPTES_DB).compte(user_id)
+        notifier_fin_de_job(email=getattr(compte, "email", None), type_=type_,
+                            statut=statut, job_id=job_id, journal=journal)
+    except Exception:  # noqa: BLE001 — un run payé et réussi ne doit pas devenir un échec
+        pass
 
 
 def _erreur_publique(e: BaseException) -> str:
@@ -794,6 +813,11 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         # verrait une analyse « en cours » qui ne progresse pas, sans savoir si elle
         # est bloquee ou seulement lente. Tant qu'il attend, son statut reste
         # « en attente », ce qui est exactement ce qui se passe.
+        # L'issue est retenue pour notifier APRÈS avoir rendu le créneau : le pool n'en
+        # tient que `RUNS_SIMULTANES_MAX`, et un dialogue SMTP lent — jusqu'à 20 s de
+        # délai d'attente — les garderait aux frais de ceux qui font la queue. Le travail
+        # est fini, la place doit être rendue.
+        statut = "echec"
         with _creneaux():
             job_store.start(job_id)
             cost = CostTracker()
@@ -813,6 +837,7 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
                 # Imputer une seconde ligne consommerait DEUX unites par run.
                 UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
                 job_store.finish(job_id, resultat, b)
+                statut = "termine"
             except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
                 b = cost.breakdown()
                 # L'argent parti reste compte, et la place reste prise : un echec ne
@@ -820,6 +845,9 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
                 # serait gratuit.
                 UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
                 job_store.fail(job_id, _erreur_publique(e), cout=b)
+
+        # Hors du créneau. Ne lève jamais : le run est payé, compté et en base.
+        _notifier(user_id, type_, statut, job_id)
 
     if _mode_jobs() == "worker":
         # Empile SEULEMENT. Sans ce garde, serveur ET worker executeraient le meme job :

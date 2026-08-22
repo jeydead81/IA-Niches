@@ -128,6 +128,7 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
         # serveur) : ici on n'inscrit que le cout, sans recompter l'analyse.
         _imputer(job.user_id, job.type, b["usd"], 0)
         store.finish(job.id, resultat, b)
+        server._notifier(job.user_id, job.type, "termine", job.id, journal=journal)
         journal(f"[worker] job {job.id} terminé ({b['dataforseo_calls']} recherches)")
     except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
         b = cost.breakdown()
@@ -136,6 +137,7 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
         # identifiants DataForSEO, et le worker écrit dans le MÊME champ que le serveur.
         # Le corriger d'un seul côté laisserait la fuite entière sur l'autre.
         store.fail(job.id, server._erreur_publique(e), cout=b)
+        server._notifier(job.user_id, job.type, "echec", job.id, journal=journal)
         journal(f"[worker] job {job.id} en échec")
     return True
 
