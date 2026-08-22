@@ -6,6 +6,7 @@ Axes : Demande (0.4) · Pénétration (0.4) · Compatibilité livre (0.2).
 """
 import re
 
+from marketplace import ACTIF
 from models import TopBook, NicheValidation, SearchResult, ScoredNiche
 
 
@@ -155,7 +156,7 @@ def score_niche(validation: NicheValidation, search: SearchResult | None,
         marqueurs_informationnels=validation.marqueurs_informationnels,
         top_asins=[o.asin for o in organic[:5] if o.asin],
         top_books=[
-            TopBook(asin=o.asin, title=o.title, url=f"https://www.amazon.fr/dp/{o.asin}",
+            TopBook(asin=o.asin, title=o.title, url=ACTIF.url_fiche(o.asin),
                     price=o.price, rating=o.rating, reviews_count=o.reviews_count,
                     bsr=(bsr_map or {}).get(o.asin),
                     bsr_subcats=(subcats_map or {}).get(o.asin) or [],

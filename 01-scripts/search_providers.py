@@ -15,12 +15,16 @@ import warnings
 import requests
 from dotenv import load_dotenv
 
+from marketplace import ACTIF
 from models import BsrInfo, SearchItem, SearchResult
 
 _BASE = "https://api.dataforseo.com/v3/merchant/amazon/products"
 _ASIN_BASE = "https://api.dataforseo.com/v3/merchant/amazon/asin"
-DEFAULT_LOCATION = 2250       # France (location_code)
-DEFAULT_LANGUAGE = "fr_FR"    # "French (France)" — code validé en live (pas "fr")
+# Codes de la place de marché active. Ils vivaient ici en dur, à côté de huit autres
+# copies dispersées : voir `marketplace.py` pour pourquoi une seule source, et pourquoi
+# une place non prête lève au lieu de rendre des chiffres faux.
+DEFAULT_LOCATION = ACTIF.location_code    # 2250 = France
+DEFAULT_LANGUAGE = ACTIF.language_code    # "fr_FR" et non "fr" — validé en live
 COST_PER_CALL_USD = {1: 0.0015, 2: 0.003}  # standard (~45 min) / priority (~1 min)
 
 

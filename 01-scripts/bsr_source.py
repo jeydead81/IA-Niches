@@ -5,6 +5,7 @@ import os
 import time
 
 from amazon_product import fetch_bsr as _scrape_bsr
+from marketplace import ACTIF
 
 BSR_TTL_S = 15 * 24 * 3600     # 15 jours. Le cache est MUTUALISE entre tous les comptes : allonger sa duree
 # Duree de memorisation d'une ABSENCE de classement. Bien plus courte que celle d'un
@@ -19,7 +20,7 @@ ECHEC_BSR_TTL_S = 3 * 24 * 3600
 
 
 def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=None,
-                 location: int = 2250, bsr_priority: int = 2, cost=None,
+                 location: int = ACTIF.location_code, bsr_priority: int = 2, cost=None,
                  bsr_pause: float = 0.4) -> dict:
     """Retour : {asin: BsrInfo|None}. Dédup, cache (par ASIN), et comptage coût pour DataForSEO."""
     uniq = list(dict.fromkeys(a for a in asins if a))

@@ -4,6 +4,7 @@ Le parsing est pur et testé ; l'I/O réseau est injectable."""
 import re
 
 import util
+from marketplace import ACTIF
 from models import BsrInfo
 
 # Bloc "Classement des meilleures ventes" (borné à 4000 car sur texte NETTOYÉ des
@@ -56,7 +57,7 @@ def parse_bsr(html: str) -> BsrInfo | None:
 
 
 def _default_fetch_html(asin: str) -> str | None:
-    r = util.http_get(f"https://www.amazon.fr/dp/{asin}")
+    r = util.http_get(ACTIF.url_fiche(asin))
     status = getattr(r, "status_code", None)
     if status == 200:
         return r.text

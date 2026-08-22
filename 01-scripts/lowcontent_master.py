@@ -33,6 +33,7 @@ from ip_filter import filtrer_ip
 from lowcontent_ideator import generate_lowcontent_niches as _generate
 from lowcontent_scoring import score_lowcontent
 from lowcontent_taxonomy import est_saisonnier, format_
+from marketplace import ACTIF
 from models import LowContentScored
 from niche_validator import validate_niches as _validate_niches
 from search_providers import get_provider
@@ -169,8 +170,8 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
         return []
 
     provider = provider or get_provider("dataforseo")
-    loc = getattr(provider, "location_code", 2250)
-    lang = getattr(provider, "language_code", "fr_FR")
+    loc = getattr(provider, "location_code", ACTIF.location_code)
+    lang = getattr(provider, "language_code", ACTIF.language_code)
 
     # ── Phase 3 — SERP par niche (payant) ──
     par_niche = []

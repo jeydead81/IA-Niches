@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from bsr_source import resolve_bsrs
 from cache import Cache
 from cost_tracker import CostTracker, PlafondCoutAtteint, dataforseo_cost_usd
+from marketplace import ACTIF
 from models import ScoredNiche
 from niche_ideator import generate_niches as _generate_niches
 from niche_validator import validate_niches as _validate_niches
@@ -70,8 +71,8 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
         progress("Scout terminé.")
         return []
     provider = provider or get_provider("dataforseo")
-    loc = getattr(provider, "location_code", 2250)
-    lang = getattr(provider, "language_code", "fr_FR")
+    loc = getattr(provider, "location_code", ACTIF.location_code)
+    lang = getattr(provider, "language_code", ACTIF.language_code)
 
     # Phase A — concurrence Amazon par niche (search, caché par mot-clé)
     per_niche = []          # (validation, SearchResult|None, [asins top-n])

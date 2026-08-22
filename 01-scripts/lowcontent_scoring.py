@@ -31,6 +31,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from lowcontent_taxonomy import est_editeur_traditionnel, est_indie, est_norme, format_
+from marketplace import ACTIF
 from models import LowContentNiche, LowContentScored, TopBook
 from scoring import MAX_TOP_BOOKS, count_targeted
 
@@ -412,7 +413,7 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
         total_reviews=sum(o.reviews_count for o in organic if o.reviews_count) or None,
         concurrence_mesuree=mesuree,
         top_books=[
-            TopBook(asin=o.asin, title=o.title, url=f"https://www.amazon.fr/dp/{o.asin}",
+            TopBook(asin=o.asin, title=o.title, url=ACTIF.url_fiche(o.asin),
                     price=o.price, rating=o.rating, reviews_count=o.reviews_count,
                     bsr=(bsr_map or {}).get(o.asin),
                     bsr_subcats=(subcats_map or {}).get(o.asin) or [],

@@ -91,6 +91,11 @@ ENV_VARS = [
                               "utilisateur, un compte de plus est un plafond neuf : "
                               "l'inscription libre offrait une depense illimitee a un "
                               "anonyme. Le PREMIER compte passe toujours (amorcage)."),
+    ("MARKETPLACE", "'fr' par defaut (amazon.fr). 'com' est DECRIT mais pas pret et "
+                    "LEVE au demarrage : les codes DataForSEO seraient justes, mais les "
+                    "browse nodes, les baremes KDP en euros, les mots saisonniers, le "
+                    "corpus du filtre IP et les prompts sont francais. Un run .com "
+                    "rendrait des chiffres faux sans lever."),
     ("COOKIE_SECURE", "Normalement inutile : le drapeau Secure est DEDUIT du protocole "
                       "(X-Forwarded-Proto puis le schema). A ne renseigner que derriere "
                       "un proxy TLS qui n'annonce rien. Il ne peut que FORCER."),

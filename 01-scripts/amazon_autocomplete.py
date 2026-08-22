@@ -6,9 +6,14 @@ import json
 from urllib.parse import urlencode
 
 import util
+from marketplace import ACTIF
 
-_BASE = "https://completion.amazon.fr/api/2017/suggestions"
-_MID_FR = "A13V1IB3VIYZZH"  # marketplace ID amazon.fr
+# Hôte et identifiant de la place de marché active (`marketplace.py`). Le nom `_MID_FR`
+# est conservé : il est lu par des tests et par `demo_free.py`, et le renommer pour une
+# généralisation que le dépôt ne sait pas encore faire (voir les six manques listés dans
+# `marketplace.py`) donnerait l'illusion d'un support multi-marché.
+_BASE = ACTIF.url_completion()
+_MID_FR = ACTIF.marketplace_id
 
 
 def _build_url(prefix: str) -> str:

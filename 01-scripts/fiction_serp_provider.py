@@ -3,6 +3,7 @@ SERP contrainte au browse node (ou à la requête si le sous-genre n'a pas de ra
 puis enrichissement BATCHÉ des n_top premiers ASIN, avec cache inter-runs et coût mesuré."""
 from fiction_books import parse_enriched_book
 from fiction_taxonomy import node_for, search_param_for
+from marketplace import ACTIF
 from models import EnrichedBook, FictionNiche, FictionShelf
 from cache import BOOK_TTL_S
 
@@ -50,7 +51,7 @@ def enrich_asins(asins: list[str], provider, cache=None, cost=None,
     qui reconstruit un rayon par niche depuis la table globale) de comparer aux ASIN
     demandés PAR NICHE pour compter les échecs — comptage impossible à faire ici sans
     connaître ce découpage."""
-    loc = getattr(provider, "location_code", 2250)
+    loc = getattr(provider, "location_code", ACTIF.location_code)
     out: dict[str, EnrichedBook] = {}
     misses: list[str] = []
     for a in asins:
