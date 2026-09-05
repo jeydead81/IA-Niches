@@ -107,13 +107,13 @@ chiffre mais une **compromission** (`auth.py:1-5`).
   `+suffixe`, qui serait un choix de fournisseur et non une règle générale (`auth.py:132-139`).
 
 **LE point de sécurité, à ne jamais défaire** : le `user_id` vient **exclusivement du cookie de
-session** (`utilisateur_courant`, `web/server.py:246-258`). Avant `7ccb4f8`, quatre endpoints
+session** (`utilisateur_courant`, `web/server.py:425-438`). Avant `7ccb4f8`, quatre endpoints
 l'acceptaient du client (corps de `POST /api/jobs`, paramètre de `/api/usage`, `/api/jobs`,
 `/api/history`) — et comme le plafond mensuel se vérifie dessus, **il suffisait d'envoyer un
 `user_id` neuf à chaque appel pour dépenser sans limite**, et d'en deviner un pour lire
 l'historique d'autrui. **Ne jamais réintroduire un paramètre `user_id` sur un endpoint.**
 
-**Reprise des données `"local"`** (`_adopter_donnees_locales`, `web/server.py:261-280`) : le
+**Reprise des données `"local"`** (`_adopter_donnees_locales`, `web/server.py:440-459`) : le
 PREMIER compte créé peut réattribuer les lignes `user_id='local'` de `history.db`, `usage.db` et
 `jobs.db`, **mais seulement s'il le demande** (`reprendre_donnees_locales` dans le corps, case à
 cocher côté UI). C'était automatique : sur une instance exposée, le premier visiteur venu
@@ -134,8 +134,8 @@ construite dessus. Voir §3.
 | 1 — Ideator | `ideate(seed, signals, n=n_ideas)` → **un seul** appel Anthropic en tool-use **forcé** (`tool_choice` figé sur `proposer_niches`, aucun parsing de texte libre). Sortie : `NicheCandidate[]` avec `niche`, `requete_amazon` COURTE (2-4 mots), `satellite_keywords`, `rationale`, `categorie`, `risques` | LLM |
 | 2 — Validation demande | `validate(candidates, pause=0.4, max_queries=3)` — par défaut `niche_validator.validate_niches` — interroge `completion.amazon.fr` sur la requête courte puis les satellites. `demand_score` = nb de suggestions distinctes ; `validated` = au moins une requête auto-complétée. Tri par `(validated, demand_score)` décroissant (`niche_validator.py:153`). **Lit aussi le CONTENU des suggestions** (§2.3) | **gratuit** |
 | — **Gate de coût** | `shortlist = validated[:n_search]` (défaut 6 côté `run_scout`, 4 côté formulaire). **Une niche non validée ne coûte jamais un appel payant.** Shortlist vide → retour `[]` immédiat | — |
-| A — Concurrence | Par niche : cache `search` (clé keyword+location+language, TTL 10 j), sinon `provider.search()` sur `merchant/amazon/products` en task_post + poll (8 s d'intervalle, 40 polls max, ~320 s), `search_param=i=stripbooks` si `books_only`. **Un échec est attrapé** (`scout_master.py:89-91`) : avertissement en progress, `sr = None`, le run continue — et la niche ressort marquée `concurrence_mesuree=False` (§4.1). On retient les 3 premiers ASIN **organiques** (`n_bsr_per_niche=3`) | DataForSEO |
-| B — BSR batché | `resolve_bsrs()` sur l'**union** des ASIN de toutes les niches : dédup, cache par ASIN (TTL 3 j), puis selon `BSR_SOURCE` (§3) | gratuit ou payant |
+| A — Concurrence | Par niche : cache `search` (clé keyword+location+language, **TTL 15 j**, `scout_master.py:28`), sinon `provider.search()` sur `merchant/amazon/products` en task_post + poll (8 s d'intervalle, 40 polls max, ~320 s), `search_param=i=stripbooks` si `books_only`. **Un échec est attrapé** (`scout_master.py:89-91`) : avertissement en progress, `sr = None`, le run continue — et la niche ressort marquée `concurrence_mesuree=False` (§4.1). On retient les 3 premiers ASIN **organiques** (`n_bsr_per_niche=3`) | DataForSEO |
+| B — BSR batché | `resolve_bsrs()` sur l'**union** des ASIN de toutes les niches : dédup, cache par ASIN — **TTL 15 j pour un RANG** (`BSR_TTL_S`, `bsr_source.py:10`) et **3 j seulement pour une ABSENCE de classement** (`ECHEC_BSR_TTL_S`, `:15`) : un livre peut entrer au classement, figer 15 j une non-mesure nous rendrait aveugles à son arrivée —, puis selon `BSR_SOURCE` (§3) | gratuit ou payant |
 | C — Scoring | `scoring.py`, fonctions pures : `bsr_stats`, `count_targeted`, **`prix_stats`**, `score_niche` (3 axes pondérés 0,4 / 0,4 / 0,2). Tri par `global_score` décroissant. Si `search is None`, aucun bonus ni malus de concurrence n'est appliqué et le verdict devient « Concurrence non mesurée — à relancer » | 0 |
 | D — Verdict IA | `n_verdict=0` **par défaut**, et **aucun appelant ne le remplit** : ni la CLI, ni `_run_scout_job`. Gate de coût assumé (3 verdicts pesaient 78 % du coût d'un run). Le verdict se demande à la pièce via `POST /api/verdict` — mais l'UI ne l'appelle pas, cf. §5.26 | — |
 
@@ -143,18 +143,18 @@ Le paramètre `signals` (mode « à partir de rien » alimenté par des tendance
 et `niche_ideator` jusqu'au prompt, mais **aucun appelant ne le remplit** : il vaut toujours `None`.
 
 **Le nombre d'IDÉES n'est plus un réglage de l'interface** (commit `6d1f134`) : `web/index.html`
-n'a plus de champ correspondant ; seul `#search` (« Niches à analyser », valeur 4, max 20) reste
-réglable. **Attention à un décalage réel dans le code** : `web/server.py:82` définit
+n'a plus de champ correspondant ; seul `#search` (« Niches à analyser », **valeur 6**, max 20) reste
+réglable. **Attention à un décalage réel dans le code** : `web/server.py:134` définit
 `IDEES_PAR_RUN = 10` avec un long commentaire de mesure, **mais cette constante n'est référencée
 nulle part** (`grep` exhaustif sur `01-scripts/`, `web/`, `tests/` : une seule occurrence, sa
 définition). Le défaut effectivement appliqué est **12**, en dur dans `_run_scout_job`
-(`web/server.py:430`) et `_valider_volumes` (`:473`), et `run_scout` a lui aussi `n_ideas=12`
-(`scout_master.py:31`). **Le vivier réel d'un run lancé depuis l'UI est donc de 12 idées, pas
+(`web/server.py:638`) et `_valider_volumes` (`:706`), et `run_scout` a lui aussi `n_ideas=12`
+(`scout_master.py:32`). **Le vivier réel d'un run lancé depuis l'UI est donc de 12 idées, pas
 10.** Ne pas citer « 10 » comme le comportement du produit tant que la constante n'est pas
 branchée.
 
 La mesure qui justifie de ne plus offrir ce réglage tient, elle (30 niches sur « bien-être »,
-2026-08-03, `web/server.py:70-79`) : viviers 10 / 20 / 30 → les 4 niches retenues sont dans les
+2026-08-03, `web/server.py:122-133`) : viviers 10 / 20 / 30 → les 4 niches retenues sont dans les
 **trois** cas déjà au-dessus du plafond `min(demand_score, 10)` du scoring (`scoring.py:91`).
 Élargir le vivier change QUELLES niches sont testées, jamais leur note sur l'axe demande. Gain
 mesuré : nul. Coût mesuré : 0,0459 $ pour 30 niches, soit ~0,0015 $ par niche. **À revoir si le
@@ -212,7 +212,7 @@ Coût : **0,153 $ pour 3 trios (MESURÉ)**, **0,409 $ pour 8 trios (EXTRAPOLÉ)*
   ASIN (`fiction_master.py:109`), passée en un appel `product_raw_batch` (jusqu'à 100 ASIN par
   task_post). La file DataForSEO met ~250 s **quel que soit** le nombre d'ASIN : la payer une fois
   par run au lieu d'une fois par niche fait passer 10 niches de 42 min à 5 min. Bonus : la dédup
-  devient inter-niches, et le nombre d'ASIN économisés est annoncé. Cache livre par ASIN, TTL 7 j.
+  devient inter-niches, et le nombre d'ASIN économisés est annoncé. Cache livre par ASIN, **TTL 15 j** (`BOOK_TTL_S`, `cache.py:13`, **importé** par `fiction_serp_provider.py:8` — jamais redéfini, cf. §5.32).
   Un payload inexploitable est **absent** du dict rendu, jamais une entrée factice.
 - **D — Classification des quatrièmes de couverture** (payant, poste LLM dominant). Seuls les
   livres AVEC blurb. Cache de classification (TTL **30 jours**, `CLASSIFICATION_TTL_S`,
@@ -253,7 +253,7 @@ rôle — trouver des combinaisons plausibles À L'INTÉRIEUR des contraintes.
   on contrôle — un modèle oublie une consigne sous pression, et rendre un trio hors contrainte
   c'est répondre à côté de la question de l'auteur.
 - Une clé hors taxonomie **LÈVE** (`build_user_prompt`, `:103-107` ; `_contraintes_fiction`,
-  `web/server.py:165-185`, rend une **400**). Les menus étant peuplés depuis la taxonomie, une
+  `web/server.py:279-303`, rend une **400**). Les menus étant peuplés depuis la taxonomie, une
   clé inconnue ne peut venir que d'une requête forgée : l'ignorer ferait croire à l'auteur que sa
   contrainte est appliquée.
 - **`contraintes_impossibles`** (`fiction_ideator.py:131-137`) : aucun trio rendu **ALORS QUE**
@@ -371,7 +371,8 @@ file de progression du flux direct mourait avec la requête HTTP : fermer l'ongl
 de 15 minutes. **Ne pas les réintroduire.** `queue` n'est plus importé par `server.py`.
 
 Sauf mention contraire, **tout endpoint exige une session** (`Depends(utilisateur_courant)`,
-12 occurrences ; `POST /api/auth/deconnexion` lit le cookie sans l'exiger).
+**14 occurrences** — 14 des 18 routes ; `POST /api/auth/deconnexion` lit le cookie sans
+l'exiger).
 
 | Méthode | Chemin | Session | Rôle |
 |---|---|---|---|
@@ -381,10 +382,10 @@ Sauf mention contraire, **tout endpoint exige une session** (`Depends(utilisateu
 | POST | `/api/auth/deconnexion` | cookie | 204. Ferme la session **côté serveur** ET retire le cookie : effacer le seul cookie laisserait le jeton valide pour quiconque en a copie |
 | GET | `/api/auth/moi` | oui | `{user_id, email}` de la session en cours |
 | GET | `/api/lowcontent/formats` | oui | `[{cle, label, famille, norme, effort}]` triés, lus depuis `data/lowcontent_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur de format ; `norme` est exposé pour que l'UI pose son badge sans re-déduire la taxonomie |
-| POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. `/api/pdf` est conservé comme ALIAS et sert le même document |
+| POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. **Quand `inclure_mots_cles` est demandé, c'est un QUATRIÈME chemin payant** : gardé par `_verifier_plafond` **et** `_reserver_appel` (`web/server.py:1039-1040`), il impute `n_analyses=0` — il exige une marge sous le plafond sans la consommer. Un dossier sans mots-clés ne dépense rien et n'est pas gardé. `/api/pdf` est conservé comme ALIAS et sert le même document |
 | GET | `/api/fiction/sous-genres` | oui | `[{cle, label}]` triés, lus depuis `data/fiction_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur : jamais de liste dupliquée en dur côté JS |
 | GET | `/api/fiction/taxonomie/{sous_genre}` | oui | `{sous_genre, tropes, decors}` — alimente les menus du compositeur. Sous-genre inconnu → 400 |
-| POST | `/api/jobs` | oui | **SEUL chemin de lancement des deux scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction", + params}` ; type inconnu → 400. Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
+| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
 | GET | `/api/jobs/{id}` | oui | État complet : statut, progression, résultat, coût, erreur, dates. **404 — et non 403 — quand le job appartient à quelqu'un d'autre** : distinguer les deux confirmerait que l'identifiant existe |
 | GET | `/api/jobs` | oui | Liste de l'utilisateur de la session, plus récents d'abord. `limit` (20). **Aucun paramètre `user_id`** |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
@@ -392,7 +393,7 @@ Sauf mention contraire, **tout endpoint exige une session** (`Depends(utilisateu
 | POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** (la `ScoredNiche` entière dans le body ; body invalide → 400). Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
 | POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0` |
-| POST | `/api/pdf` | oui | One-pager PDF de positionnement à la volée (fpdf2). Stateless, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
+| POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1071`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
 
 ### 2.7 Gardes de sécurité (revue adversariale, commits `d443ba8` + `8d37ab8`)
 
@@ -401,15 +402,15 @@ Sauf mention contraire, **tout endpoint exige une session** (`Depends(utilisateu
 | Garde | Où | Ce qu'il ferme |
 |---|---|---|
 | `user_id` exclusivement issu du cookie | `web/server.py:246-258` | Plafond contournable à volonté ; lecture de l'historique d'autrui |
-| `_verifier_plafond` | défini `web/server.py:188-197`, appelé en `:643` (`/api/verdict`) et `:674` (`/api/kdp-keywords`) ; `POST /api/jobs` fait sa propre vérification en ligne (`:516-520`) | `UsageMeter.autorise` n'avait **qu'un** site d'appel, `POST /api/jobs`, que l'interface n'empruntait pas : le plafond ne protégeait que le chemin inutilisé. **Les trois endpoints qui dépensent vérifient désormais.** `POST /api/pdf` n'a pas de garde parce qu'il ne dépense rien |
-| Bornes de volume `_borner` | `web/server.py:128-135` ; `MAX_IDEES=30`, `MAX_RECHERCHES=20`, `MAX_NICHES_FICTION=20` (`:83-85`) | Le plafond compte des ANALYSES, pas des appels payants : une seule « analyse » avec `search=9999` déclenchait des milliers de requêtes DataForSEO pour une unité de plafond. **Borner le volume est la seule protection réelle du MONTANT.** `_borner` **refuse (400) plutôt que de rogner en silence** — un utilisateur qui demande 9999 doit savoir qu'il ne l'aura pas |
-| `origine_sure` (anti-CSRF) | `web/server.py:138-162`, appelé sur `/api/auth/inscription` (`:285`), `/api/auth/connexion` (`:326`), `POST /api/jobs` (`:502`) — **3 sites** | Lancer un run dépense de l'argent réel ; `SameSite=Lax` laisse partir le cookie sur une navigation de premier niveau. S'appuie sur `Sec-Fetch-Site` (en-tête interdit au script, non falsifiable) puis sur `Origin` vs `Host`. **Absent = client hors navigateur** (curl, tests) : laissé passer, un tel client n'a pas de cookie ambiant à voler |
+| `_verifier_plafond` | défini `web/server.py:367-376`, appelé en **trois** endroits : `:957` (`/api/verdict`), `:991` (`/api/kdp-keywords`) et `:1039` (`/api/dossier`, **uniquement** dans la branche `inclure_mots_cles` — un dossier sans mots-clés ne dépense rien). `POST /api/jobs` ne l'appelle pas : il **réserve atomiquement** (`UsageMeter.reserver_analyse`, `:797-801`), après le devis et les bornes | `UsageMeter.autorise` n'avait **qu'un** site d'appel, `POST /api/jobs`, que l'interface n'empruntait pas : le plafond ne protégeait que le chemin inutilisé. **Les trois endpoints qui dépensent vérifient désormais.** `POST /api/pdf` n'a pas de garde parce qu'il ne dépense rien |
+| Bornes de volume `_borner` | `_borner` défini `web/server.py:242` ; `MAX_IDEES=30` (`:135`), `MAX_RECHERCHES=20` (`:136`), **`MAX_NICHES_FICTION=11`** (`:144`, **DÉRIVÉ** du plafond de coût, cf. §2.13), `MAX_RECHERCHES_LC=20` (`:147`) | Le plafond compte des ANALYSES, pas des appels payants : une seule « analyse » avec `search=9999` déclenchait des milliers de requêtes DataForSEO pour une unité de plafond. **Borner le volume est la seule protection réelle du MONTANT.** `_borner` **refuse (400) plutôt que de rogner en silence** — un utilisateur qui demande 9999 doit savoir qu'il ne l'aura pas |
+| `origine_sure` (anti-CSRF) | `web/server.py:252-277`, appelé sur `/api/auth/inscription` (`:464`), `/api/auth/connexion` (`:505`), `POST /api/jobs` (`:762`) — **3 sites** | Lancer un run dépense de l'argent réel ; `SameSite=Lax` laisse partir le cookie sur une navigation de premier niveau. S'appuie sur `Sec-Fetch-Site` (en-tête interdit au script, non falsifiable) puis sur `Origin` vs `Host`. **Absent = client hors navigateur** (curl, tests) : laissé passer, un tel client n'a pas de cookie ambiant à voler |
 | Cloisonnement des jobs | `web/server.py:563` et `:596-597` | Connaître un identifiant suffisait à lire le run, le résultat et le coût d'autrui |
 | Limitation des tentatives | `auth.py:53-59`, `:216-242` | Un top-1000 de mots de passe se teste en ligne en moins d'une minute contre une adresse connue |
 | Politique de mot de passe | `auth.py:43-47`, `:66-72`, `:112-129` | Dictionnaire ; et déni de service par mot de passe de plusieurs mégaoctets |
-| `_corps_json` / `_identifiants` | `web/server.py:206-216`, `:234-243` | Un corps non-JSON ou un champ mal typé remontait en **500** : trace exposée, et signal donné à l'attaquant qu'il a trouvé un chemin non prévu. Désormais **400** |
-| `INSCRIPTIONS_OUVERTES` fermé par défaut | `web/server.py:219-227` | Le plafond étant PAR utilisateur, **un compte de plus est un plafond neuf** : l'inscription libre offrait une dépense illimitée à un anonyme |
-| Cookie `Secure` **déduit** du protocole | `web/server.py:101-117` | C'était une variable à 0 par défaut « à passer à 1 au déploiement » : un jeton de 30 jours diffusé en clair le jour où quelqu'un oublie de la lire. Lit `X-Forwarded-Proto` puis le schéma. `COOKIE_SECURE=1` peut **forcer** le drapeau, plus jamais le désactiver |
+| `_corps_json` / `_identifiants` | `web/server.py:385-396`, `:413-423` | Un corps non-JSON ou un champ mal typé remontait en **500** : trace exposée, et signal donné à l'attaquant qu'il a trouvé un chemin non prévu. Désormais **400** |
+| `INSCRIPTIONS_OUVERTES` fermé par défaut | `web/server.py:398-411` | Le plafond étant PAR utilisateur, **un compte de plus est un plafond neuf** : l'inscription libre offrait une dépense illimitée à un anonyme |
+| Cookie `Secure` **déduit** du protocole | `web/server.py:215-232` | C'était une variable à 0 par défaut « à passer à 1 au déploiement » : un jeton de 30 jours diffusé en clair le jour où quelqu'un oublie de la lire. Lit `X-Forwarded-Proto` puis le schéma. `COOKIE_SECURE=1` peut **forcer** le drapeau, plus jamais le désactiver |
 | `httponly` + `samesite=lax` | `web/server.py:120-125` | Vol du jeton par injection de script ; CSRF sur POST cross-site |
 
 ### 2.8 Modules
@@ -461,13 +462,16 @@ proprement sans verdict) · `tutoriel_pdf.py` (script autonome, exposé par aucu
 `python 01-scripts/tutoriel_pdf.py` régénère les deux PDF à la racine ; constantes
 `COUTS` / `ENV_VARS` / `ENDPOINTS` / `GLOSSAIRE` / `VERDICTS` / `PIEGES` / `DEPLOIEMENT`).
 **`COUTS` est la seule source du dépôt qui étiquette chaque chiffre mesuré / calculé /
-extrapolé / estimé.** `ENDPOINTS` couvre bien les 16 routes actuelles et `ENV_VARS` est à jour
+extrapolé / estimé.** `ENDPOINTS` couvre bien les **18** routes actuelles et `ENV_VARS` est à jour
 sur `INSCRIPTIONS_OUVERTES` et `COOKIE_SECURE` ; deux tests le tiennent
 (`tests/test_tutoriel_pdf.py:100,118`) en lisant `web/server.py` et les `os.getenv` du code comme
-source de vérité plutôt qu'en figeant une liste. **Deux trous connus, non couverts par ces
-tests** : (a) `ENV_VARS` ignore `HOST` et `PORT` — le test ne vérifie que le sens « documenté ⇒
-lu » ; (b) `DEPLOIEMENT` contient encore une entrée « Utiliser les travaux asynchrones, pas les
-endpoints SSE » qui référence des endpoints **supprimés**. Les `PIEGES`, le `GLOSSAIRE` et
+source de vérité plutôt qu'en figeant une liste. **Trous connus, non couverts par ces
+tests** : (a) `ENV_VARS` ne couvre que **22 des 33** variables lues — il ignore `HOST`, `PORT`,
+`APP_ENV`, `JOBS_MODE`, `WORKER_REPOS_S`, `WORKER_CONCURRENCE`, `RUNS_SIMULTANES_MAX`,
+`PLAFOND_USD_PAR_RUN`, `DEBIT_APPELS_MAX`, `LOWCONTENT_IDEATOR_MODEL` et
+`LOWCONTENT_VERDICT_MODEL`, parce que le test ne vérifie que le sens « documenté ⇒ lu » et jamais
+l'inverse ; (b) `DEPLOIEMENT` contenait une entrée « Utiliser les travaux asynchrones, pas les
+endpoints SSE » qui référençait des endpoints **supprimés** — corrigée le 2026-08-22. Les `PIEGES`, le `GLOSSAIRE` et
 `DEPLOIEMENT` ne sont vérifiés par personne.
 
 **Outillage dev** — `fiction_validation.py` + `build_validation_set.py` + `validate_classifier.py`
@@ -498,16 +502,24 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
   quand la reprise a eu lieu** (silencieuse côté serveur : ne pas la dire laisserait croire que
   l'historique antérieur est perdu).
 - **Un seul chemin de lancement** (`lancerTravail`, `:911-934`) : `POST /api/jobs` puis
-  `EventSource` sur `/api/jobs/{id}/stream`. L'id est mémorisé en `localStorage` par onglet
-  (`ia-niches-job-scout` / `ia-niches-job-fiction`) et `reprendreTravail` (`:955-976`) s'y
-  raccroche au chargement — **un rechargement reprend le run en cours**, et un run terminé
-  pendant l'absence est retrouvé et affiché. Le flux rejouant TOUTE la progression, la liste
+  `EventSource` sur `/api/jobs/{id}/stream`. L'id est mémorisé en `localStorage` par onglet —
+  **trois clés** : `ia-niches-job-scout`, `ia-niches-job-fiction`, `ia-niches-job-lowcontent` — et
+  `reprendreTravail` s'y raccroche au chargement — **un rechargement reprend le run en cours**, et
+  un run terminé pendant l'absence est retrouvé et affiché.
+  **Les trois appels doivent vivre dans `entrer()`, jamais au niveau module** : celui du
+  low-content y était, donc il partait AVANT que la session soit confirmée, se prenait un 401 et
+  ne reprenait rien — un run de neuf minutes perdu à chaque rechargement, en silence, l'onglet
+  réaffichant un formulaire vide comme si rien n'avait tourné. Corrigé le 2026-08-22. Le flux rejouant TOUTE la progression, la liste
   d'étapes est vidée à chaque raccrochage pour ne pas empiler deux fois les mêmes lignes.
   Une **429** est traduite en « limite atteinte, rien n'a été lancé », jamais en « erreur ».
 - **Aide contextuelle** : une pastille « ? » fixe ouvre un mini-tutoriel **par onglet**
-  (`AIDE`, `:1373`), chacun avec une section « Pièges de lecture ». Plus un glossaire en bulle
-  unique partagée (`:1193-1243`), survol **et** clic/tap (une tablette ne survole rien),
-  épinglé jusqu'à Échap.
+  (`AIDE`), chacun avec sa section « Pièges de lecture » — **trois entrées, `nf` / `fic` / `lc`**.
+  `ongletActif()` est une **table explicite** et non une cascade booléenne : la version
+  `? 'fic' : 'nf'` a survécu à l'ajout du troisième onglet et rendait `'nf'` sur `#tab-lc`,
+  l'auteur lisant donc les pièges de la NON-FICTION en regardant un rayon low-content, sans que
+  rien ne le signale. Une vue ajoutée sans sa ligne se voit désormais (`AIDE[undefined]`).
+  Plus un glossaire en bulle unique partagée, survol **et** clic/tap (une tablette ne survole
+  rien), épinglé jusqu'à Échap.
 - **Aucun montant nulle part** : ni `TAUX_USD_EUR`, ni `fmtUsd`/`formatCost`, et `grep` rend
   zéro occurrence de `usd` (§5.27). Attention en vérifiant : le caractère `$` est omniprésent
   dans `index.html` — c'est l'alias de `document.querySelector` et le marqueur d'interpolation
@@ -598,6 +610,19 @@ cherche « noel » dans « christmas planner ». Faux, plausibles, silencieux. D
 **`MARKETPLACE=com` LÈVE au démarrage**, en listant ce qui manque. `com` est *décrit* (ses
 deux codes DataForSEO sont justes) et déclaré non prêt.
 
+**Nuance d'ordre à connaître** (même famille que §5.21) : `ACTIF = marketplace_actif()` est résolu
+au chargement du module. `web/server.py` appelle `load_dotenv()` AVANT ses imports moteur, donc le
+serveur — le point d'entrée réel du produit — lève bien au démarrage. En CLI, les orchestrateurs
+importent `marketplace` avant leur propre `load_dotenv()` : un `MARKETPLACE` défini **uniquement**
+dans `.env` y est ignoré et on reste sur `fr`. Sans danger (`fr` est la seule place prête) mais ce
+n'est pas une levée : en CLI, passer la variable dans l'environnement du shell.
+
+**Piège que ce module s'est infligé à lui-même** : `ACTIF` valait d'abord `MARKETPLACES[DEFAUT]`,
+sans lire l'environnement. `marketplace_actif()` — la fonction qui lève — n'avait alors **aucun
+appelant de production**, seulement des tests : `MARKETPLACE=com` se serait lu « bascule
+effectuée » pendant que le produit continuait sur `fr` sans rien dire. Exactement le défaut que le
+module existe pour empêcher, appliqué à lui-même.
+
 ### 2.16 Message de fin d'analyse — `notification.py`
 
 **Éteint par défaut** : il faut `NOTIFICATIONS_EMAIL` **et** `SMTP_HOST`. Une configuration
@@ -625,6 +650,15 @@ L'adresse est relue depuis `comptes.db` au moment de l'envoi plutôt que portée
 l'y recopier en ferait une donnée personnelle de plus, dupliquée dans une base qui n'en a
 pas besoin.
 
+**Piège payé une fois, et le plus instructif du module** : `_notifier` lisait
+`UserStore(_COMPTES_DB)` alors que la constante s'appelle `_USERS_DB`. Le `NameError` était avalé
+par le `except Exception` de `_notifier` — qui est là pour une BONNE raison, et qui masquait donc
+intégralement la panne : **aucun e-mail ne pouvait partir, et rien nulle part ne le disait**. Les
+deux tests fonctionnels ne le voyaient pas parce qu'ils monkeypatchent `server._notifier` : ils
+vérifiaient que le serveur APPELLE la notification, jamais qu'elle fonctionne. **Remplacer la
+fonction qu'on teste, c'est tester le harnais.** Un test résout désormais une VRAIE adresse depuis
+un `comptes.db` isolé.
+
 ---
 
 ## 3. SOURCES DE DONNÉES ET COÛTS
@@ -632,8 +666,8 @@ pas besoin.
 | Source | Usage | Coût |
 |---|---|---|
 | **API Anthropic** | Ideator non-fiction, ideator fiction, classifieur de blurbs, verdict éditorial, mots-clés KDP | Payant au token. Grille dans `cost_tracker.py:8-14` — les **quatre clés portent le préfixe `claude-`** : `claude-sonnet-5` (défaut partout) 2 $/10 $ par million in/out en tarif intro **jusqu'au 31/08/2026**, puis 3 $/15 $ ; `claude-opus-4-8` 5 $/25 $ ; `claude-fable-5` 10 $/50 $ ; `claude-haiku-4-5` 1 $/5 $. **Un identifiant absent de la grille est facturé 0,00 $** (`cost_tracker.py:22-24`, `if not p: return 0.0`) : un coût invisible, pas nul. Écrire `opus-4-8` sans le préfixe dans `IDEATOR_MODEL` suffit à faire disparaître la dépense des rapports sans lever la moindre erreur |
-| **DataForSEO — Amazon Products** (`/v3/merchant/amazon/products`) | SERP : organiques vs sponsorisés, ASIN, prix, note, avis, badges | 0,003 $/appel en priority 2 (file rapide ~1-4 min, **défaut**), 0,0015 $ en priority 1 (jusqu'à ~45 min). Cache 10 j |
-| **DataForSEO — Amazon ASIN** (`/v3/merchant/amazon/asin`) | BSR, rayon, blurb, série, éditeur, date, langue. Batché jusqu'à 100 ASIN | Même tarif par ASIN. **La file met ~250 s quel que soit le lot** → batch unique par run. Cache livre 7 j, cache BSR 3 j |
+| **DataForSEO — Amazon Products** (`/v3/merchant/amazon/products`) | SERP : organiques vs sponsorisés, ASIN, prix, note, avis, badges | 0,003 $/appel en priority 2 (file rapide ~1-4 min, **défaut**), 0,0015 $ en priority 1 (jusqu'à ~45 min). Cache **15 j** |
+| **DataForSEO — Amazon ASIN** (`/v3/merchant/amazon/asin`) | BSR, rayon, blurb, série, éditeur, date, langue. Batché jusqu'à 100 ASIN | Même tarif par ASIN. **La file met ~250 s quel que soit le lot** → batch unique par run. Cache livre **15 j**, cache BSR **15 j** (3 j pour une absence de classement) |
 | **Classification de blurbs** (dérivée, pas une source réseau) | Étiquettes tropes/décor/`est_roman` produites par le LLM et remises en cache | **TTL 30 j** (`CLASSIFICATION_TTL_S`, `cache.py:17`) — le plus long des quatre, parce que la clé porte déjà tout ce qui peut invalider le résultat (§2.4 D) |
 | **Amazon autocomplete** (`completion.amazon.fr/api/2017/suggestions`, marketplace `A13V1IB3VIYZZH`) | Validation de la demande non-fiction **et lecture du contenu des suggestions** (§2.3), sonde fiction, confirmation des mots-clés KDP | **Gratuit.** Endpoint public, aucune clé. Pause 0,4 s entre requêtes |
 | **Fiche `amazon.fr/dp/{asin}` scrapée** | BSR, source par défaut en local | **Gratuit — mais IP résidentielle uniquement** (voir piège ci-dessous) |
@@ -656,7 +690,9 @@ le PC de Baptiste, **bloqué depuis un datacenter**. En production il faut
 (recensement exhaustif sur ces deux dossiers, aucun autre `.py` du dépôt n'en lit, revérifié
 le 2026-08-22). `.env.example` en documente **vingt-neuf** : il lui manque `HOST`, `PORT`,
 `LOWCONTENT_IDEATOR_MODEL` et `LOWCONTENT_VERDICT_MODEL`. **Son propre en-tête annonce
-« ONZE variables » : ce compte est périmé** — à corriger. Ce tableau porte les trente-trois.
+« VINGT variables » (`.env.example:5`) alors qu'il en documente 29 : ce compte est périmé** — à
+corriger. Ne pas chercher « ONZE » dans le fichier, cette citation a longtemps traîné ici et n'y
+a jamais correspondu. Ce tableau porte les trente-trois.
 
 Deux tests tiennent une partie de l'invariant (`tests/test_tutoriel_pdf.py`), mais dans un
 seul sens : **documenté ⇒ lu**. Rien ne vérifie l'inverse, d'où les quatre trous
@@ -733,7 +769,7 @@ Les `REDDIT_*` **ne sont plus lues nulle part** : les modules qui les lisaient o
 | Bonus « expertise pharmacien » (santé/nutrition/bien-être) | **Non codé et délibérément contredit** : `niche_ideator.py:47-50` impose au contraire au modèle de ne privilégier aucun domaine et de ne rien supposer de l'expertise de l'auteur |
 | Malus pour risque KDP TOS | **Non codé.** `NicheCandidate.risques` (`models.py:24`) est rempli par le LLM (champ `required` dans le schéma d'outil) mais n'est propagé nulle part : ni `NicheValidation`, ni `ScoredNiche`, ni le scoring, ni l'affichage. **Champ mort** |
 | « Nombre de résultats de recherche Amazon inférieur à 10 000 » | **Non codé et non mesurable en l'état** : la donnée n'est pas collectée. `SearchResult.total_items` vaut `len(items)` de la page de SERP (`search_providers.py:86`), pas le total annoncé par Amazon, et n'entre dans aucun calcul |
-| `IDEES_PAR_RUN = 10` | **Constante morte** (`web/server.py:82`, zéro référence ailleurs). Le vivier réellement appliqué est de **12**. Ne pas documenter 10 comme le comportement du produit — cf. §2.2 |
+| `IDEES_PAR_RUN = 10` | **Constante morte** (`web/server.py:134`, zéro référence ailleurs). Le vivier réellement appliqué est de **12**. Ne pas documenter 10 comme le comportement du produit — cf. §2.2 |
 
 ---
 
@@ -810,7 +846,7 @@ Section critique. Chacun a coûté un bug réel.
     (`TropeClassification`, `:144`). `clf:` porte **en plus** la version de taxonomie, le modèle
     et un SHA1 du prompt système (`_prompt_tag()`) : ce qui change le raisonnement, là où
     l'empreinte de champs couvre ce qui change la forme du résultat. Sans elles, ajouter un champ
-    (le blurb l'a été en M4) sert des objets amputés en silence — 7 jours pour `book:`,
+    (le blurb l'a été en M4) sert des objets amputés en silence — 15 jours pour `book:`,
     **30 jours pour `clf:`** — et durcir le prompt n'a aucun effet sur les livres déjà vus.
     **Limite assumée** : l'empreinte suit les noms, pas les types ni la sémantique — changer le
     sens d'un champ sans le renommer exige de vider le cache à la main.
@@ -848,7 +884,7 @@ Section critique. Chacun a coûté un bug réel.
     (ligne 32) **avant** ses imports moteur (ligne 33 et suivantes) : un ordre qui a l'air d'un
     détail de style et qui est en fait load-bearing.
 22. **`POST /api/jobs` accepte deux jeux de noms de paramètres** (`_run_scout_job`,
-    `web/server.py:430-431`) : `n_ideas`/`n_search` **et** les noms historiques `ideas`/`search`,
+    `web/server.py:638-639`) : `n_ideas`/`n_search` **et** les noms historiques `ideas`/`search`,
     parce qu'une divergence a été constatée en live — un client reprenant les noms de l'ancien
     flux direct voyait son plafond silencieusement ignoré et payait les défauts. À conserver tant
     qu'un client tiers peut exister, même si l'UI n'envoie plus que `n_search`.
@@ -901,10 +937,14 @@ Section critique. Chacun a coûté un bug réel.
     d'une facturation en jetons ou par abonnement. **Ne pas confondre « ne plus afficher » et
     « ne plus compter ».** Seule exception, volontaire : la **fourchette de prix des LIVRES**
     (`fmtEur`, `web/index.html:1048`) reste — c'est une donnée de marché, pas une facture.
-28. **La borne serveur et la borne du formulaire ne coïncident pas partout.** `#search` va
-    jusqu'à 20, comme `MAX_RECHERCHES` ; mais `#fic-n` est plafonné à **15** côté HTML alors que
-    `MAX_NICHES_FICTION` vaut **20**. Ce n'est pas un défaut (le serveur est plus permissif que le
-    formulaire, jamais l'inverse), mais ne pas déduire l'un de l'autre.
+28. **Les bornes serveur et formulaire coïncident désormais — les vérifier ENSEMBLE.**
+    `#search` va jusqu'à 20 (`web/index.html:555`) comme `MAX_RECHERCHES` (`web/server.py:136`) ;
+    `#fic-n` jusqu'à **11** (`:625`) comme `MAX_NICHES_FICTION` (`:144`) ; `#lc-search` jusqu'à 20
+    comme `MAX_RECHERCHES_LC` (`:147`). La règle à tenir n'est plus « le serveur est plus
+    permissif » mais **« le serveur ne doit jamais être PLUS STRICT que le formulaire »** : sinon
+    une saisie valide à l'écran ressort en 400, et c'est l'utilisateur qui paie l'incohérence.
+    `tests/test_devis.py` et `tests/test_ux_presets.py` lisent la constante au lieu de figer un
+    littéral, pour que relever le plafond ne laisse pas le formulaire en arrière.
 
 
 30. **En low-content, `n_variantes_quasi_identiques` se lit à l'ENVERS.** Élevé = mauvais :

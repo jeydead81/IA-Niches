@@ -1,26 +1,26 @@
 # IA-Niches
 
 Application web locale qui cherche des niches de livres sur **Amazon.fr** pour les auteurs KDP.
-Une IA (Claude) propose des niches, l'**autocomplete Amazon** (gratuit) filtre celles que personne
-ne cherche, puis **DataForSEO** ne paie la concurrence et les BSR que sur les survivantes. Deux
-moteurs indépendants : **non-fiction** (niche + requête + score sur 3 axes + fourchette de prix du
-rayon) et **fiction** (trios sous-genre x tropes x décor, avec lecture des quatrièmes de
-couverture). Sortie : une liste de niches classées, plus des fonctions à la demande (verdict
-éditorial, PDF, mots-clés KDP, historique).
+**Trois moteurs indépendants**, et le troisième ne marche pas comme les deux autres :
+
+| Moteur | Comment il trouve les niches |
+|---|---|
+| **non-fiction** | l'IA propose, l'**autocomplete Amazon** (gratuit) élimine ce que personne ne cherche, **DataForSEO** ne paie la concurrence et les BSR que sur les survivantes. Niche + requête + score sur 3 axes + fourchette de prix du rayon |
+| **fiction** | trios sous-genre × tropes × décor, avec **lecture des quatrièmes de couverture** — c'est ce qui permet de mesurer la saturation d'un trope |
+| **low-content** | **l'ordre est inversé** : l'autocomplete est la SOURCE, l'IA ne fait que classer des requêtes réelles. En low-content la tête de requête est morte et l'argent est trois crans plus bas dans la traîne ; un LLM à qui on demande du long-tail invente aussi la demande qui va avec (§5) |
+
+Sortie : une liste de niches classées, plus des fonctions à la demande (verdict éditorial, dossier
+de niche en 3 pages, PDF, mots-clés KDP, historique).
 
 L'accès se fait par **compte e-mail + mot de passe** (§3). Tout se lance par un **travail
 asynchrone** : le run survit à la fermeture de l'onglet.
 
 > **La source de vérité de ce projet est le code** (`01-scripts/`, `web/`). `CLAUDE.md` et
 > `ROADMAP.md` décrivent la v2 et sont tenus à la main : en cas de divergence, le code a raison
-> et c'est la doc qu'on corrige. **Ne pas supprimer `CLAUDE.md`** : **18 lignes du code vivant**
-> le citent comme normatif, réparties sur **15 fichiers**
+> et c'est la doc qu'on corrige. **Ne pas supprimer `CLAUDE.md`** : **24 lignes du code vivant**
+> le citent comme normatif, réparties sur **19 fichiers**
 > (`grep -rn CLAUDE 01-scripts web tests --include=*.py --include=*.html`, comptage refait le
-> 2026-08-03) — 9 modules de `01-scripts/` (`auth.py`, `fiction_master.py`, `fiction_scoring.py`,
-> `fiction_serp_provider.py`, `fiction_validation.py`, `history.py`, `kdp_keywords.py`,
-> `models.py`, `niche_verdict.py`), `web/index.html`, et 5 fichiers de `tests/`
-> (`test_fiction_scoring.py`, `test_fiction_serp_provider.py`, `test_kdp_keywords.py`,
-> `test_server_auth.py`, `test_ux_kdp_historique.py`).
+> 2026-08-22).
 > Les dossiers v1 ont disparu, mais **pas de la même façon** : `00-config/` et `02-veille-hebdo/`
 > ont été supprimés par le commit `eaa20b2` ; `03-niches-validees/` et `04-archives/` étaient
 > **vides et n'ont jamais été versionnés** — git ne suit pas les dossiers vides, aucun commit ne
@@ -109,7 +109,11 @@ des fiches Amazon se fait en expressions régulières pures, cf. `amazon_product
 est **conservé** : importé par `01-scripts/fiction_validation.py` **et** trois fichiers de tests
 (`test_build_validation_set.py`, `test_fiction_validation.py`, `test_validate_classifier.py`).
 
-### Variables d'environnement — les 15 lues par le code
+### Variables d'environnement — les 33 lues par le code
+
+`.env.example` en documente **29** : il lui manque `HOST`, `PORT`, `LOWCONTENT_IDEATOR_MODEL` et
+`LOWCONTENT_VERDICT_MODEL`. Deux tests (`tests/test_tutoriel_pdf.py`) tiennent l'invariant, mais
+dans un seul sens — **documenté ⇒ lu**. Rien ne vérifie l'inverse, d'où ces quatre trous.
 
 **Obligatoires**
 
@@ -147,6 +151,29 @@ Les défauts vides ne font pas échouer le démarrage : l'échec survient au pre
 | `KDP_KEYWORDS_MODEL` | Mots-clés backend KDP. |
 | `FICTION_IDEATOR_MODEL` | Ideator fiction (trios). |
 | `FICTION_CLASSIFIER_MODEL` | Classifieur de quatrièmes. **Ne pas rétrograder** : Haiku 4.5 mesuré à 42 % d'accord contre 80 % requis. |
+| `LOWCONTENT_IDEATOR_MODEL` | Classement des requêtes low-content. **Absente de `.env.example`.** |
+| `LOWCONTENT_VERDICT_MODEL` | Verdict low-content. **Absente de `.env.example`.** |
+
+**Charge, dépense et exécution**
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `PLAFOND_USD_PAR_RUN` | `0.60` | Plafond **prédictif** : `verifier(cout_prevu)` refuse AVANT de dépenser, il n'interrompt pas au milieu. Combiné au devis préalable (`devis.py`), c'est ce qui empêche un rapport partiel facturé au plafond entier. |
+| `RUNS_SIMULTANES_MAX` | `5` | Créneaux d'exécution simultanés. Plafond de **charge**, pas de dépense. Avant lui, le serveur lançait un fil par job sans aucune limite. |
+| `DEBIT_APPELS_MAX` | `40`/h/utilisateur | Limite les appels **à la pièce** (`/api/verdict`, `/api/kdp-keywords`), qui imputent `n_analyses=0` et échappent donc au plafond mensuel. **Garde-fou, pas un palier tarifaire** : le modèle économique n'étant pas fixé, la valeur est ancrée sur ce que le produit sait faire. |
+| `JOBS_MODE` | `thread` | `worker` fait que `POST /api/jobs` **empile seulement**. Sans ce garde, serveur ET worker exécuteraient le même job : deux fois les SERP, deux fois les tokens. |
+| `WORKER_CONCURRENCE` | `5` | Taille du pool de `worker.py`. |
+| `WORKER_REPOS_S` | `2.0` | Attente entre deux `claim_next` quand la file est vide. |
+| `APP_ENV` | non défini | `prod` déclenche `_verifier_config_prod`, qui **refuse de démarrer** sur une configuration dangereuse en exposition. |
+| `MARKETPLACE` | `fr` | Toute autre valeur **LÈVE au démarrage**, `com` compris. Voir §10. |
+
+**Message de fin d'analyse** — éteint par défaut, il faut `NOTIFICATIONS_EMAIL` **et** `SMTP_HOST`.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `NOTIFICATIONS_EMAIL` | non défini = éteint | Prévient l'auteur quand son analyse est finie. Une configuration à moitié faite n'envoie pas « au mieux » : elle n'envoie pas. |
+| `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` / `_TLS` | port `587`, TLS actif | `SMTP_FROM` retombe sur `SMTP_USER`. Le message ne contient **jamais** le résultat de l'analyse ni le moindre montant. |
+| `BASE_URL` | non définie | Sert **uniquement** au lien du message. Absente, le message part sans lien plutôt qu'avec un lien mort — rien dans le code ne connaît le nom de domaine. |
 
 **Piège de facturation** : un identifiant de modèle absent de la grille de `cost_tracker.py` est
 facturé **0,00 $** — un coût invisible, pas un coût nul. Les quatre identifiants tarifés portent
@@ -216,11 +243,11 @@ serait une régression économique silencieuse.
 ### Interface web (usage normal)
 
 Ouvre `http://127.0.0.1:8000` — adresse et port surchargeables par `HOST` / `PORT` (§2). Page
-unique (`web/index.html`, 89 241 octets, 1 524 lignes, CSS + JS inline, zéro build, aucun
-`<script src>` ni `<link>`) : écran de connexion, onglet non-fiction, onglet fiction avec
-compositeur de trio, progression en direct (SSE reconnectable), tableau de niches dépliable,
-glossaire contextuel et **pastille d'aide « ? » fixe** ouvrant un mini-tutoriel **par onglet**,
-chacun terminé par une section « Pièges de lecture ».
+unique (`web/index.html`, 118 946 octets, CSS + JS inline, zéro build, aucun `<script src>` ni
+`<link>`) : écran de connexion, **trois onglets** — non-fiction, fiction avec compositeur de trio,
+low-content avec sélecteur de format —, progression en direct (SSE reconnectable), tableau de
+niches dépliable, glossaire contextuel et **pastille d'aide « ? » fixe** ouvrant un mini-tutoriel
+**par onglet**, chacun terminé par une section « Pièges de lecture ».
 
 **Une seule ressource tierce subsiste** : `web/index.html:8` fait un
 `@import url('https://fonts.googleapis.com/css2?…')` pour Fira Sans et Fira Code. Chaque ouverture
@@ -228,7 +255,7 @@ chacun terminé par une section « Pièges de lecture ».
 portent un repli : `system-ui,sans-serif` et `ui-monospace,monospace`), mais l'application n'est
 pas strictement locale tant que cet import est là.
 
-**Endpoints exposés par `web/server.py` — 16** (décorateurs `@app.`, comptés le 2026-08-03) :
+**Endpoints exposés par `web/server.py` — 18** (décorateurs `@app.`, comptés le 2026-08-22) :
 
 | Groupe | Routes |
 |---|---|
@@ -236,8 +263,11 @@ pas strictement locale tant que cet import est là.
 | Comptes | `POST /api/auth/inscription` · `POST /api/auth/connexion` · `POST /api/auth/deconnexion` (ces trois-là n'exigent pas de session en cours) · `GET /api/auth/moi` |
 | Travaux | `POST /api/jobs` · `GET /api/jobs` · `GET /api/jobs/{id}` · `GET /api/jobs/{id}/stream` |
 | Fiction | `GET /api/fiction/sous-genres` · `GET /api/fiction/taxonomie/{sous_genre}` |
-| À la demande | `POST /api/verdict` · `POST /api/kdp-keywords` · `POST /api/pdf` · `GET /api/history` |
+| Low-content | `GET /api/lowcontent/formats` — source de vérité unique du sélecteur de format, `norme` exposé pour que l'UI pose son badge sans re-déduire la taxonomie |
+| À la demande | `POST /api/dossier` (dossier de niche en 3 pages ; `POST /api/pdf` en est un **alias** et sert le même document) · `POST /api/verdict` · `POST /api/kdp-keywords` · `GET /api/history` |
 | Compteur | `GET /api/usage` |
+
+`POST /api/jobs` accepte `type: "scout" | "fiction" | "lowcontent"` ; un type inconnu rend 400.
 
 **Un seul chemin de lancement.** Les endpoints de flux direct `GET /api/scout` et `GET /api/fiction`
 ont été **supprimés** (commit `5257323`). L'interface fait `POST /api/jobs`, reçoit un id
@@ -277,6 +307,10 @@ python 01-scripts/scout_master.py --seed "sommeil" --ideas 15 --search 8
 python 01-scripts/fiction_master.py --sous-genre cosy_mystery
 python 01-scripts/fiction_master.py --sous-genre dark_romance --n-niches 5 --rayon papier
 
+# Scout low-content
+python 01-scripts/lowcontent_master.py --seed "carnet"
+python 01-scripts/lowcontent_master.py --format-cle registres_reglementaires
+
 # Canaux gratuits, smoke test (0 $)
 python 01-scripts/demo_free.py --suggest "tarot"
 python 01-scripts/demo_free.py --bsr 2266283340
@@ -288,6 +322,13 @@ python 01-scripts/tutoriel_pdf.py
 # sort en SystemExit 2. Défauts : --n-niches 5, sortie validation-fiction-<date>.xlsx)
 python 01-scripts/build_validation_set.py --sous-genre cosy_mystery
 python 01-scripts/validate_classifier.py <fichier.xlsx>
+
+# Calibration du scoring low-content (§12 — c'est L'ÉTAPE SUIVANTE du projet)
+python 01-scripts/build_lowcontent_validation_set.py --gabarit 99-logs/validation-lc.xlsx
+python 01-scripts/build_lowcontent_validation_set.py --xlsx  99-logs/validation-lc.xlsx
+
+# Worker séparé : exécute les travaux hors du processus serveur (JOBS_MODE=worker)
+python 01-scripts/worker.py
 ```
 
 **Aucune de ces commandes CLI ne consigne l'historique ni n'impute l'usage** : `_consigner_scout`,
@@ -299,16 +340,24 @@ Sous-genres fiction valides (`data/fiction_taxonomy_fr_v1.json`, version `fr_v1`
 `feel_good`. C'est la source unique : `GET /api/fiction/sous-genres` et
 `GET /api/fiction/taxonomie/{sous_genre}` la servent à l'UI, rien n'est dupliqué en dur côté JS.
 
-`01-scripts/launcher.py` (lancé par `IA-Niches.bat`) est un menu CLI **antérieur à l'UI web** :
-3 entrées (suggestions, BSR, idées de niches), il n'expose ni le scout non-fiction complet ni la
-fiction. **Conservé, sort à trancher** — et ce n'est pas un fichier inerte : l'entrée 3 appelle
-`niche_ideator.generate_niches` puis `niche_validator.validate_niches`, c'est-à-dire un vrai appel
-Anthropic payant, annoncé « ~0,02 € » par le menu lui-même (`launcher.py:26`), **sans compte, sans
-plafond et sans imputation**. Supprimer ou moderniser, en le sachant.
+`01-scripts/launcher.py` (lancé par `IA-Niches.bat`) est un menu CLI **antérieur à l'UI web**,
+désormais **gratuit et seulement gratuit** : deux sondes, autocomplete et BSR scrapé.
+
+**Son entrée 3 (« idées de niches par l'IA ») a été RETIRÉE le 2026-08-18**, sur décision de
+Baptiste. Elle appelait `generate_niches` sans compte, sans `_verifier_plafond`, sans `UsageMeter`
+et sans même un `CostTracker`. Le montant n'était pas le sujet (~0,02 € annoncés) : c'était le
+**seul chemin du dépôt à dépenser sans laisser de trace dans `usage.db`**, or c'est `usage.db` qui
+porte tout le raisonnement de marge — ce qu'il ne voit pas, personne ne le voit.
+
+`tests/test_launcher.py` est le cliquet : il échoue si `niche_ideator`, `run_scout`,
+`search_providers` ou `dataforseo` réapparaissent dans le fichier. Sa fixture coupe en outre le SDK
+et le HTTP sortant avant chaque test — écrite après qu'un test a déclenché un **vrai appel
+Anthropic facturé**, parce qu'un test ne doit pas dépendre de la propreté du code qu'il teste pour
+rester inoffensif.
 
 ---
 
-## 5. Les deux moteurs
+## 5. Les trois moteurs
 
 ### Scout non-fiction — `01-scripts/scout_master.py`
 
@@ -403,8 +452,62 @@ garde-fous :
 
 **Durée** : 10 à 15 minutes (869 s mesurés sur 3 trios).
 
-**Piège de lecture** : `saturation_trio` est le **seul score inversé** — élevé = mauvais. Une jauge
-colorée comme les autres ferait recommander exactement les pires niches.
+**Piège de lecture** : `saturation_trio` est un **score inversé** — élevé = mauvais. Une jauge
+colorée comme les autres ferait recommander exactement les pires niches. (Le low-content en a un
+second, `n_variantes_quasi_identiques`, ci-dessous.)
+
+### Scout low-content — `01-scripts/lowcontent_master.py`
+
+**Son ordre est INVERSÉ par rapport aux deux autres, et c'est tout le sujet.** Ailleurs, le LLM
+propose et l'autocomplete valide. Ici, **l'autocomplete est la source**.
+
+La raison est mesurable : en low-content, la tête de requête (« livre coloriage », « registre ») est
+morte ou tenue par des éditeurs, et l'argent est trois crans plus bas dans la traîne (« coloriage
+licorne 3 ans fille », « registre du personnel obligatoire »). Un LLM à qui on demande des requêtes
+long-tail invente aussi la demande qui va avec. Amazon, lui, ne complète que ce que des gens tapent
+réellement — et il le donne pour rien.
+
+**Chaîne** : arbre d'autocomplete (`autocomplete_expand`, gratuit ; `alphabet=True` sonde aussi
+« graine a »…« graine z », parce qu'Amazon ne rend qu'une dizaine de complétions par préfixe) →
+filtres **IP** et **saisonnalité** appliqués ICI, avant tout appel payant → l'IA **classe** les
+requêtes réelles (format × thème × public) → SERP par niche → **un seul batch ASIN** → scoring.
+
+**Quatre axes** au lieu de trois : demande 0,35 · pénétration 0,35 · **rentabilité** 0,20 ·
+**faisabilité** 0,10. Les deux derniers n'existent pas ailleurs, et ce n'est pas un raffinement :
+
+- **rentabilité** — sous 9,99 € de prix catalogue, KDP verse 50 % au lieu de 60 %, et le coût
+  d'impression se déduit ensuite (deux bandes par encre : forfait de 2,05 € jusqu'à 110 pages, puis
+  0,75 € + 0,012 €/page). Un rayon très demandé à 6,99 € peut ne rien rapporter ;
+- **faisabilité** — un carnet quadrillé et un cahier d'activités illustré ne se produisent pas dans
+  le même monde.
+
+**Deux signaux de pénétration propres au rayon** :
+
+- **`part_indie`** — douze références peuvent toutes venir de papetiers (Exacompta, Quo Vadis).
+  Invisible dans un comptage de résultats, décisif pour savoir si un auteur seul peut attaquer. Un
+  éditeur inconnu rend **`None`**, jamais `False` : `False` voudrait dire « ce n'est pas de
+  l'indie », donc une conclusion ;
+- **`n_variantes_quasi_identiques`** — **échelle INVERSÉE, élevé = mauvais.** Dix couvertures pour
+  un seul intérieur, c'est une ferme de variantes ; publier la onzième n'y gagne rien.
+
+**Le filtre IP est le seul garde-fou JURIDIQUE du dépôt** (`ip_filter.py`, corpus dans
+`data/exclusions_ip.md`). Il tolère l'apostrophe typographique (la forme officielle de
+Pat'Patrouille, T'choupi, McDonald's), le séparateur libre, le pluriel dans les deux sens et les
+mots de liaison internes. Mesuré : sur 198 requêtes portant une marque sous forme mutée, **198
+échappaient** à la version exacte. La même mesure a révélé **cinq faux positifs préexistants** —
+« cahier de révision BTS MCO » était rejeté en silence.
+
+**`norme: true`** (registres, carnets professionnels) : le contenu est fixé par un texte externe.
+**Piège de lecture à ne jamais inverser** — « normé » ne veut pas dire « difficile ». Le contenu
+étant imposé, la production est SIMPLE (effort 1) ; c'est la **conformité** qui est exigeante, et
+`lowcontent_verdict` **dégrade un « Go » côté code** si aucune source réglementaire n'est citée. Un
+registre incomplet expose l'acheteur, qui est un employeur.
+
+> **Les seuils de `data/lowcontent_criteres.json` sont des HYPOTHÈSES, pas des mesures.** Le fichier
+> le dit dans son en-tête. Tant que la calibration (§12) n'est pas faite, ne pas les citer comme des
+> critères établis.
+
+**Durée** : 3 à 9 minutes.
 
 ---
 
@@ -412,10 +515,21 @@ colorée comme les autres ferait recommander exactement les pires niches.
 
 | Fonction | Endpoint | Coût interne | État |
 |---|---|---|---|
-| Verdict éditorial d'une niche (Go / Go prudent / No-Go, confiance /10, facteur décisif, 2-3 angles d'attaque, critique stratégique) | `POST /api/verdict` | 0,028 $ | Sans état : la niche entière est passée dans le body. Vérifie le plafond, impute avec `n_analyses=0`. **Aucun appelant dans l'UI livrée** (§11). |
-| PDF de positionnement (one-pager) | `POST /api/pdf` | 0 $ | Rendu à la volée, aucune persistance serveur. Bouton présent mais inatteignable (§11). |
-| 7 mots-clés backend KDP | `POST /api/kdp-keywords` | ~0,006 $ (estimé) | ~22 candidats proposés par le LLM, règles KDP vérifiées **côté code** (50 caractères, termes proscrits, chevauchement avec le titre, doublons, motif de rejet lisible), puis confirmation **gratuite** par l'autocomplete Amazon. Vérifie le plafond, impute avec `n_analyses=0`. Bouton inatteignable (§11). |
-| Historique et évolution d'une niche | `GET /api/history` | 0 $ | Enregistré automatiquement par les deux runners de `POST /api/jobs` — **jamais par les CLI**, et **jamais pour une niche non-fiction dont la SERP a échoué** (`concurrence_mesuree=False`). Une seule mesure → `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas une erreur. Seuil de significativité 0,10. Atteignable dans l'UI côté non-fiction seulement (§11). |
+| Verdict éditorial d'une niche (Go / Go prudent / No-Go, confiance /10, facteur décisif, 2-3 angles d'attaque, critique stratégique) | `POST /api/verdict` | 0,028 $ | Sans état : la niche entière est passée dans le body. Vérifie le plafond, impute avec `n_analyses=0`. Bouton « Analyser cette niche (~10 s) » sur chaque ligne. |
+| **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories) | `POST /api/dossier` | 0 $ (catégories) · ~0,006 $ si mots-clés | Accepte une `ScoredNiche` **ou** une `LowContentScored` via `type`. Les catégories sont incluses par défaut (déduites des BSR déjà payés) ; les mots-clés **non** — le défaut ne dépense pas à l'insu de l'utilisateur. `POST /api/pdf` est un alias et sert le même document. |
+| 7 mots-clés backend KDP | `POST /api/kdp-keywords` | ~0,006 $ (estimé) | ~22 candidats proposés par le LLM, règles KDP vérifiées **côté code** (50 caractères, termes proscrits, chevauchement avec le titre, doublons, motif de rejet lisible), puis confirmation **gratuite** par l'autocomplete Amazon. Vérifie le plafond, impute avec `n_analyses=0`. |
+| Historique et évolution d'une niche | `GET /api/history` | 0 $ | Enregistré automatiquement par les runners de `POST /api/jobs` — **jamais par les CLI**, et **jamais pour une niche dont la SERP a échoué** (`concurrence_mesuree=False`). Une seule mesure → `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas une erreur. Seuil de significativité 0,10. Affiché sur les **trois** onglets. |
+
+> **Ces boutons ont été morts pendant des semaines, et c'est la leçon la plus chère du dépôt.**
+> Ils naissaient dans `verdictBlock(r)`, qui sort par `if(!v) return ''` — or `n_verdict=0` partout,
+> donc `verdict` valait **toujours** `None`. Trois endpoints développés, testés, payés, sans aucun
+> chemin d'accès. Corrigé le 2026-08-18 : `verdictSlot(r)` rend désormais l'un ou l'autre état,
+> **jamais le vide**, et `brancherActions()` est le SEUL site de branchement.
+>
+> Ce qui l'avait caché : `test_ux_kdp_historique` vérifiait que les chaînes étaient **présentes**
+> dans le HTML, et passait au vert pendant que les boutons étaient morts. **Une chaîne présente dans
+> un fichier ne prouve rien sur ce qui est cliquable.** Les tests actuels EXÉCUTENT les fonctions de
+> rendu avec node (`tests/js_harness.py`).
 | Consommation du mois glissant | `GET /api/usage` | 0 $ | Fenêtre de 30 jours, ni calendaire ni cumulative à vie. Affichée en nombre d'analyses, **sans montant**. |
 
 ---
@@ -445,6 +559,8 @@ jusqu'à ~45 min d'attente.
 | Scout non-fiction, BSR serveur (`dataforseo`) | **0,084 $** | 0,048 $ | calculé |
 | Scout fiction, 3 trios | 0,153 $ | 0,113 $ | mesuré |
 | Scout fiction, 8 trios | 0,409 $ | 0,299 $ | extrapolé |
+| Scout low-content, 6 niches | ~0,05 $ | ~0,03 $ | **estimé** — aucune mesure datée |
+| Jeu de calibration low-content, 30 requêtes | 0,15-0,25 $ | — | **estimé**, selon le cache |
 | Verdict éditorial (1 niche) | 0,028 $ | 0,028 $ | mesuré |
 | Mots-clés KDP (1 niche) | ~0,006 $ | ~0,006 $ | **estimé** — aucune mesure datée |
 | Ideator seul, vivier de 30 idées | 0,0459 $ | 0,0459 $ | mesuré (2026-08-03) |
@@ -457,9 +573,22 @@ jusqu'à ~45 min d'attente.
 Amazon bloque : il faut `BSR_SOURCE=dataforseo`, et le scout non-fiction passe de 0,030 $ à
 **0,084 $**, soit ×2,8.
 
-Le **cache SQLite mutualisé** (`99-logs/df-cache.db`, TTL : BSR 3 j, livre 7 j, SERP 10 j,
-classification 30 j) est l'économie principale à l'échelle : deux utilisateurs qui analysent le
-même rayon ne le paient qu'une fois. Ce partage est **délibéré**, pas un oubli de cloisonnement.
+Le **cache SQLite mutualisé** (`99-logs/df-cache.db`) est l'économie principale à l'échelle : deux
+utilisateurs qui analysent le même rayon ne le paient qu'une fois. Ce partage est **délibéré**, pas
+un oubli de cloisonnement.
+
+**TTL harmonisés à 15 jours** — BSR, livre, SERP et autocomplete — sauf la **classification de
+quatrièmes, à 30 jours**, parce que sa clé porte déjà tout ce qui peut invalider le résultat (ASIN,
+version de taxonomie, modèle, empreinte du prompt système, empreinte des champs). Ce qu'on échange
+contre 15 jours, c'est de la fraîcheur ; mais le produit compare des **ordres de grandeur** de BSR
+(sous 10 000, sous 50 000, au-delà), pas un classement à la journée, et un rayon ne change pas de
+tranche en deux semaines. Un BSR **absent** est mémorisé à part et pour 3 jours seulement
+(`ECHEC_BSR_TTL_S`) : une absence est une information plus fragile qu'une mesure.
+
+> **Piège structurel, déjà payé une fois** : `BOOK_TTL_S` valait 15 j dans `cache.py` (documenté,
+> testé) et 7 j dans `fiction_serp_provider.py` (appliqué). Le test surveillait la constante MORTE
+> et passait au vert en garantissant le contraire de ce qu'il annonçait. **Tester la valeur
+> réellement PASSÉE, jamais la présence d'une constante.**
 Les **quatre** familles de clés portent une empreinte SHA1 du schéma pydantic — `book:`, `bsr:`,
 `search:` et `clf:`, qui cumule empreinte de schéma **et** empreinte du prompt système du
 classifieur. Ajouter un champ invalide automatiquement les entrées ; sans cela, `clf:` servait
@@ -476,41 +605,57 @@ vides et n'ont jamais été versionnés. `05-prompts/` subsiste avec **un seul**
 `prompt-onebooklab-template.md` : il sert le workflow manuscrit de Baptiste, hors de cet outil, et
 n'est importé par aucun module.
 
-L'arbre ci-dessous liste **les 33 modules `.py` de `01-scripts/`** sans exception.
+L'arbre ci-dessous liste **les 48 modules `.py` de `01-scripts/`**, groupés par rôle.
 
 ```
 ├── 01-scripts/                # Le moteur
 │   ├── scout_master.py            # Orchestrateur non-fiction
 │   ├── fiction_master.py          # Orchestrateur fiction (6 étapes, batch ASIN unique)
+│   ├── lowcontent_master.py       # Orchestrateur low-content (l'autocomplete est la SOURCE)
 │   ├── models.py                  # Tous les types pydantic + la logique métier subtile
-│   ├── scoring.py / fiction_scoring.py   # Scoring, 100 % de fonctions pures
-│   ├── niche_ideator.py / fiction_ideator.py   # Génération LLM (tool-use forcé) + ContraintesTrio
+│   ├── scoring.py / fiction_scoring.py / lowcontent_scoring.py   # 100 % de fonctions pures
+│   ├── niche_ideator.py / fiction_ideator.py / lowcontent_ideator.py   # LLM, tool-use forcé
 │   ├── niche_validator.py / amazon_autocomplete.py / fiction_autocomplete.py  # Demande, gratuit
+│   ├── autocomplete_expand.py     # Arbre des complétions — la source du low-content
+│   ├── ip_filter.py               # SEUL garde-fou juridique : marques et franchises
 │   ├── search_providers.py        # DataForSEO (SERP + ASIN batché) + parseurs BSR
 │   ├── bsr_source.py / amazon_product.py  # BSR : scrape gratuit ou DataForSEO payant
 │   ├── fiction_serp_provider.py / fiction_books.py / fiction_classifier.py / fiction_taxonomy.py
-│   ├── niche_verdict.py / kdp_keywords.py / positioning_pdf.py   # Fonctions à la demande
+│   ├── lowcontent_taxonomy.py / lowcontent_verdict.py
+│   ├── marketplace.py             # Source UNIQUE de la place de marché (§10)
+│   ├── niche_verdict.py / kdp_keywords.py / positioning_pdf.py / dossier_pdf.py  # À la demande
 │   ├── auth.py                    # Comptes, mots de passe (scrypt), sessions
 │   ├── cache.py / cost_tracker.py / jobs.py / usage.py / history.py   # Infrastructure
+│   ├── devis.py                   # Estimation du PIRE cas avant de lancer (§7)
+│   ├── worker.py                  # Exécuteur hors serveur, pool + file équitable
+│   ├── notification.py            # Message de fin d'analyse, éteint par défaut
 │   ├── util.py                    # HTTP avec en-têtes navigateur
 │   ├── tutoriel_pdf.py            # Générateur des 2 PDF racine
 │   ├── demo_free.py               # Smoke test des canaux gratuits (0 $)
-│   ├── launcher.py                # Menu CLI antérieur à l'UI web — l'entrée 3 dépense (§4)
+│   ├── launcher.py                # Menu CLI, GRATUIT et seulement gratuit (§4)
 │   ├── requirements.txt
-│   └── fiction_validation.py, build_validation_set.py, validate_classifier.py  # Outillage dev
+│   ├── fiction_validation.py, build_validation_set.py, validate_classifier.py   # Outillage dev
+│   └── lowcontent_validation.py, build_lowcontent_validation_set.py             # Calibration (§12)
 ├── web/
-│   ├── server.py                  # FastAPI, 16 routes @app, 707 lignes
-│   └── index.html                 # UI complète en un fichier (89 241 octets, 1 524 lignes)
-├── data/fiction_taxonomy_fr_v1.json   # 6 sous-genres : source de vérité unique
-├── tests/                         # 453 tests sur 46 fichiers, tous hors-ligne
+│   ├── server.py                  # FastAPI, 18 routes @app, 1 086 lignes
+│   └── index.html                 # UI complète en un fichier (118 946 octets)
+├── data/
+│   ├── fiction_taxonomy_fr_v1.json      # 6 sous-genres : source de vérité unique
+│   ├── lowcontent_taxonomy_fr_v1.json   # 36 formats, 8 familles
+│   ├── lowcontent_criteres.json         # Seuils du scoring LC — HYPOTHÈSES tant que §12 n'est pas fait
+│   ├── kdp_print_costs.json             # Barèmes d'impression KDP, en EUROS, avec date de relevé
+│   └── exclusions_ip.md                 # Corpus du filtre IP
+├── tests/                         # 967 tests sur 83 fichiers, tous hors-ligne
 ├── docs/
 │   ├── spike_fiction_M0.md            # Spike de conception du moteur fiction
-│   └── superpowers/plans/ (12) · specs/ (1)   # Plans TDD ; cités depuis le code et les tests
+│   ├── pages-publiques/               # Mentions légales, confidentialité, CGV, landing — BROUILLONS
+│   └── superpowers/plans/ · specs/    # Plans TDD ; cités depuis le code et les tests
 ├── 05-prompts/prompt-onebooklab-template.md   # Workflow manuscrit, hors outil
 ├── 99-logs/                       # 5 bases SQLite locales, git-ignorées (+ .db-wal/.db-shm)
 │   ├── df-cache.db · jobs.db · usage.db · history.db · comptes.db
 │   ├── validation-fiction-2026-07-21.xlsx           # SUIVI par git : étalon-or du classifieur
-│   └── rapport-validation-classifieur-2026-07-21.json   # SUIVI par git
+│   ├── rapport-validation-classifieur-2026-07-21.json   # SUIVI par git
+│   └── validation-lc.xlsx         # SUIVI par git : gabarit de calibration LC, À REMPLIR (§12)
 ├── assets/hedgehog.ico            # Icône du raccourci Windows
 ├── .env / .env.example
 ├── pytest.ini · .gitattributes · .gitignore · LICENSE
@@ -528,9 +673,10 @@ en live (BSR Kindle vs papier non comparables, titres gratuits exclus, lookahead
 `tutoriel_pdf.py` n'en fait pas partie : c'est un **générateur de PDF**, pas une source de vérité.
 Deux tests le tiennent — l'un vérifie qu'il couvre **tous** les endpoints réellement exposés (il lit
 `web/server.py`), l'autre qu'il ne cite **que** des variables encore lues (il balaie
-`01-scripts/*.py` et `web/server.py`). Sa table `ENDPOINTS` couvre bien les 16 routes actuelles,
-comptes compris, et sa table `COUTS` est la seule source du dépôt qui étiquette chaque chiffre
-mesuré / calculé / extrapolé / estimé. Le reste (`PIEGES`, `GLOSSAIRE`) n'est vérifié par personne.
+`01-scripts/*.py` et `web/server.py`). Sa table `ENDPOINTS` couvre les routes actuelles, comptes
+compris, et sa table `COUTS` est la seule source du dépôt qui étiquette chaque chiffre
+mesuré / calculé / extrapolé / estimé. Le reste (`PIEGES`, `GLOSSAIRE`, `DEPLOIEMENT`) n'est
+vérifié par personne — et `DEPLOIEMENT` référence encore des endpoints supprimés.
 
 ---
 
@@ -538,18 +684,23 @@ mesuré / calculé / extrapolé / estimé. Le reste (`PIEGES`, `GLOSSAIRE`) n'es
 
 ```bash
 python -m pytest                    # depuis la racine
-python -m pytest --collect-only     # 453 tests collected, 46 fichiers, 0 erreur de collecte
+python -m pytest --collect-only     # 967 tests collected, 83 fichiers, 0 erreur de collecte
 ```
 
 `pytest.ini` fixe `pythonpath=01-scripts`, `testpaths=tests`, `python_files=test_*.py`,
-`addopts=-q`. **Les 453 tests sont tous hors-ligne** : chaque dépendance lourde (client Anthropic,
+`addopts=-q`. **Les 967 tests sont tous hors-ligne** : chaque dépendance lourde (client Anthropic,
 provider DataForSEO, fetch HTTP, sonde autocomplete) est injectable par paramètre. Aucune clé API
-n'est nécessaire pour les faire passer. Deux fichiers (`test_ux_glossaire.py`,
-`test_ux_kdp_historique.py`) testent l'interface en lisant `web/index.html` comme du texte — ils
-vérifient la **présence** des chaînes, jamais leur **atteignabilité** (§11).
+n'est nécessaire pour les faire passer. `tests/conftest.py` coupe en plus le SDK et le HTTP sortant
+avant **chaque** test, et réinitialise les états globaux de module (`server._CRENEAUX`) — un
+sémaphore qui survivait d'un test à l'autre provoquait des échecs **intermittents**, six sur une
+exécution et zéro sur la suivante, sur des sujets sans rapport.
 
-**TDD non négociable** : les tests d'abord, en rouge, avant toute ligne d'implémentation. C'est ce
-qui tient ces 453 tests sans réseau.
+`tests/js_harness.py` extrait les fonctions de rendu **pures** de `web/index.html` et les APPELLE
+avec node (skip explicite si node est absent). C'est ce qui distingue un test de présence d'un test
+de comportement — cf. l'encadré du §6, où la présence passait au vert sur des boutons morts.
+
+**TDD non négociable** : les tests d'abord, **en rouge**, avant toute ligne d'implémentation, et on
+vérifie qu'ils échouent pour la BONNE raison. C'est ce qui tient ces 967 tests sans réseau.
 
 ---
 
@@ -575,7 +726,29 @@ qui tient ces 453 tests sans réseau.
   UserStore : sinon importer `server.py` en test écrit de vrais fichiers dans le dépôt.
 - **Un seul chemin de lancement.** Ne pas réintroduire un second chemin (flux direct) : celui qui
   n'est pas exercé dérive.
-- Code langue DataForSEO : `fr_FR` (pas `fr`), `location_code=2250`.
+- **Deux scores sont INVERSÉS** : `saturation_trio` (fiction) et `n_variantes_quasi_identiques`
+  (low-content). Élevé = mauvais. Une jauge colorée uniformément ferait recommander exactement les
+  pires niches.
+- **Une seule source pour la place de marché** : `marketplace.py`. `location_code=2250`,
+  `language_code="fr_FR"` (**pas** `fr`), identifiant d'autocomplete et domaine des fiches y vivent
+  ensemble. `MARKETPLACE=com` **LÈVE au démarrage** : six choses du dépôt sont irréductiblement
+  françaises (browse nodes, libellés de rayon, barèmes KDP en euros, mots saisonniers, corpus du
+  filtre IP, prompts). Un run `.com` ne planterait pas — il rendrait des **chiffres faux et
+  plausibles**, ce qui est pire.
+- **Le message de fin d'analyse ne contient jamais le résultat**, ni le moindre montant, ni l'erreur
+  interne (elle peut porter les identifiants DataForSEO). Un échec d'envoi ne fait **jamais** échouer
+  un run : le run a coûté de l'argent réel et son résultat est en base.
+- **Le BSR est DÉJÀ dans l'enrichissement ASIN.** Appeler `resolve_bsrs` derrière sur les mêmes
+  ASIN les facture une seconde fois — mesuré : 240 appels pour 120 ASIN, 0,78 $ contre un plafond de
+  0,60 $, franchi **en silence**. Seuls les ASIN absents de l'enrichissement valent un second
+  passage.
+- **`MAX_NICHES_FICTION` vaut 11, et c'est DÉRIVÉ, pas choisi** : c'est le plus grand nombre de
+  trios dont le devis tient sous `PLAFOND_USD_PAR_RUN`. Ne pas la relever sans relever le plafond —
+  au-delà, le run atteindrait le plafond en route et rendrait un rapport **partiel** à quelqu'un qui
+  a payé son plafond entier, ce qui se lit comme une arnaque et non comme une protection.
+- **Tester la valeur réellement PASSÉE, jamais la présence d'une constante.** `BOOK_TTL_S` valait
+  15 j dans `cache.py` (documenté, testé) et 7 j dans `fiction_serp_provider.py` (appliqué) : le
+  test surveillait la constante MORTE et garantissait au vert le contraire de ce qu'il annonçait.
 
 ---
 
@@ -586,19 +759,21 @@ qui tient ces 453 tests sans réseau.
 - **Pas de paiement, pas d'abonnement, pas de facturation.** Les comptes existent, le plafond
   existe, la mesure du coût existe — la monétisation, non. `INSCRIPTIONS_OUVERTES` est fermé par
   défaut précisément parce qu'un compte gratuit de plus est une dépense de plus.
-- **Trois fonctions payantes ou utiles restent inatteignables depuis l'UI livrée.** Les boutons
-  « Télécharger le PDF » (`.btn-pdf`) et « Mots-clés KDP » (`.btn-kdp`) sont générés à l'intérieur
-  de `verdictBlock(r)` dans `web/index.html`, qui sort sur `if(!v) return ''` dès sa deuxième ligne
-  quand la niche n'a pas de verdict — or `n_verdict=0` partout, donc `ScoredNiche.verdict` vaut
-  **toujours** `None`. Et `index.html` **ne contient aucune occurrence de `api/verdict`** (vérifié
-  le 2026-08-03). Les fonctions `loadKdp`, `downloadPdf` et leurs écouteurs existent, sur des
-  éléments qui ne sont jamais rendus. Les tests UX vérifient la **présence** des chaînes dans le
-  HTML, pas leur **atteignabilité**.
-- **L'historique fiction est écrit et jamais lu.** `_consigner_fiction` alimente bien `history.db`,
-  mais la carte fiction ne contient ni `histslot` ni appel à `loadHistorique` : les deux n'existent
-  que dans le rendu non-fiction.
+- **Le scoring low-content n'est pas calibré** (§12). Les seuils de `data/lowcontent_criteres.json`
+  sont des **hypothèses documentées**, pas des mesures : le moteur rend des chiffres cohérents entre
+  eux, rien ne dit qu'ils correspondent au terrain. L'outillage de calibration existe, la mesure non.
 - **`IDEES_PAR_RUN` est déclarée et non branchée** (§5) : le défaut appliqué est 12, pas 10.
 - **`BSR_SOURCE=scrape` ne survit pas au déploiement** (§7).
+- **Aucune autre place de marché qu'`amazon.fr`** : `marketplace.py` rassemble les neuf codages en
+  dur et rend le manque **explicite**, il ne le comble pas (§10).
+- **Les quatre pages publiques sont des brouillons non servis** (`docs/pages-publiques/`) : mentions
+  légales, confidentialité, CGV, landing. Chacune porte des `[[A COMPLETER : … ]]` — identité légale,
+  hébergeur, prix, délai de rétractation. `tests/test_pages_publiques.py` verrouille le lien : dès
+  qu'une route sert un de ces fichiers, il ne doit plus rester un seul marqueur.
+- **Réinitialisation de mot de passe, vérification d'adresse, changement d'e-mail, suppression de
+  compte, rôles, administration** : aucun de ces chemins n'est codé. Un mot de passe perdu est un
+  compte perdu. Le seul e-mail sortant est le message de fin d'analyse, transactionnel et sans lien
+  d'action.
 - **Aucun HTTPS intégré, aucun déploiement, aucun Docker, aucune base partagée** : cinq fichiers
   SQLite locaux. Le cookie de session obtient son drapeau `Secure` tout seul derrière un proxy TLS,
   mais le proxy, lui, reste à monter.
@@ -624,6 +799,10 @@ qui tient ces 453 tests sans réseau.
 - **Aucun test d'intégration réseau** : rien ne détecte une rupture de contrat côté DataForSEO ou
   Amazon avant un run réel.
 
+**Corrigé depuis, ne pas le réintroduire dans la doc** : les boutons « Télécharger le PDF »,
+« Mots-clés KDP » et l'historique fiction ont été inatteignables pendant des semaines (§6). Les
+trois sont branchés depuis le 2026-08-18, et les tests EXÉCUTENT désormais les fonctions de rendu.
+
 **Ce qui n'existe plus du tout** : `GET /api/scout` et `GET /api/fiction` (supprimés, commit
 `5257323` — ne pas les réintroduire) ; Scrapingdog (côté `.py`, le mot ne survit que dans le
 docstring d'en-tête de `cost_tracker.py` ; il subsiste dans des archives de décision de
@@ -634,6 +813,75 @@ garde-fous ; le mode dry-run ; les rapports Excel du scout (`openpyxl` ne sert q
 5 phases ; la pré-production (sommaires, prompts de rédaction, briefs de couverture) et la
 post-production (4e de couverture, fiche produit AIDA). Depuis `eaa20b2`, les trois modules de
 veille et les dossiers v1 sont supprimés, pas seulement inutilisés.
+
+---
+
+## 12. Reprendre le travail — l'étape suivante
+
+> Cette section est le point d'entrée d'une nouvelle session, sur ce PC ou un autre. Elle dit
+> **ce qui est fait**, **ce qui bloque** et **par quoi commencer**. Le détail technique vit dans
+> `CLAUDE.md` (lu en priorité par l'agent) ; `ROADMAP.md` porte le classement complet.
+
+### Fait, livré, poussé
+
+Trois moteurs · comptes et sessions · travaux asynchrones avec file équitable · chaîne complète de
+garde-fous de dépense (devis avant lancement, plafond prédictif par run, plafond mensuel atomique
+par utilisateur, bornes de volume, limiteur de débit) · filtre IP juridique · message de fin
+d'analyse · brouillons des pages légales. **967 tests, tous hors ligne.**
+
+### L'étape suivante, et elle n'attend que Baptiste
+
+**Calibrer le scoring low-content.** Les seuils de `data/lowcontent_criteres.json`
+(`variantes_max=6`, `part_indie_bonne=0.5`, `redevance_min_bonne=2.0`) n'ont été confrontés à aucun
+rayon réel. Le protocole **inverse** celui du classifieur fiction : là-bas Baptiste CORRIGE des
+étiquettes produites par l'IA, ici il étiquette des requêtes **avant** toute analyse — son jugement
+est la référence. Si l'IA choisissait les requêtes à juger, on calibrerait le scoring sur lui-même.
+
+```bash
+# 1. Le gabarit existe déjà dans le dépôt : 99-logs/validation-lc.xlsx
+#    (8 familles x 4 lignes, liste déroulante sur la colonne « etiquette »)
+#    Pour le régénérer : --gabarit. Il REFUSE d'écraser un classeur déjà étiqueté.
+
+# 2. Remplir les colonnes « requete » et « etiquette » : bonne | mauvaise | morte
+#    Viser 25-30 lignes, MINIMUM 3 par famille, et environ un tiers de chaque étiquette.
+#    Tout étiqueter « bonne » rendrait la corrélation INDÉFINIE : il faut des cas dont on
+#    connaît la réponse aux deux bouts. Les cas limites sont les plus utiles.
+
+# 3. Lancer la mesure (~10 min, ~0,20 $, plafond explicite à 2 $)
+python 01-scripts/build_lowcontent_validation_set.py --xlsx 99-logs/validation-lc.xlsx
+```
+
+**Porte, conjointe : Spearman ≥ 0,5 ET aucune requête « morte » en 🟢.** Une corrélation honnête qui
+recommande quand même un rayon mort ferait publier dans le vide. En cas d'échec, on corrige
+`data/lowcontent_criteres.json` **jamais le code** : un seuil qui migre dans `lowcontent_scoring.py`
+redevient invisible et non discutable.
+
+Le rapport (`99-logs/rapport-calibration-lc.json`) donne aussi les **distributions de signaux par
+étiquette** — c'est ce qui permet de régler un seuil au lieu de le déplacer au hasard — et les
+requêtes perdues **avant** toute dépense, séparées en deux : une « morte » écartée là est le gate
+gratuit qui travaille, une « bonne » écartée là est un faux négatif que l'utilisateur ne peut PAS
+voir, puisque la niche n'apparaît nulle part.
+
+### Ensuite, par ordre de blocage
+
+1. **Paiement (Stripe)** — rien n'est intégré. `usage.db` mesure et stocke tout, ce qui donne la
+   base d'une facturation, mais aucun montant n'est présenté et aucun prestataire n'est branché.
+   `INSCRIPTIONS_OUVERTES` reste fermé par défaut jusque-là : un compte gratuit de plus est une
+   dépense de plus sur la clé API de l'exploitant.
+2. **Pages publiques** — remplir les `[[A COMPLETER]]`, trancher l'hébergement (plusieurs
+   paragraphes de la politique de confidentialité en dépendent), faire relire les CGV.
+3. **Déploiement** — aucun HTTPS intégré, aucun Docker, aucune base partagée. Le cookie obtient son
+   drapeau `Secure` tout seul derrière un proxy TLS, mais le proxy reste à monter.
+4. **Hygiène** — `IDEES_PAR_RUN` à brancher ou à supprimer, `DEPLOIEMENT` de `tutoriel_pdf.py` qui
+   référence des endpoints supprimés, résidus Scrapingdog dans les archives de `docs/superpowers/`.
+
+### Règles de travail à ne pas contourner
+
+**TDD non négociable** — les tests d'abord, **en rouge**, et on vérifie qu'ils échouent pour la
+bonne raison. **Le code est la source de vérité** : quand ce README, `CLAUDE.md` ou `ROADMAP.md`
+divergent du code, c'est la doc qu'on corrige. **Ne jamais présenter une absence de mesure comme un
+verdict de marché** — c'est la faute la plus grave que ce produit puisse commettre, elle fait
+publier un livre sur une niche vide ou renoncer à une bonne.
 
 ---
 

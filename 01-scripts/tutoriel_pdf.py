@@ -206,10 +206,13 @@ DEPLOIEMENT = [
      "BSR_SOURCE=scrape lit les fiches Amazon depuis une IP résidentielle. Depuis un "
      "datacenter, Amazon bloque. En production : BSR_SOURCE=dataforseo, ce qui fait "
      "passer un scout non-fiction de 0,030 $ à 0,084 $."),
-    ("Utiliser les travaux asynchrones, pas les endpoints SSE",
+    ("Un seul chemin de lancement : POST /api/jobs",
      "La latence DataForSEO est très variable : SERP mesurées à 85 s, 222 s et 251 s "
-     "sur un même run. Les endpoints SSE perdent le travail si le client ferme "
-     "l'onglet. POST /api/jobs survit."),
+     "sur un même run. Le travail vit dans jobs.db, pas dans la requête HTTP : fermer "
+     "l'onglet ne le tue pas, et GET /api/jobs/{id}/stream (SSE) se reconnecte en "
+     "rejouant toute la progression. Les anciens GET /api/scout et GET /api/fiction "
+     "ont été supprimés : deux chemins pour le même travail, dont un seul exercé, "
+     "divergent."),
     ("La file ASIN se paie une fois par run, pas par niche",
      "Environ 250 s quel que soit le nombre d'ASIN. fiction_master groupe déjà toutes "
      "les SERP avant un unique batch : ne pas revenir à un batch par niche (10 niches "
@@ -219,7 +222,8 @@ DEPLOIEMENT = [
      "par une base partagée. Le schéma porte déjà un user_id (défaut 'local') : "
      "brancher l'authentification est un remplissage de colonne, pas une migration."),
     ("Le cache est mutualisé entre utilisateurs",
-     "Clés par ASIN et par mot-clé, TTL 7 jours. C'est l'économie principale à "
+     "Clés par ASIN et par mot-clé, TTL 15 jours (30 pour la classification de "
+     "quatrièmes de couverture). C'est l'économie principale à "
      "l'échelle : deux clients analysant le même rayon ne le paient qu'une fois."),
 ]
 
