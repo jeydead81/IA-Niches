@@ -1425,7 +1425,11 @@ formLc.addEventListener('submit', e => {
 });
 
 brancherPresets('preset-lc', 'lowcontent', '#lc-search');
-reprendreTravail(VUE_LC);
+// La reprise du travail low-content est appelée depuis `entrer()`, comme celles des deux
+// autres onglets — surtout pas ici. Au niveau module, elle partait AVANT que la session
+// soit confirmée, se prenait un 401 et ne reprenait rien : un run de neuf minutes était
+// perdu à chaque rechargement, en silence, l'onglet réaffichant un formulaire vide comme
+// si rien n'avait tourné.
 
 // ================= Travaux asynchrones =================
 // L'interface passe par POST /api/jobs puis se raccroche au flux du travail, au lieu de
@@ -1891,6 +1895,7 @@ function chargerUsage(){
     chargerUsage();
     reprendreTravail(VUE_NF);
     reprendreTravail(VUE_FIC);
+    reprendreTravail(VUE_LC);
   }
 
   function sortir(){
@@ -2037,6 +2042,48 @@ const AIDE = {
       "« Vos contraintes ne laissent aucun trio crédible » veut dire que vos filtres ne se combinent pas. Aucune recherche Amazon n'a été lancée : ce n'est jamais un verdict sur le marché.",
     ],
   },
+  lc: {
+    titre: "Low-content : trouver une traîne réelle, et vérifier qu'elle rapporte",
+    corps: `
+      <h3>Pourquoi cet onglet marche à l'envers des deux autres</h3>
+      <p>Ailleurs, l'IA propose et Amazon valide. Ici <strong>Amazon est la source</strong> :
+      on descend l'arbre des complétions, et l'IA ne fait que <em>classer</em> des requêtes
+      que des gens tapent déjà.</p>
+      <p>La raison est mesurable. En low-content, la tête de requête (« livre coloriage »,
+      « registre ») est morte ou tenue par des papetiers, et l'argent est trois crans plus
+      bas dans la traîne : « coloriage licorne 3 ans fille », « registre du personnel
+      obligatoire ». Un modèle à qui on demande du long-tail invente aussi la demande qui
+      va avec. Amazon, lui, ne complète que ce que des gens cherchent — et c'est gratuit.</p>
+
+      <h3>Les deux axes que les autres onglets n'ont pas</h3>
+      <p><strong>Rentabilité.</strong> Sous 9,99 € de prix catalogue, KDP verse 50 % au lieu
+      de 60 %, et le coût d'impression se déduit ensuite. Un rayon très demandé à 6,99 €
+      peut ne rien rapporter — c'est le piège le plus coûteux du low-content, et il ne se
+      voit sur aucun compteur de concurrence.</p>
+      <p><strong>Faisabilité.</strong> Un carnet quadrillé et un cahier d'activités illustré
+      ne se produisent pas dans le même monde. L'effort est annoncé, pas deviné.</p>
+
+      <h3>Les deux signaux de pénétration propres au rayon</h3>
+      <p><strong>Part indie.</strong> Douze références peuvent toutes venir d'Exacompta ou
+      de Quo Vadis. Un simple comptage de résultats ne le voit pas, et c'est pourtant ce qui
+      décide si un auteur seul peut attaquer.</p>
+      <p><strong>Variantes quasi identiques.</strong> Dix couvertures pour un seul intérieur,
+      c'est une ferme de variantes. Publier la onzième n'y gagne rien.</p>
+
+      <h3>Ce que le filtre de marques écarte, et pourquoi</h3>
+      <p>Les requêtes portant une marque, une franchise ou un personnage protégé sont
+      retirées <em>avant</em> toute dépense, et le motif s'affiche. Ce n'est pas de la
+      prudence excessive : publier un cahier « Pat'Patrouille » fait retirer le livre et
+      fermer le compte KDP.</p>
+    `,
+    pieges: [
+      "Les variantes se lisent À L'ENVERS : beaucoup de variantes quasi identiques est une MAUVAISE nouvelle, pas un signe de marché porteur. C'est le seul chiffre de cet onglet dont une jauge colorée comme les autres ferait recommander exactement les pires rayons.",
+      "« Normé » ne veut pas dire « difficile ». Un registre obligatoire a son contenu FIXÉ par un texte : la production est simple, c'est la conformité qui est exigeante. Le verdict est dégradé tant qu'aucune source réglementaire n'est citée, parce qu'un registre incomplet expose l'acheteur, qui est un employeur.",
+      "Une part indie « non mesurée » n'est pas une part indie nulle. Zéro pour cent voudrait dire « rayon tenu par des éditeurs installés », donc « n'y va pas » — une conclusion, là où il n'y a qu'une absence de lecture.",
+      "Un prix médian bas n'est pas une mauvaise nouvelle en soi : c'est le couple prix × pagination qui décide de la redevance. Lire la ligne de rentabilité, pas le prix seul.",
+      "Les seuils de cet onglet ne sont pas encore calibrés sur des rayons réels : ils sont cohérents entre eux, ce sont des hypothèses documentées. Les traiter comme des ordres de grandeur, pas comme des verdicts.",
+    ],
+  },
 };
 
 (function initAide(){
@@ -2046,8 +2093,17 @@ const AIDE = {
   function ongletActif(){
     // On lit l'état RÉEL du DOM (la classe .active posée par switchTab) plutôt que de
     // maintenir une variable en parallèle, qui finirait par diverger du bouton affiché.
-    const t=document.querySelector('#tab-fic');
-    return (t && t.classList.contains('active')) ? 'fic' : 'nf';
+    //
+    // Table explicite et non cascade booléenne : la version « ? 'fic' : 'nf' » a survécu
+    // à l'ajout du troisième onglet et rendait 'nf' sur #tab-lc — l'auteur lisait donc
+    // les pièges de la NON-FICTION en regardant un rayon low-content, sans rien qui le
+    // signale. Une nouvelle vue ajoutée ici sans sa ligne se verra : AIDE[undefined].
+    const vues=[['#tab-lc','lc'],['#tab-fic','fic'],['#tab-nf','nf']];
+    for(const [sel,cle] of vues){
+      const t=document.querySelector(sel);
+      if(t && t.classList.contains('active')) return cle;
+    }
+    return 'nf';
   }
 
   function ouvrir(){

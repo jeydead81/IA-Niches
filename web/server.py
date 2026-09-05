@@ -339,7 +339,7 @@ def _notifier(user_id: str, type_: str, statut: str, job_id: str,
     Un compte absent (`"local"`, compte supprimé) ne notifie personne et ne lève pas —
     l'analyse a bien eu lieu, elle est en base, et l'écran la montre."""
     try:
-        compte = UserStore(_COMPTES_DB).compte(user_id)
+        compte = UserStore(_USERS_DB).compte(user_id)
         notifier_fin_de_job(email=getattr(compte, "email", None), type_=type_,
                             statut=statut, job_id=job_id, journal=journal)
     except Exception:  # noqa: BLE001 — un run payé et réussi ne doit pas devenir un échec

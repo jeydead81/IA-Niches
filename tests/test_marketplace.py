@@ -163,3 +163,31 @@ def test_les_trois_orchestrateurs_ne_replient_plus_sur_un_2250_en_dur():
         texte = (racine / nom).read_text(encoding="utf-8")
         assert '"location_code", 2250' not in texte, f"{nom} replie encore sur 2250"
         assert '"language_code", "fr_FR"' not in texte, f"{nom} replie encore sur fr_FR"
+
+
+def test_la_valeur_ACTIVE_est_celle_de_l_ENVIRONNEMENT(monkeypatch):
+    """`ACTIF` est ce que TOUT le code lit — les trois orchestrateurs, `bsr_source`,
+    `amazon_autocomplete`, `amazon_product` et les deux scorings. Le figer sur le défaut
+    rendrait `marketplace_actif()` décoratif : la levée serait écrite, testée, et sans
+    aucun appelant de production.
+
+    C'est le piège §5.26 appliqué à la configuration : `MARKETPLACE=com` se lirait
+    « bascule effectuée » alors que le produit continue sur `fr` sans rien dire."""
+    import importlib
+
+    import marketplace
+    monkeypatch.setenv("MARKETPLACE", "fr")
+    importlib.reload(marketplace)
+    assert marketplace.ACTIF.cle == "fr"
+
+    # On capture sur la classe de BASE, pas sur `MarketplaceIndisponible` importée en tête
+    # de fichier : `reload` reconstruit le module, donc une NOUVELLE classe d'exception, et
+    # `pytest.raises` compare par identité. Le message, lui, reste vérifiable.
+    monkeypatch.setenv("MARKETPLACE", "com")
+    with pytest.raises(RuntimeError) as e:
+        importlib.reload(marketplace)
+    assert "taxonomie" in str(e.value).lower()
+
+    # Et on laisse le module dans un état sain pour les tests suivants.
+    monkeypatch.delenv("MARKETPLACE", raising=False)
+    importlib.reload(marketplace)

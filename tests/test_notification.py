@@ -304,3 +304,39 @@ def test_la_notification_sort_du_creneau_avant_d_envoyer(tmp_path, monkeypatch):
     assert "notifie" in journal, "aucune notification"
     assert journal.index("creneau:sort") < journal.index("notifie"), \
         f"notification envoyée DANS le créneau : {journal}"
+
+
+def test_le_point_d_appel_RESOUT_vraiment_l_adresse(tmp_path, monkeypatch):
+    """LE test qui manquait, et son absence a laissé passer un bug total.
+
+    Les deux tests « les DEUX issues » ci-dessus monkeypatchent `server._notifier` — donc
+    ils vérifient que le serveur APPELLE la notification, jamais qu'elle fonctionne. Or
+    `_notifier` lisait une constante inexistante : `NameError`, avalée par son propre
+    `except Exception` (qui est là pour la bonne raison — un run payé ne doit pas devenir
+    un échec parce qu'un SMTP refuse). Résultat : aucun e-mail ne pouvait partir, et rien
+    nulle part ne le disait.
+
+    C'est le piège §5.26 dans sa forme la plus pure : du code écrit, testé, et inerte.
+    Remplacer la fonction qu'on teste, c'est tester le harnais."""
+    import auth
+    import server
+
+    monkeypatch.setattr(server, "_USERS_DB", tmp_path / "comptes.db")
+    compte = auth.UserStore(tmp_path / "comptes.db").creer_compte(
+        "auteur@exemple.fr", "motdepasse-long-12")
+
+    vus = []
+    monkeypatch.setattr(server, "notifier_fin_de_job",
+                        lambda **kw: vus.append(kw) or True)
+    server._notifier(compte.user_id, "scout", "termine", "job-1")
+
+    assert vus, "la notification n'a jamais été atteinte"
+    assert vus[0]["email"] == "auteur@exemple.fr"
+
+
+def test_un_compte_introuvable_ne_leve_pas(tmp_path, monkeypatch):
+    """`user_id='local'` ou compte supprimé : personne à prévenir, et surtout pas de levée
+    — l'analyse a bien eu lieu, elle est en base, l'écran la montre."""
+    import server
+    monkeypatch.setattr(server, "_USERS_DB", tmp_path / "comptes.db")
+    server._notifier("inexistant", "scout", "termine", "job-1")

@@ -114,7 +114,18 @@ def marketplace_actif() -> Marketplace:
     return m
 
 
-# Résolu à l'import, comme les défauts de modèle. Contrairement à eux (§5.21), ça ne pose
-# pas de problème d'ordre : `web/server.py` appelle `load_dotenv()` AVANT ses imports
-# moteur, et la CLI n'a pas à basculer de place de marché en cours de run.
-ACTIF = MARKETPLACES[DEFAUT]
+# Résolu à l'import, en LISANT l'environnement — c'est ce qui fait de `marketplace_actif`
+# autre chose qu'une fonction décorative. `ACTIF` est ce que lit TOUT le code (les trois
+# orchestrateurs, `bsr_source`, `amazon_autocomplete`, `amazon_product`, les deux
+# scorings) : le figer sur le défaut laisserait la levée écrite, testée, et sans aucun
+# appelant de production, et `MARKETPLACE=com` se lirait « bascule effectuée » pendant
+# que le produit continue sur `fr` sans rien dire.
+#
+# NUANCE D'ORDRE, à connaître (même famille que §5.21) : la valeur est lue au chargement
+# du module. `web/server.py` appelle `load_dotenv()` AVANT ses imports moteur, donc le
+# serveur — le point d'entrée réel du produit — lève bien au démarrage. En CLI, les
+# orchestrateurs importent ce module avant leur propre `load_dotenv()` : un `MARKETPLACE`
+# défini UNIQUEMENT dans `.env` y est ignoré et on reste sur `fr`. C'est sans danger (`fr`
+# est la seule place prête) mais ce n'est pas une levée : en CLI, passer la variable dans
+# l'environnement du shell.
+ACTIF = marketplace_actif()

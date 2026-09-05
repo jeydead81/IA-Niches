@@ -96,3 +96,59 @@ def test_le_texte_attenue_reste_ATTENUE(html):
     mu = re.search(r"--text-muted:\s*(#[0-9A-Fa-f]{6})", html).group(1)
     txt = re.search(r"--text:\s*(#[0-9A-Fa-f]{6})", html).group(1)
     assert _luminance(mu) > _luminance(txt) * 1.5
+
+
+# ── 4. Le troisième onglet a été ajouté sans son aide ni sa reprise ────────────
+
+def test_l_onglet_low_content_a_SA_PROPRE_aide(html):
+    """`AIDE` ne portait que `nf` et `fic`. L'onglet low-content recevait donc
+    silencieusement le tutoriel de la NON-FICTION — et c'est le moteur qui a le plus de
+    pièges de lecture : `n_variantes_quasi_identiques` s'y lit à l'envers, « normé » n'y
+    veut pas dire « difficile », une part indie non mesurée n'y est pas une part nulle.
+
+    Afficher le mauvais tutoriel est pire que n'en afficher aucun : l'auteur croit avoir
+    lu les pièges du rayon qu'il regarde."""
+    i = html.index("const AIDE")
+    j = html.index("function ouvrir(", i)
+    bloc = html[i:j]
+    assert "lc:" in bloc, "AIDE n'a pas d'entrée pour l'onglet low-content"
+    # C'est le tableau `pieges:` qui porte la section, pas son titre — celui-ci n'est écrit
+    # qu'une fois, dans le gabarit de rendu (`:2113`). Compter le titre reviendrait à
+    # vérifier la présence d'une chaîne au lieu de la structure qui la remplit.
+    assert bloc.count("pieges:") == 3, \
+        f"{bloc.count('pieges:')} tableau(x) de pièges pour trois onglets"
+
+
+def test_l_aide_low_content_porte_SES_pieges_a_lui(html):
+    """Les deux qui font publier à côté : l'échelle inversée des variantes, et « normé »
+    qui ne veut pas dire « difficile »."""
+    i = html.index("const AIDE")
+    j = html.index("function ouvrir(", i)
+    bloc = html[i:j]
+    lc = bloc[bloc.index("lc:"):]
+    assert "variantes" in lc.lower()
+    assert "norm" in lc.lower()
+
+
+def test_ongletActif_connait_les_TROIS_onglets(html):
+    """`return (t && t.classList.contains('active')) ? 'fic' : 'nf'` est exactement la
+    cascade booléenne à deux issues que le passage à trois onglets rend fausse : sur
+    `#tab-lc` elle rend `'nf'`, sans erreur et sans rien signaler."""
+    i = html.index("function ongletActif")
+    corps = html[i:i + 700]
+    assert "#tab-lc" in corps, "ongletActif ne regarde jamais l'onglet low-content"
+
+
+def test_la_reprise_low_content_attend_la_SESSION(html):
+    """`reprendreTravail(VUE_NF)` et `(VUE_FIC)` sont appelés dans `entrer()`, donc après
+    une session confirmée. `(VUE_LC)` était appelé au niveau module, au chargement du
+    script : il partait avant l'authentification, se prenait un 401 et ne reprenait rien.
+
+    Un run low-content de neuf minutes était donc perdu à chaque rechargement, en
+    silence — l'onglet réaffichait un formulaire vide comme si rien n'avait tourné."""
+    i = html.index("function entrer(")
+    j = html.index("function sortir(", i)
+    corps = html[i:j]
+    for vue in ("VUE_NF", "VUE_FIC", "VUE_LC"):
+        assert f"reprendreTravail({vue})" in corps, \
+            f"reprendreTravail({vue}) n'est pas appelé depuis entrer()"
