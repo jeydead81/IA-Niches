@@ -43,6 +43,12 @@ desktop.ini
 .vscode/
 *.swp
 
+# Fichiers verrous Excel. Word et Excel en creent un « ~$nom.xlsx » tant que le fichier
+# est OUVERT : il apparait dans `git status` pendant qu'on remplit un classeur de
+# validation, et il est trivial de le committer par reflexe. Il ne contient rien d'utile
+# et disparait a la fermeture.
+~$*
+
 # Cache SQLite DataForSEO (local)
 99-logs/df-cache.db
 

@@ -117,17 +117,45 @@ def familles_taxonomie(version: str = "fr_v1") -> list[str]:
 
 
 def exporter_gabarit(path: str | Path, n_par_famille: int = MIN_PAR_FAMILLE + 1,
-                     version: str = "fr_v1") -> Path:
+                     version: str = "fr_v1", ecraser: bool = False) -> Path:
     """Écrit le classeur vide, pré-découpé PAR FAMILLE.
 
     Une page blanche produirait vingt requêtes de carnets et zéro registre : on
     calibrerait le rayon que Baptiste connaît le mieux, et on croirait avoir calibré le
     produit. Les lignes sont donc déjà attribuées, et le rapport redira lesquelles sont
-    restées vides."""
+    restées vides.
+
+    **LÈVE si le fichier existe DÉJÀ et porte des étiquettes.** Le gabarit et le fichier
+    de travail portent le même nom : relancer la commande après avoir étiqueté trente
+    requêtes effacerait une demi-heure de travail, en silence et sans retour arrière —
+    il n'y a pas de corbeille pour un xlsx écrasé. C'est la règle 10 du dépôt
+    (confirmation avant d'écraser un fichier existant) appliquée à l'outil lui-même.
+
+    Un gabarit VIERGE se régénère sans discuter : il n'y a rien à perdre. On refuse
+    plutôt que de sauvegarder à côté — un `.bak` créé sans le dire est un fichier de
+    plus que personne ne relira. `ecraser=True` passe outre, parce qu'un refus
+    incontournable pousserait à supprimer le fichier à la main sans réfléchir."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
+
+    out = Path(path)
+    if out.exists() and not ecraser:
+        try:
+            deja = charger_etiquettes(out)
+        except Exception:                     # noqa: BLE001 — voir plus bas
+            # Illisible ou d'un autre schéma : on refuse aussi. Un fichier qu'on ne sait
+            # pas lire est le cas où l'écraser coûterait le plus cher, pas le moins.
+            raise FileExistsError(
+                f"{out} existe et n'a pas pu être relu — refus d'écraser. "
+                f"Renommez-le, ou relancez avec --forcer.")
+        if deja:
+            exemples = ", ".join(f"« {e.requete} »" for e in deja[:3])
+            raise FileExistsError(
+                f"{out} contient déjà {len(deja)} requête(s) étiquetée(s) ({exemples}…) "
+                f"— refus d'écraser. Lancez l'analyse avec --xlsx {out}, ou relancez "
+                f"avec --forcer pour repartir d'un classeur vierge.")
 
     wb = Workbook()
     ws = wb.active
@@ -160,7 +188,6 @@ def exporter_gabarit(path: str | Path, n_par_famille: int = MIN_PAR_FAMILLE + 1,
     for ligne in ws.iter_rows(min_row=1, max_row=4, max_col=1):
         ligne[0].alignment = Alignment(wrap_text=False)
 
-    out = Path(path)
     wb.save(out)
     return out
 

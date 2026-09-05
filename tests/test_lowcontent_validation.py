@@ -225,3 +225,43 @@ def test_le_rapport_se_serialise_en_json():
     r = rapport_calibration(_paires_alignees())
     d = json.loads(r.model_dump_json())
     assert "spearman" in d and "porte_franchie" in d
+
+
+def test_le_gabarit_REFUSE_d_ecraser_un_classeur_deja_rempli(tmp_path):
+    """Le gabarit et le fichier de travail portent le même nom : relancer `--gabarit`
+    après avoir étiqueté trente requêtes effacerait une demi-heure de travail, en
+    silence et sans retour arrière — il n'y a pas de corbeille pour un xlsx écrasé.
+
+    C'est la règle 10 du dépôt appliquée à l'outil lui-même : confirmation avant
+    d'écraser un fichier existant. On refuse plutôt qu'on sauvegarde à côté : un
+    `.bak` créé sans le dire est un fichier de plus que personne ne relira."""
+    openpyxl = pytest.importorskip("openpyxl")
+    chemin = exporter_gabarit(tmp_path / "g.xlsx")
+
+    # Un gabarit VIERGE se régénère sans discuter : rien à perdre.
+    exporter_gabarit(chemin)
+
+    wb = openpyxl.load_workbook(chemin)
+    ws = wb.active
+    ws["A7"], ws["C7"] = "carnet suivi glycemie", "bonne"
+    wb.save(chemin)
+
+    with pytest.raises(FileExistsError, match="carnet suivi glycemie|rempli|étiquet"):
+        exporter_gabarit(chemin)
+
+    # Et le fichier est INTACT après le refus.
+    assert charger_etiquettes(chemin)[0].requete == "carnet suivi glycemie"
+
+
+def test_on_peut_forcer_la_regeneration_explicitement(tmp_path):
+    """Le refus doit être contournable — sinon on force la main de l'utilisateur qui
+    veut vraiment repartir de zéro, et il ira supprimer le fichier lui-même sans
+    réfléchir."""
+    openpyxl = pytest.importorskip("openpyxl")
+    chemin = exporter_gabarit(tmp_path / "g.xlsx")
+    wb = openpyxl.load_workbook(chemin)
+    wb.active["A7"], wb.active["C7"] = "carnet a", "bonne"
+    wb.save(chemin)
+
+    exporter_gabarit(chemin, ecraser=True)
+    assert charger_etiquettes(chemin) == []

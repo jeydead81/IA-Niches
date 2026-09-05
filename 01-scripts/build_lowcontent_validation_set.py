@@ -180,11 +180,19 @@ def main(argv: list[str] | None = None) -> int:
                     help="où écrire le rapport (défaut : 99-logs/rapport-calibration-lc.json)")
     ap.add_argument("--plafond", type=float, default=PLAFOND_USD_DEFAUT,
                     help=f"plafond de dépense du run, en $ (défaut {PLAFOND_USD_DEFAUT})")
+    ap.add_argument("--forcer", action="store_true",
+                    help="avec --gabarit : écrase un classeur DÉJÀ étiqueté (destructif)")
     ap.add_argument("--version", default="fr_v1")
     a = ap.parse_args(argv)
 
     if a.gabarit:
-        out = exporter_gabarit(a.gabarit, version=a.version)
+        try:
+            out = exporter_gabarit(a.gabarit, version=a.version, ecraser=a.forcer)
+        except FileExistsError as e:
+            # Message net et code de sortie distinct : un script appelant doit pouvoir
+            # distinguer « rien à faire, le travail est déjà là » d'une vraie panne.
+            print(str(e), file=sys.stderr)
+            return 3
         print(f"Gabarit écrit : {out}")
         print("Remplissez les colonnes « requete » et « etiquette », puis relancez "
               f"avec --xlsx {out}")
