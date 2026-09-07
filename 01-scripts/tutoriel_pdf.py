@@ -87,6 +87,20 @@ ENV_VARS = [
      "Défaut claude-sonnet-5. NE PAS rétrograder le classifieur : Haiku 4.5 mesuré à "
      "42 % d'accord contre 80 % requis."),
     ("KDP_KEYWORDS_MODEL", "Defaut claude-sonnet-5. Les 7 mots-cles backend."),
+    ("DATA_DIR", "Ou vivent les cinq bases SQLite. Non defini = 99-logs/. EXIGEE des que "
+                 "APP_ENV=prod : le disque d'un conteneur est efface a chaque "
+                 "deploiement, et sans volume monte sur ce chemin les comptes, la "
+                 "consommation, l'historique et le cache disparaissent SANS AUCUN "
+                 "SIGNAL. Le serveur refuse de demarrer plutot que de le laisser faire."),
+    ("APP_ENV", "'prod' active les gardes d'exposition : BSR_SOURCE=dataforseo exige, "
+                "DATA_DIR exigee, et le serveur ecoute 0.0.0.0 au lieu de la boucle "
+                "locale (sinon, dans un conteneur, il est injoignable en silence)."),
+    ("HOST / PORT", "Lus seulement par `python web/server.py`. HOST est DEDUIT "
+                    "d'APP_ENV et n'a normalement pas a etre renseigne ; les "
+                    "plateformes injectent PORT."),
+    ("JOBS_MODE", "'thread' (defaut) : le serveur execute les travaux lui-meme. "
+                  "'worker' : il empile, et `python 01-scripts/worker.py` execute. Les "
+                  "deux processus doivent voir le MEME DATA_DIR."),
     ("INSCRIPTIONS_OUVERTES", "FERME par defaut. Le plafond mensuel etant PAR "
                               "utilisateur, un compte de plus est un plafond neuf : "
                               "l'inscription libre offrait une depense illimitee a un "
@@ -217,6 +231,19 @@ DEPLOIEMENT = [
      "Environ 250 s quel que soit le nombre d'ASIN. fiction_master groupe déjà toutes "
      "les SERP avant un unique batch : ne pas revenir à un batch par niche (10 niches "
      "passeraient de 5 à 42 minutes)."),
+    ("Sans volume persistant, TOUT est perdu à chaque déploiement",
+     "Les cinq bases sont des fichiers, et le disque d'un conteneur est effacé à chaque "
+     "mise en ligne. Sans volume : plus de comptes, plus de consommation (donc le "
+     "plafond repart de zéro et la base de la facturation est perdue), plus "
+     "d'antériorité d'historique, plus de cache mutualisé. Et RIEN ne le signalerait : "
+     "le service repartirait sur des bases vides comme une installation neuve. D'où "
+     "DATA_DIR, EXIGÉE dès APP_ENV=prod — le serveur refuse de démarrer sans elle."),
+    ("Un redémarrage laisse des travaux en l'air, et ils sont récupérés au démarrage",
+     "Un run coupé par une mise en ligne reste 'en_cours' : l'utilisateur voit une "
+     "analyse éternellement en cours et son unité de plafond est consommée. Serveur et "
+     "worker passent donc en échec, à leur démarrage, les travaux sans progression "
+     "depuis 30 min — coût et progression CONSERVÉS. Limite connue : un run coupé moins "
+     "de 30 min avant attendra le redémarrage suivant."),
     ("Les magasins SQLite sont locaux",
      "jobs.db et usage.db sont des fichiers. Pour plusieurs instances, les remplacer "
      "par une base partagée. Le schéma porte déjà un user_id (défaut 'local') : "

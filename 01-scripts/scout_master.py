@@ -48,11 +48,14 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
     cost = cost if cost is not None else CostTracker()
     load_dotenv()
 
-    from pathlib import Path
-    _root = Path(__file__).resolve().parent.parent
     cache = None
     if use_cache:
-        cache = Cache(cache_path or (_root / "99-logs" / "df-cache.db"))
+        # Le répertoire vient de `storage` : en hébergement, le cache doit suivre le
+        # volume persistant comme les quatre autres bases. C'est celle dont la perte est
+        # la plus discrète — rien ne lève, rien ne s'affiche, tout le monde repaie
+        # simplement ce qui était déjà acheté (cache.py : magasin MUTUALISÉ).
+        import storage
+        cache = Cache(cache_path or storage.base("df-cache.db"))
 
     # 1) Ideator (coût LLM réel via on_usage)
     progress(f"Génération de niches par l'IA (graine : {seed or 'aucune'})…")

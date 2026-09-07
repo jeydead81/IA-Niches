@@ -217,3 +217,39 @@ class JobStore:
         with self._conn() as cx:
             rows = cx.execute(sql, params).fetchall()
         return [self._row_to_job(r) for r in rows]
+
+
+# 30 min sans le moindre signe de vie. Le run le plus long du produit (fiction, 8 trios)
+# tient en 10 à 15 minutes, batch ASIN compris : le double laisse la marge d'une file
+# DataForSEO lente sans laisser un zombie une journée entière.
+ORPHELIN_APRES_S = 30 * 60
+
+
+def recuperer_orphelins(store: JobStore, depuis_s: float = ORPHELIN_APRES_S,
+                        journal=print, prefixe: str = "[worker]") -> int:
+    """Passe en échec les travaux interrompus. Rend combien ont été récupérés.
+
+    Le coût déjà mesuré est CONSERVÉ (§5.29) : le remettre à zéro ferait croire qu'un run
+    interrompu était gratuit. La progression est conservée aussi — ce qui a été fait avant
+    la coupure reste lisible, et c'est la seule chose qui dit à l'utilisateur où il en
+    était.
+
+    **Vit ICI et pas dans `worker.py`, alors que c'est le worker qui l'a fait naître.**
+    Le serveur en a besoin aussi : en `JOBS_MODE=thread` — le défaut — il n'y a aucun
+    worker, et un run coupé par un redémarrage resterait `en_cours` pour toujours. Or
+    `worker.py` importe `server`, donc `server` ne peut pas importer `worker` : la
+    recopier des deux côtés était la seule autre issue, et deux implémentations
+    divergent. Celle qui divergerait serait justement celle qui ne tourne pas sur le
+    poste où l'on teste.
+
+    `prefixe` n'est pas cosmétique : dans un journal partagé, savoir si c'est le serveur
+    ou le worker qui a récupéré un travail dit lequel des deux processus a redémarré."""
+    n = 0
+    for job in store.orphelins(depuis_s=depuis_s):
+        store.fail(job.id,
+                   "Analyse interrompue (redémarrage du service). Le travail déjà "
+                   "effectué est conservé ci-dessus ; relancez pour terminer.",
+                   cout=job.cout)
+        journal(f"{prefixe} job {job.id} ({job.type}) récupéré : interrompu")
+        n += 1
+    return n

@@ -774,9 +774,15 @@ vérifie qu'ils échouent pour la BONNE raison. C'est ce qui tient ces 967 tests
   compte, rôles, administration** : aucun de ces chemins n'est codé. Un mot de passe perdu est un
   compte perdu. Le seul e-mail sortant est le message de fin d'analyse, transactionnel et sans lien
   d'action.
-- **Aucun HTTPS intégré, aucun déploiement, aucun Docker, aucune base partagée** : cinq fichiers
-  SQLite locaux. Le cookie de session obtient son drapeau `Secure` tout seul derrière un proxy TLS,
-  mais le proxy, lui, reste à monter.
+- **Le dépôt est DÉPLOYABLE, rien n'est déployé.** Depuis le 2026-09-07 : `requirements.txt` à la
+  racine (il inclut celui de `01-scripts/`, il ne le recopie pas), `Procfile`, `HOST` déduit
+  d'`APP_ENV`, `DATA_DIR` **exigée** en production, et les travaux interrompus par un redémarrage
+  sont récupérés au démarrage. Ce qui manque encore : un hébergeur configuré, **un volume
+  persistant monté sur `DATA_DIR`** — sans lui les cinq bases disparaissent à chaque mise en ligne,
+  sans aucun signal —, et le proxy TLS (le cookie obtient son drapeau `Secure` tout seul derrière
+  lui, mais le proxy reste à monter). Toujours aucun Docker, aucune base partagée : cinq fichiers
+  SQLite. **`JOBS_MODE=worker` suppose que serveur et worker voient le MÊME `DATA_DIR`** — là où un
+  volume ne s'attache qu'à un seul service, rester en `thread`.
 
 **Limites de mesure**
 
@@ -870,10 +876,13 @@ voir, puisque la niche n'apparaît nulle part.
    dépense de plus sur la clé API de l'exploitant.
 2. **Pages publiques** — remplir les `[[A COMPLETER]]`, trancher l'hébergement (plusieurs
    paragraphes de la politique de confidentialité en dépendent), faire relire les CGV.
-3. **Déploiement** — aucun HTTPS intégré, aucun Docker, aucune base partagée. Le cookie obtient son
-   drapeau `Secure` tout seul derrière un proxy TLS, mais le proxy reste à monter.
-4. **Hygiène** — `IDEES_PAR_RUN` à brancher ou à supprimer, `DEPLOIEMENT` de `tutoriel_pdf.py` qui
-   référence des endpoints supprimés, résidus Scrapingdog dans les archives de `docs/superpowers/`.
+3. **Déploiement** — le dépôt est prêt côté code (`requirements.txt` racine, `Procfile`, `HOST`
+   déduit, `DATA_DIR` exigée en prod, récupération des travaux interrompus). Reste à faire, chez
+   l'hébergeur et non dans le code : créer le service, **monter un volume et le pointer par
+   `DATA_DIR`**, poser les variables (`APP_ENV=prod`, `BSR_SOURCE=dataforseo`, les clés), vérifier
+   que le proxy TLS envoie `X-Forwarded-Proto`. Toujours aucun Docker, aucune base partagée.
+4. **Hygiène** — `IDEES_PAR_RUN` à brancher ou à supprimer, résidus Scrapingdog dans les archives
+   de `docs/superpowers/`.
 
 ### Règles de travail à ne pas contourner
 

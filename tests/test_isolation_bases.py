@@ -9,6 +9,7 @@ fabriqué par des tests, et donc d'un delta qui ne mesure rien.
 Le test vérifie la seule chose qui compte vraiment : chaque helper de client de test isole
 les QUATRE bases, celle des comptes comprise."""
 import re
+import sys
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -42,11 +43,22 @@ def test_aucun_test_ne_construit_un_client_sans_isoler_les_bases():
 def test_les_chemins_de_bases_du_serveur_restent_des_constantes_de_module():
     """L'isolation en test repose entièrement sur le monkeypatch de ces constantes. Les
     remplacer par un magasin construit à l'import rendrait tout test impossible à isoler —
-    et créerait de vrais fichiers dès qu'un test importe server.py."""
+    et créerait de vrais fichiers dès qu'un test importe server.py.
+
+    Ce test vérifiait la FORME (`= _ROOT / `), et il a cassé au premier refactor légitime :
+    le répertoire est passé sous `storage.data_dir()` pour pouvoir pointer un volume en
+    hébergement, sans que l'invariant bouge d'un pouce. Il vérifie désormais ce qui compte
+    vraiment — une assignation au niveau du module, dont la valeur EST un Path — plutôt
+    qu'une écriture particulière (§5.32 : tester la valeur réellement obtenue)."""
     src = (RACINE / "web" / "server.py").read_text("utf-8")
+    sys.path.insert(0, str(RACINE / "web"))
+    import server
     for nom in BASES:
-        assert re.search(rf"^{nom} = _ROOT / ", src, re.M), \
-            f"{nom} doit rester une constante Path au niveau du module"
+        assert re.search(rf"^{nom} = ", src, re.M), \
+            f"{nom} doit être assignée au niveau du module, pas dans une fonction"
+        valeur = getattr(server, nom)
+        assert isinstance(valeur, Path), \
+            f"{nom} doit rester un Path monkeypatchable (trouvé : {type(valeur).__name__})"
 
 
 def test_le_helper_reinitialise_aussi_l_etat_global_de_module():

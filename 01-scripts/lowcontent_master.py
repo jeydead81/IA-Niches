@@ -92,9 +92,8 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     if format_cle:
         format_(format_cle, version)          # lève AVANT toute dépense
 
-    from pathlib import Path
-    _root = Path(__file__).resolve().parent.parent
-    cache = Cache(cache_path or (_root / "99-logs" / "df-cache.db")) if use_cache else None
+    import storage
+    cache = Cache(cache_path or storage.base("df-cache.db")) if use_cache else None
 
     # ── Phase 0 — arbre d'autocomplete (gratuit) ──
     suggestions = []

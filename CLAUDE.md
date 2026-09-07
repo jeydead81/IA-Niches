@@ -7,7 +7,9 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages et références de ligne revérifiés le **2026-08-19**, après les commits
+> Comptages revérifiés le **2026-09-07** (994 tests, 49 modules, 34 variables d'env, 18
+> endpoints, `server.py` 1 157 lignes). Références de ligne revérifiées le **2026-08-19**,
+> après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
 > unique).
@@ -59,15 +61,17 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 
 ## 2. ARCHITECTURE RÉELLE
 
-Application web **locale**, mono-page : FastAPI (`web/server.py`, **1 086 lignes,
-18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-08-22) + un unique
+Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
+mais rien n'est déployé) : FastAPI (`web/server.py`, **1 157 lignes,
+18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-09-07) + un unique
 `web/index.html` de **118 946 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
 page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
 page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
 externe ».
 
-**Cinq** bases SQLite locales dans `99-logs/` : `df-cache.db`, `jobs.db`, `usage.db`,
-`history.db`, **`comptes.db`**. **48 fichiers `.py`** dans `01-scripts/`.
+**Cinq** bases SQLite : `df-cache.db`, `jobs.db`, `usage.db`, `history.db`, **`comptes.db`**.
+Elles vivent dans `99-logs/` par défaut, et dans **`DATA_DIR`** dès qu'elle est définie —
+`storage.py` en est la source unique (§2.17). **49 fichiers `.py`** dans `01-scripts/`.
 
 **TROIS** moteurs indépendants coexistent désormais : le **scout non-fiction**, le **scout
 fiction** et le **scout low-content** (§2.11, livré les 2026-08-18/19). Les trois ne se
@@ -335,6 +339,15 @@ toujours, l'unité de plafond consommée, sans que rien ne le dise.
   LIMITE. Le créneau est pris AVANT de marquer le job démarré : un job qui attend reste
   « en attente », ce qui est exactement ce qui se passe.
 
+**`recuperer_orphelins` a QUITTÉ ce module** (2026-09-07) : elle vit dans `jobs.py`, et le
+serveur l'appelle lui aussi au démarrage (§2.17). Elle n'avait qu'un appelant — la boucle du
+worker — alors que le mode par défaut est `thread` : sans worker, un run coupé par un
+redémarrage restait `en_cours` POUR TOUJOURS. Anecdotique en local, **nominal en hébergement**,
+où chaque mise en ligne redémarre le service. `worker` importe `server`, donc `server` ne peut
+pas importer `worker` : la recopier des deux côtés était la seule autre issue, et celle qui
+aurait divergé serait justement celle qui ne tourne pas sur le poste où l'on teste (§5.32).
+`ORPHELIN_APRES_S` a suivi, pour la même raison.
+
 **Écart assumé avec le plan** : les runners n'ont PAS été extraits vers un `job_runners.py`.
 Ils lisent les chemins de bases que les tests isolent en monkeypatchant `server` ; les
 déplacer créerait une SECONDE source de vérité pour ces chemins, et un helper d'isolation
@@ -453,8 +466,10 @@ qui ne contient jamais le résultat.
 
 **Infrastructure** — `cache.py` (clé/valeur SQLite **partagé cross-user**, TTL, connexion par
 appel + WAL) · `cost_tracker.py` (coût réel : appels DataForSEO + tokens LLM, grille par modèle)
-· `jobs.py` · `usage.py` · `history.py` (la seule fonction qui répond à « est-ce que ça
-bouge ? ») · `fiction_taxonomy.py` (chargement/validation de la taxonomie, source de vérité
+· `jobs.py` (magasin des travaux, **et `recuperer_orphelins` depuis §2.12**) · `usage.py` ·
+`history.py` (la seule fonction qui répond à « est-ce que ça bouge ? ») ·
+**`storage.py` (§2.17, source unique du répertoire des cinq bases)** ·
+`fiction_taxonomy.py` (chargement/validation de la taxonomie, source de vérité
 unique des filtres de rayon et des libellés Amazon, rend des copies profondes).
 
 **Sorties** — `positioning_pdf.py` (one-pager, Helvetica core, assainisseur latin-1, dégrade
@@ -532,9 +547,19 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**965 tests** collectés sur **83 fichiers** `tests/test_*.py`, **965 passés**, aucune erreur de
-collecte (`python -m pytest`, relancé le 2026-08-22 ; la suite avait connu des échecs
-INTERMITTENTS, cf. §5.33).
+**994 tests** collectés sur **84 fichiers** `tests/test_*.py`, **994 passés, 0 ignoré**,
+aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-07 ; la suite avait connu
+des échecs INTERMITTENTS, cf. §5.33).
+
+**« 0 ignoré » est la moitié importante de cette ligne, et elle a coûté cher à établir.**
+`httpx` et `pypdf` ne sont importés par aucun module de production — ils ne figuraient donc
+pas dans `requirements.txt`. Sur un poste où ils manquent, les tests concernés sortent en
+`pytest.importorskip` : la suite affiche un vert complet **en ayant ignoré 136 tests, dont
+TOUTE la couche serveur** (`test_server_*`, `test_securite_*`, `test_history`) — donc
+l'authentification et les gardes de dépense. Mesuré le 2026-09-06 : 818 passés / 156 ignorés
+sans les deux paquets, 954 / 20 avec, 974 / 0 une fois `node` disponible. **Toujours lire le
+nombre d'IGNORÉS avant d'annoncer une suite verte** : c'est la même famille que §5.26, un
+vert qui ne prouve pas ce qu'on croit qu'il prouve.
 
 Deux fichiers exercent l'interface pour de vrai plutôt que d'y chercher des chaînes :
 `tests/js_harness.py` extrait les fonctions de rendu PURES de `web/index.html` et les
@@ -659,6 +684,51 @@ vérifiaient que le serveur APPELLE la notification, jamais qu'elle fonctionne. 
 fonction qu'on teste, c'est tester le harnais.** Un test résout désormais une VRAIE adresse depuis
 un `comptes.db` isolé.
 
+### 2.17 Hébergement — `storage.py`, `Procfile`, `requirements.txt` racine
+
+Livré le 2026-09-07. **Le dépôt est DÉPLOYABLE ; rien n'est déployé** (§7). Quatre manques,
+tous silencieux — c'est ce qui les rendait dangereux.
+
+| Manque | Ce qui se serait passé | Ce qui le ferme |
+|---|---|---|
+| Rien ne dit comment construire | Un constructeur automatique cherche `requirements.txt` **à la racine** ; le nôtre est dans `01-scripts/` | `requirements.txt` racine qui **inclut** (`-r 01-scripts/requirements.txt`) et ne recopie rien : deux listes divergeraient, et celle installée en PROD cesserait d'être celle qu'on teste |
+| Rien ne dit comment démarrer | L'hébergeur devine, et devine mal sur un point d'entrée qui n'est ni `main.py` ni `app.py` | `Procfile` : `web: python web/server.py`. **Pas d'`uvicorn` direct** — ce serait un second chemin de lancement (§2.6), et `HOST`/`PORT`, lus sous `__main__`, cesseraient d'être lus |
+| `HOST=127.0.0.1` | Déploiement MUET : construction réussie, journaux propres, rien ne répond | `_hote()` DÉDUIT : `0.0.0.0` dès `APP_ENV=prod`, `127.0.0.1` sinon, un `HOST` explicite primant toujours. Même raisonnement que `_cookie_securise` — ce qui s'oublie doit se déduire |
+| Répertoire des bases en dur | Disque de conteneur effacé à chaque mise en ligne → **perte TOTALE et SILENCIEUSE** | `storage.data_dir()` + `DATA_DIR`, **EXIGÉE dès `APP_ENV=prod`** |
+
+**Pourquoi `storage.py` LÈVE au lieu de retomber sur un défaut prudent.** Partout ailleurs,
+un réglage oublié dégrade doucement (`_cookie_securise` déduit, `_plafond_analyses_mensuel`
+retombe sur illimité-mais-journalisé). Ici c'est impossible : sans volume, `comptes.db`,
+`usage.db`, `history.db`, `jobs.db` et `df-cache.db` disparaissent au prochain `git push` —
+les clients, la consommation qui porte le plafond ET la future facturation, l'antériorité de
+l'historique, et le cache mutualisé qui est l'économie principale du modèle. **Rien ne le
+signalerait** : le service repart sur des bases vides, le premier visiteur crée « le premier
+compte », l'amorçage joue, tout a l'air normal. C'est la règle 3 appliquée au stockage — un
+répertoire vide ne doit jamais pouvoir se lire comme « pas encore de client ».
+Le chemin était écrit à quatre endroits (les 4 constantes de `server.py`, plus le
+`df-cache.db` construit à l'identique par les trois orchestrateurs) ; un seul resté en dur
+suffirait à faire repartir une base sur le disque éphémère pendant que les autres suivent le
+volume, et **la plus discrète ferait le plus de dégâts** — un cache perdu ne lève rien, il
+fait simplement repayer tout le monde. `tests/test_deploiement.py` porte le cliquet.
+
+**Récupération des travaux interrompus au démarrage** (`_recuperer_travaux_interrompus`,
+branchée sur le `lifespan` de l'app — pas `@app.on_event`, déprécié). En `JOBS_MODE=worker`
+elle ne fait rien : c'est le worker qui exécute, donc lui qui récupère, et que les deux s'en
+chargent ferait passer en échec un travail que l'autre vient de reprendre. Aucune exception
+ne remonte : le ménage ne doit jamais empêcher de démarrer. **Un test démarre l'application
+POUR DE VRAI** (`with TestClient(...)`) au lieu de vérifier que la fonction existe — une
+fonction correcte branchée sur un hook qui ne se déclenche pas est le défaut central de ce
+dépôt (§5.26, §2.16).
+
+**Limite connue, et c'est un manque, pas une décision** : un run coupé moins de 30 minutes
+avant le redémarrage n'est pas encore un orphelin (c'est l'absence de progression qui le
+définit, pas l'âge — un run fiction VIVANT dure 15 minutes) et attendra le redémarrage
+suivant. Aucun balayage périodique n'existe.
+
+**Ce qui marche déjà sans rien faire** : le cookie `Secure` se déduit de
+`X-Forwarded-Proto` que tout proxy TLS envoie, `origine_sure` fonctionne derrière ce proxy,
+et `_verifier_config_prod` refuse de démarrer sans `BSR_SOURCE=dataforseo`.
+
 ---
 
 ## 3. SOURCES DE DONNÉES ET COÛTS
@@ -686,17 +756,19 @@ le PC de Baptiste, **bloqué depuis un datacenter**. En production il faut
 
 ### Variables d'environnement (`.env` uniquement)
 
-**Trente-trois** variables sont lues par `os.getenv` dans `01-scripts/` et `web/`
+**Trente-quatre** variables sont lues par `os.getenv` dans `01-scripts/` et `web/`
 (recensement exhaustif sur ces deux dossiers, aucun autre `.py` du dépôt n'en lit, revérifié
-le 2026-08-22). `.env.example` en documente **vingt-neuf** : il lui manque `HOST`, `PORT`,
-`LOWCONTENT_IDEATOR_MODEL` et `LOWCONTENT_VERDICT_MODEL`. **Son propre en-tête annonce
-« VINGT variables » (`.env.example:5`) alors qu'il en documente 29 : ce compte est périmé** — à
-corriger. Ne pas chercher « ONZE » dans le fichier, cette citation a longtemps traîné ici et n'y
-a jamais correspondu. Ce tableau porte les trente-trois.
+le 2026-09-07 — la trente-quatrième est `DATA_DIR`, §2.17). **`.env.example` les documente
+désormais TOUTES**, `HOST`, `PORT` et les deux `LOWCONTENT_*_MODEL` compris : le trou de
+quatre variables signalé ici jusqu'au 2026-09-06 est fermé, et l'en-tête du fichier porte le
+compte juste. Ne pas chercher « ONZE » ni « VINGT » dans le fichier, ces citations ont
+longtemps traîné ici et n'y correspondent plus.
 
 Deux tests tiennent une partie de l'invariant (`tests/test_tutoriel_pdf.py`), mais dans un
-seul sens : **documenté ⇒ lu**. Rien ne vérifie l'inverse, d'où les quatre trous
-ci-dessus.
+seul sens : **documenté ⇒ lu**. Rien ne vérifie l'inverse — la couverture complète de
+`.env.example` est donc tenue à la main et peut se dégrader au prochain ajout, sans qu'aucun
+test ne le dise. `tutoriel_pdf.ENV_VARS` reste, lui, partiel (les postes de déploiement y
+sont désormais : `DATA_DIR`, `APP_ENV`, `HOST`/`PORT`, `JOBS_MODE`).
 
 | Variable | Défaut | Obligatoire |
 |---|---|---|
@@ -707,8 +779,9 @@ ci-dessus.
 | `DATAFORSEO_PRIORITY` | `2` (`_resolve_priority`, `search_providers.py:27`). Valeur non entière ou hors plage → `warnings.warn` + repli sur 2. Un argument explicite prime sur l'env | non |
 | `INSCRIPTIONS_OUVERTES` | **non défini = FERMÉ** (`web/server.py:227`). Accepte `1/true/yes/oui`. **Le premier compte passe toujours** | non |
 | `COOKIE_SECURE` | non défini → le drapeau est **déduit** de `X-Forwarded-Proto` puis du schéma (`web/server.py:101-117`). `1/true/yes/oui` **force** le drapeau ; **aucune valeur ne peut le désactiver** | non |
-| `HOST` | `"127.0.0.1"` (`web/server.py:707`). Lue **uniquement** sous `if __name__ == "__main__"` : sans effet si le serveur est lancé par `uvicorn server:app` | non |
-| `PORT` | `"8000"` (`web/server.py:704`). Même portée que `HOST`. Valeur non entière → repli silencieux sur 8000 | non |
+| `HOST` | **DÉDUIT** (`_hote()`) : `0.0.0.0` si `APP_ENV=prod`, `127.0.0.1` sinon ; une valeur explicite prime toujours. Lue **uniquement** sous `if __name__ == "__main__"` : sans effet si le serveur est lancé par `uvicorn server:app` à la main. Le défaut local était injouable en conteneur — écouter la boucle locale y rend le service injoignable **sans la moindre erreur** (§2.17) | non |
+| `PORT` | `"8000"`. Même portée que `HOST`. Valeur non entière → repli silencieux sur 8000. Les plateformes imposent le leur | non |
+| `DATA_DIR` | non défini = `99-logs/`. **EXIGÉE dès `APP_ENV=prod`** : `storage.data_dir()` LÈVE, donc le serveur refuse de démarrer. Sans volume persistant, les cinq bases disparaissent à chaque mise en ligne, sans aucun signal (§2.17). Le répertoire est créé s'il manque — un volume neuf est vide | non (oui en prod) |
 | `PLAFOND_ANALYSES_MENSUEL` | non défini → `None` = illimité, mais l'usage reste journalisé (`web/server.py:88-98`). Valeur non entière → retombe silencieusement sur illimité. **Plafond PAR utilisateur, glissant sur 30 jours** | non |
 | `IDEATOR_MODEL` | `claude-sonnet-5` (`niche_ideator.py:20`), choisi après un A/B live du 2026-07-05 : qualité à parité avec `claude-opus-4-8` pour ~2× moins cher | non |
 | `VERDICT_MODEL` | `claude-sonnet-5` (`niche_verdict.py:9`) | non |
@@ -718,7 +791,7 @@ ci-dessus.
 | `LOWCONTENT_IDEATOR_MODEL` | `claude-sonnet-5` (`lowcontent_ideator.py:30`). **Absente de `.env.example`** | non |
 | `LOWCONTENT_VERDICT_MODEL` | `claude-sonnet-5` (`lowcontent_verdict.py:24`). **Absente de `.env.example`** | non |
 | `MARKETPLACE` | `"fr"` (`marketplace.py`). Toute autre valeur **LÈVE**, `"com"` compris : il est décrit et déclaré non prêt (§2.15). Valeur vide → retombe sur `fr`, un `MARKETPLACE=` étant un oubli et non une demande de bascule | non |
-| `APP_ENV` | non défini. `"prod"` déclenche `_verifier_config_prod` (`web/server.py:317`), qui refuse de démarrer sur une configuration dangereuse en exposition | non |
+| `APP_ENV` | non défini. `"prod"` est LA variable d'exposition : elle déclenche `_verifier_config_prod` (qui exige `BSR_SOURCE=dataforseo`), **exige `DATA_DIR`** et fait écouter `0.0.0.0`. Refus de démarrer sur une configuration dangereuse, jamais un défaut silencieux | non |
 | `JOBS_MODE` | `"thread"` (`web/server.py:110`). `"worker"` fait que `POST /api/jobs` **empile seulement** : sans ce garde, serveur ET worker exécuteraient le même job — deux fois les SERP, deux fois les tokens | non |
 | `RUNS_SIMULTANES_MAX` | `5` (`RUNS_SIMULTANES_DEFAUT`, `web/server.py:76`). Nombre de créneaux d'exécution simultanés. C'est un plafond de CHARGE, pas de dépense | non |
 | `PLAFOND_USD_PAR_RUN` | `0.60` (`cost_tracker.py`). Plafond **prédictif** : `verifier(cout_prevu)` refuse AVANT de dépenser, il n'interrompt pas au milieu. Combiné au devis préalable, c'est ce qui empêche un rapport partiel facturé | non |
@@ -1137,6 +1210,13 @@ Section critique. Chacun a coûté un bug réel.
   7 emplacements.
 - **Aucun endpoint ne sert le dossier de passation ni le guide utilisateur.** `tutoriel_pdf.py`
   est un script autonome.
-- **Aucune base partagée, aucun Docker, aucun déploiement.** Cinq fichiers SQLite locaux
-  (`df-cache.db`, `jobs.db`, `usage.db`, `history.db`, `comptes.db`).
+- **Aucune base partagée, aucun Docker, aucun déploiement EN COURS.** Cinq fichiers SQLite
+  (`df-cache.db`, `jobs.db`, `usage.db`, `history.db`, `comptes.db`), désormais dans le
+  répertoire que `DATA_DIR` désigne. **Nuance depuis le 2026-09-07** : le dépôt est
+  DÉPLOYABLE — `requirements.txt` racine, `Procfile`, `HOST` déduit, `DATA_DIR` exigée en
+  prod, récupération des travaux interrompus au démarrage (§2.17). Rien n'est déployé pour
+  autant : aucun hébergeur n'est configuré, aucun volume n'existe, aucun HTTPS n'est monté,
+  et **`JOBS_MODE=worker` suppose que les deux processus voient le MÊME `DATA_DIR`** — sur
+  une plateforme où un volume ne s'attache qu'à un seul service, ce mode est inutilisable en
+  l'état, il faut rester en `thread`.
 - **Aucun test d'intégration réseau.**

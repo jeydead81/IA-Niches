@@ -1,0 +1,10 @@
+# Les dépendances ne sont PAS listées ici. Ce fichier n'existe que pour les
+# constructeurs automatiques (Nixpacks, chez Railway), qui détectent un projet Python en
+# cherchant `requirements.txt` ou `pyproject.toml` À LA RACINE — et ne trouveraient rien,
+# le nôtre vivant dans `01-scripts/` avec le reste du moteur.
+#
+# Il INCLUT, il ne recopie pas : deux listes de dépendances divergent toujours, et ici la
+# divergence serait la pire possible — la liste installée en PRODUCTION cesserait d'être
+# celle qu'on teste. Même défaut que §5.32 (une constante dupliquée dans deux modules,
+# dont le test surveillait la copie morte).
+-r 01-scripts/requirements.txt

@@ -63,11 +63,9 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
             enrich_fn = lambda asins, **kw: _enrich_asins(asins, _provider, **kw)  # noqa: E731
 
     if use_cache and cache is None:
-        from pathlib import Path
-
+        import storage
         from cache import Cache
-        _root = Path(__file__).resolve().parent.parent
-        cache = Cache(cache_path or (_root / "99-logs" / "df-cache.db"))
+        cache = Cache(cache_path or storage.base("df-cache.db"))
 
     # A) Ideator — 1 seul appel LLM pour tous les trios de ce sous-genre.
     progress(f"Génération de {n_niches} trios pour « {sous_genre_cle} »…")

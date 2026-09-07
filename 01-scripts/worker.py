@@ -42,16 +42,19 @@ sys.path.insert(0, str(_ROOT / "web"))
 
 import server  # noqa: E402  — voir l'écart assumé ci-dessus
 from cost_tracker import CostTracker  # noqa: E402
-from jobs import JobStore  # noqa: E402
+# `recuperer_orphelins` vit dans `jobs.py` depuis que le SERVEUR en a besoin lui aussi :
+# en `JOBS_MODE=thread` — le défaut — il n'existe aucun worker pour la faire, et un run
+# coupé par un redémarrage resterait `en_cours` pour toujours. Ce module l'importe au lieu
+# de la porter : `worker` importe `server`, donc `server` ne peut pas importer `worker`,
+# et la recopier des deux côtés aurait créé deux implémentations qui divergent.
+from jobs import ORPHELIN_APRES_S, JobStore, recuperer_orphelins  # noqa: E402,F401
 
 # Alias de module : les tests les remplacent pour exercer la boucle sans moteur réel.
 _RUNNERS = server._JOB_RUNNERS
 _imputer = server._imputer
 
-# 30 min sans le moindre signe de vie. Le run le plus long du produit (fiction, 8 trios)
-# tient en 10 à 15 minutes, batch ASIN compris : le double laisse la marge d'une file
-# DataForSEO lente sans laisser un zombie une journée entière.
-ORPHELIN_APRES_S = 30 * 60
+# `ORPHELIN_APRES_S` (30 min) est importé de `jobs` : une constante dupliquée dans deux
+# modules est un défaut invisible par construction (§5.32).
 # Repos entre deux sondages de la file. La file n'est pas un flux temps réel : un job qui
 # démarre 2 s plus tard ne change rien à un run de 5 minutes, et sonder en boucle serrée
 # ferait tourner un CPU pour rien.
@@ -77,23 +80,6 @@ def concurrence_configuree() -> int:
     return max(1, n)
 
 
-def recuperer_orphelins(store: JobStore, depuis_s: float = ORPHELIN_APRES_S,
-                        journal=print) -> int:
-    """Passe en échec les travaux interrompus. Rend combien ont été récupérés.
-
-    Le coût déjà mesuré est CONSERVÉ (§5.29) : le remettre à zéro ferait croire qu'un run
-    interrompu était gratuit. La progression est conservée aussi — ce qui a été fait avant
-    la coupure reste lisible, et c'est la seule chose qui dit à l'utilisateur où il en
-    était."""
-    n = 0
-    for job in store.orphelins(depuis_s=depuis_s):
-        store.fail(job.id,
-                   "Analyse interrompue (redémarrage du service). Le travail déjà "
-                   "effectué est conservé ci-dessus ; relancez pour terminer.",
-                   cout=job.cout)
-        journal(f"[worker] job {job.id} ({job.type}) récupéré : interrompu")
-        n += 1
-    return n
 
 
 def executer_un_job(store: JobStore, journal=print) -> bool:

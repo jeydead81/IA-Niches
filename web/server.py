@@ -16,6 +16,7 @@ Lancer :  uvicorn server:app --reload   (depuis le dossier web/)
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 import sys
 import tempfile
 import threading
@@ -42,6 +43,7 @@ from lowcontent_verdict import generate_lowcontent_verdict  # noqa: E402
 from kdp_keywords import generer_mots_cles  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
+import storage  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from devis import PLAFOND_DEPASSE, verifier_devis  # noqa: E402
 from notification import notifier_fin_de_job
@@ -49,13 +51,32 @@ from models import LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
 from categories import suggerer_categories  # noqa: E402
-from jobs import JobStore  # noqa: E402
+from jobs import JobStore, recuperer_orphelins  # noqa: E402
 from usage import PlafondAtteint, UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
 from auth import (EmailDejaPris, EmailInvalide, MAX_INSCRIPTIONS_PAR_CLIENT,  # noqa: E402
                   MotDePasseFaible, SESSION_TTL_S, TropDeTentatives, UserStore)
 
-app = FastAPI(title="IA-Niches")
+@asynccontextmanager
+async def _cycle_de_vie(app: FastAPI):
+    """Ce qui tourne au démarrage du service, et rien à l'arrêt.
+
+    Le démarrage est le seul moment où l'on SAIT qu'un redémarrage vient d'avoir lieu —
+    et sur un hébergeur, un redémarrage arrive à chaque déploiement.
+
+    `lifespan` et non `@app.on_event("startup")`, qui est déprécié : une API sur le départ
+    finit par ne plus se déclencher du tout, et un hook qui ne se déclenche plus est
+    exactement la panne muette que ce code existe pour empêcher.
+
+    Limite connue et assumée : un run coupé moins de 30 minutes avant le redémarrage n'est
+    pas encore un orphelin (c'est l'absence de progression qui le définit, pas l'âge — un
+    run fiction VIVANT dure 15 minutes) et attendra le redémarrage suivant. Un balayage
+    périodique le rattraperait ; il n'existe pas, et c'est un manque, pas une décision."""
+    _recuperer_travaux_interrompus()
+    yield
+
+
+app = FastAPI(title="IA-Niches", lifespan=_cycle_de_vie)
 _HERE = Path(__file__).resolve().parent
 
 # Chemins des magasins asynchrones (plan SaaS S2/S3). De simples constantes Path : la
@@ -63,10 +84,16 @@ _HERE = Path(__file__).resolve().parent
 # l'intérieur de chaque endpoint — jamais à l'import du module, sinon importer server.py
 # en test écrirait déjà des fichiers réels dans le dépôt (cf. cache.py, même principe :
 # connexion/instance par appel, jamais une instance partagée figée à l'import).
-_JOBS_DB = _ROOT / "99-logs" / "jobs.db"
-_USAGE_DB = _ROOT / "99-logs" / "usage.db"
-_HISTORY_DB = _ROOT / "99-logs" / "history.db"
-_USERS_DB = _ROOT / "99-logs" / "comptes.db"
+# Le RÉPERTOIRE, lui, vient de `storage` : en hébergement il doit pointer un volume
+# persistant, et un seul chemin resté en dur suffirait à faire repartir une base sur le
+# disque éphémère du conteneur pendant que les autres suivent le volume. `storage.base()`
+# est appelé ici, à l'import : sous APP_ENV=prod sans DATA_DIR il LÈVE, donc le serveur
+# refuse de démarrer plutôt que de perdre les comptes au déploiement suivant — même
+# posture que `_verifier_config_prod`, appelé lui aussi à l'import.
+_JOBS_DB = storage.base("jobs.db")
+_USAGE_DB = storage.base("usage.db")
+_HISTORY_DB = storage.base("history.db")
+_USERS_DB = storage.base("comptes.db")
 
 # Plafond de runs SIMULTANES en mode thread. Sans lui, le serveur lancait un fil par job
 # sans aucune limite : dix utilisateurs, c'etait dix runs DataForSEO de front et autant
@@ -1074,13 +1101,57 @@ async def api_pdf(request: Request, user_id: str = Depends(utilisateur_courant))
                     headers={"Content-Disposition": _content_disposition(scored.niche)})
 
 
+def _recuperer_travaux_interrompus(store: JobStore | None = None) -> int:
+    """Passe en échec les runs qu'un redémarrage a coupés. Appelée AU DÉMARRAGE.
+
+    En local, un redémarrage du serveur est un événement rare. Sur un hébergeur, c'est le
+    cas NOMINAL : chaque déploiement reconstruit et relance le service. Or la récupération
+    n'avait qu'un appelant, `worker.boucle()`, alors que le mode par défaut est `thread` :
+    sans worker, un run coupé restait `en_cours` POUR TOUJOURS. L'utilisateur voyait une
+    analyse éternellement en cours, son unité de plafond consommée, et rien ne le lui
+    disait — exactement la forme de panne que ce dépôt combat partout ailleurs.
+
+    En `JOBS_MODE=worker`, on ne touche à rien : c'est le worker qui exécute, donc lui qui
+    récupère (il le fait au démarrage de sa boucle). Que les deux s'en chargent ferait
+    passer en échec, depuis le serveur, un travail que le worker vient de reprendre.
+
+    Aucune exception ne remonte : refuser de démarrer parce qu'un vieux travail traîne
+    ferait tomber le service entier pour une ligne de ménage. La récupération est un
+    confort, servir les clients est le service — même arbitrage que
+    `_adopter_donnees_locales`."""
+    if _mode_jobs() == "worker":
+        return 0
+    try:
+        return recuperer_orphelins(store or JobStore(_JOBS_DB),
+                                   journal=_LOG.info, prefixe="[serveur]")
+    except Exception:  # noqa: BLE001 — le ménage ne doit jamais empêcher de démarrer
+        _LOG.exception("récupération des travaux interrompus impossible")
+        return 0
+
+
+def _hote() -> str:
+    """L'interface d'écoute. DÉDUITE en production, comme le drapeau `Secure` du cookie.
+
+    `127.0.0.1` est le bon défaut sur le poste de Baptiste et le mauvais dans un
+    conteneur : le routeur de l'hébergeur parle au service depuis l'extérieur du
+    processus, donc écouter la boucle locale rend le déploiement MUET — la construction
+    réussit, les journaux sont propres, et rien ne répond jamais. Une variable à penser
+    au déploiement est une variable qu'on oublie (c'est l'histoire de `COOKIE_SECURE`) :
+    `APP_ENV=prod` dit déjà « je suis en exposition », qu'elle décide aussi de ça.
+
+    Un `HOST` explicite prime toujours : la déduction est un défaut, pas une contrainte."""
+    explicite = (os.getenv("HOST") or "").strip()
+    if explicite:
+        return explicite
+    return "0.0.0.0" if (os.getenv("APP_ENV") or "").strip().lower() == "prod" else "127.0.0.1"
+
+
 if __name__ == "__main__":
     import uvicorn
-    # HOST et PORT par variable d'environnement : un port figé à 8000 empêche de lancer
-    # deux instances et bloque tout hébergement (les plateformes imposent leur PORT).
-    # Défauts inchangés pour l'usage local : 127.0.0.1:8000.
+    # PORT par variable d'environnement : un port figé à 8000 empêche de lancer deux
+    # instances et bloque tout hébergement (les plateformes imposent leur PORT).
     try:
         port = int(os.getenv("PORT", "8000"))
     except ValueError:
         port = 8000
-    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"), port=port)
+    uvicorn.run(app, host=_hote(), port=port)
