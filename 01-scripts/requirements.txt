@@ -25,3 +25,13 @@ openpyxl==3.1.2             # jeu de validation du classifieur (fiction_validati
 
 # Tests
 pytest>=8
+# httpx et pypdf ne sont importés par AUCUN module de production — ils sont exigés par les
+# tests, et leur absence ne casse RIEN : les tests concernés sortent en `importorskip`.
+# C'est précisément le problème. Sur une machine où ils manquent, la suite affiche un vert
+# complet en ayant ignoré 136 tests, dont TOUTE la couche serveur (test_server_*,
+# test_securite_*, test_history) — donc l'authentification et les gardes de dépense.
+# Mesuré le 2026-09-06 sur un poste fraîchement réinstallé : 818 passés / 156 ignorés,
+# contre 954 / 20 une fois les deux paquets présents. Même famille que §5.26 : un vert qui
+# ne prouve pas ce qu'on croit qu'il prouve.
+httpx                       # starlette.testclient — tout test qui appelle un endpoint
+pypdf                       # relecture du TEXTE des PDF générés (test_dossier_pdf)
