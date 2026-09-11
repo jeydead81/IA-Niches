@@ -62,9 +62,24 @@ def enrich_asins(asins: list[str], provider, cache=None, cost=None,
             misses.append(a)
 
     if misses:
-        raw = provider.product_raw_batch(misses)
+        prio = getattr(provider, "priority", 2)
+        try:
+            raw = provider.product_raw_batch(misses)
+        except Exception:
+            # Une panne pendant la RELECTURE laisse des tâches créées, donc facturées : on
+            # impute le pire cas plutôt que rien (règle 2 : ne jamais arrondir un coût vers
+            # le bas), puis on laisse remonter.
+            if cost is not None:
+                cost.add_dataforseo(len(misses), prio)
+            raise
         if cost is not None:
-            cost.add_dataforseo(len(misses), getattr(provider, "priority", 2))
+            # Les tâches RÉELLEMENT créées : un lot refusé à l'envoi n'est pas facturé. Un
+            # fournisseur qui ne le dit pas impute tout, par prudence.
+            cost.add_dataforseo(getattr(raw, "taches_creees", len(misses)), prio)
+        for n_lot, cause in getattr(raw, "lots_en_echec", []):
+            if progress:
+                progress(f"⚠ {n_lot} ASIN non envoyés : lot refusé à l'envoi ({cause}) — "
+                         f"ni facturés, ni enrichis.")
         n_echecs = 0
         for a in misses:
             b = parse_enriched_book(raw.get(a) or {})

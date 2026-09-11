@@ -37,6 +37,16 @@ _TARIF = COST_PER_CALL_USD[2]
 _LLM_IDEATOR = 0.012
 _LLM_CLASSIF_PAR_LIVRE = 0.001
 
+# La réponse du classement low-content grandit avec n : UN appel, mais une niche de plus à
+# rendre. Constante lue dans l'ideator (`_budget_reponse`) et tarif lu dans la grille de
+# `cost_tracker` — jamais recopiés : deux copies divergent. Tarif de sortie le plus ÉLEVÉ
+# des deux (intro / standard) : un devis est un pire cas.
+from cost_tracker import _LLM_PRICES
+from lowcontent_ideator import DEFAULT_MODEL as _MODELE_LC, _JETONS_PAR_NICHE
+
+_PRIX_LC = _LLM_PRICES.get(_MODELE_LC) or _LLM_PRICES["claude-sonnet-5"]
+_SORTIE_USD_PAR_JETON = max(_PRIX_LC["out"], _PRIX_LC.get("out_std", _PRIX_LC["out"])) / 1e6
+
 # Ce que chaque scout consomme par unité de volume. Ces constantes DOIVENT suivre les
 # orchestrateurs : `n_bsr_per_niche` (scout_master), `n_top` (fiction_master) et
 # `n_enrich_per_niche` (lowcontent_master).
@@ -55,6 +65,7 @@ _MODELES = {
         "cle": "n_search", "defaut": 6,
         "asin_par_unite": 6,          # lowcontent_master.n_enrich_per_niche
         "classif_par_unite": 0,       # le LLM classe des REQUÊTES, pas des livres
+        "jetons_sortie_par_unite": _JETONS_PAR_NICHE,   # une niche de plus à rendre
     },
 }
 
@@ -94,7 +105,8 @@ def cout_max_estime(type_: str, params: dict | None = None) -> float:
         n * _TARIF                        # une SERP par niche
         + n_asin * _TARIF                 # les fiches ASIN (BSR, éditeur, prix, pages)
         + _LLM_IDEATOR                    # un seul appel d'idéation par run
-        + n_classif * _LLM_CLASSIF_PAR_LIVRE,
+        + n_classif * _LLM_CLASSIF_PAR_LIVRE
+        + n * modele.get("jetons_sortie_par_unite", 0) * _SORTIE_USD_PAR_JETON,
         4)
 
 

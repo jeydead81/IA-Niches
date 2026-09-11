@@ -260,6 +260,15 @@ class RapportCalibration(BaseModel):
     # n'apparaît nulle part. Les additionner effacerait exactement cette différence.
     ecartees_correctement: list[str] = Field(default_factory=list)
     bonnes_perdues_avant_analyse: list[str] = Field(default_factory=list)
+
+    # Requêtes FOURNIES au moteur et absentes de sa sortie sans qu'aucun filtre ne les ait
+    # écartées : omises par le modèle, tronquées, ou coupées par le plafond de coût. Aucun
+    # gate ne joue en mode classement — les verser dans `ecartees_*` les faisait passer
+    # pour des rejets « pour zéro centime », alors qu'elles étaient dans un prompt payé.
+    non_rendues: list[dict[str, str]] = Field(default_factory=list)
+    # Niches à SERP mesurée mais dont la sonde autocomplete est tombée : leur axe demande
+    # repose sur un minimum inventé (`demand_score=1`), elles sortent du calcul.
+    n_demande_non_mesuree: int = 0
     hors_taxonomie: list[dict[str, str]] = Field(default_factory=list)
     avertissements: list[str] = Field(default_factory=list)
 
@@ -283,11 +292,14 @@ def _mediane(valeurs: list[float | None]) -> float | None:
 def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                         familles: list[str] | None = None,
                         ecartees: list[tuple[str, str]] | None = None,
-                        version: str = "fr_v1") -> RapportCalibration:
+                        version: str = "fr_v1",
+                        non_rendues: list[tuple[str, str]] | None = None
+                        ) -> RapportCalibration:
     """`paires` = (étiquette de Baptiste, niche scorée par le moteur), dans le même ordre
     que `familles` si elle est fournie. `ecartees` = (requête, étiquette) des requêtes
     perdues avant la moindre dépense."""
-    r = RapportCalibration(n_requetes=len(paires) + len(ecartees or []))
+    r = RapportCalibration(n_requetes=len(paires) + len(ecartees or [])
+                           + len(non_rendues or []))
     if familles is not None and len(familles) != len(paires):
         raise ValueError(f"{len(familles)} familles pour {len(paires)} paires")
 
@@ -317,16 +329,55 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
             f"{len(r.bonnes_perdues_avant_analyse)} requête(s) jugée(s) « bonne » "
             f"perdue(s) AVANT toute analyse : "
             f"{', '.join(r.bonnes_perdues_avant_analyse)}. Faux négatif invisible — "
-            f"la niche n'apparaît nulle part à l'écran. Vérifier le filtre IP, le filtre "
-            f"saisonnier et le gate gratuit. N'entre PAS dans la porte du plan.")
+            f"la niche n'apparaît nulle part à l'écran. Vérifier le filtre IP et le filtre "
+            f"saisonnier. N'entre PAS dans la porte du plan.")
     if r.ecartees_correctement:
         r.avertissements.append(
             f"{len(r.ecartees_correctement)} requête(s) non « bonne(s) » écartée(s) pour "
-            f"zéro centime : le gate gratuit a fait son travail.")
+            f"zéro centime par le filtre IP ou le filtre saisonnier, avant tout appel "
+            f"payant.")
 
-    calibrables = [(e, s) for e, s in paires if s.concurrence_mesuree]
+    for requete, e in (non_rendues or []):
+        if e not in ETIQUETTES:
+            raise ValueError(f"étiquette « {e} » inconnue — attendu {ETIQUETTES}")
+        r.n_par_etiquette[e] = r.n_par_etiquette.get(e, 0) + 1
+        r.non_rendues.append({"requete": requete, "etiquette": e})
+    mortes_non_scorees = [d["requete"] for d in r.non_rendues if d["etiquette"] == "morte"]
+    if r.non_rendues:
+        r.avertissements.append(
+            f"{len(r.non_rendues)} requête(s) NON rendue(s) par le classement (omise par le "
+            f"modèle, réponse tronquée ou plafond de coût atteint) : "
+            + ", ".join(d["requete"] for d in r.non_rendues)
+            + ". Ni le filtre IP, ni le filtre saisonnier, ni un gate ne les a écartées : "
+              "elles n'ont simplement pas été mesurées.")
+    # Les « morte » indécidables sont réunies plus bas, une fois connues les niches que la
+    # SERP ou la sonde n'ont pas mesurées : l'omission n'est qu'une voie sur trois.
+
+    serp_ok = [(e, s) for e, s in paires if s.concurrence_mesuree]
+    calibrables = [(e, s) for e, s in serp_ok if s.niche.n_enfants_autocomplete is not None]
     r.n_calibrees = len(calibrables)
-    r.n_non_mesurees = len(paires) - len(calibrables)
+    r.n_non_mesurees = len(paires) - len(serp_ok)
+    r.n_demande_non_mesuree = len(serp_ok) - len(calibrables)
+    if r.n_demande_non_mesuree:
+        r.avertissements.append(
+            f"{r.n_demande_non_mesuree} requête(s) écartée(s) du calcul : demande non "
+            f"mesurée (sonde autocomplete tombée). Leur axe demande repose sur un minimum "
+            f"inventé — les corréler mesurerait ce minimum. À relancer.")
+
+    # « Aucune morte en vert » ne se vérifie que sur une morte réellement MESURÉE. Omise,
+    # à SERP tombée (« ⚪ à relancer », jamais verte — mais son score n'a jamais vu le
+    # rayon) ou à demande non mesurée (score calculé sur un minimum inventé), elle est
+    # INDÉCIDABLE : la compter comme « pas en vert » ouvrirait la porte par artefact.
+    ids_calibres = {id(s) for _, s in calibrables}
+    mortes_indecidables = mortes_non_scorees + [
+        s.niche.requete_amazon for e, s in paires
+        if e == "morte" and id(s) not in ids_calibres]
+    if mortes_indecidables:
+        r.avertissements.append(
+            f"{len(mortes_indecidables)} requête(s) « morte » NON vérifiable(s) (omise, SERP "
+            f"tombée ou demande non mesurée) : " + ", ".join(mortes_indecidables)
+            + ". Le critère « aucune morte en vert » est INDÉCIDABLE pour elles, pas "
+              "satisfait — porte fermée. Relancer : le cache ne repaiera que ce qui manque.")
     if r.n_non_mesurees:
         r.avertissements.append(
             f"{r.n_non_mesurees} requête(s) écartée(s) du calcul : concurrence non "
@@ -369,5 +420,6 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
 
     r.porte_franchie = (r.spearman is not None
                         and r.spearman >= SEUIL_SPEARMAN
-                        and not r.morts_en_vert)
+                        and not r.morts_en_vert
+                        and not mortes_indecidables)
     return r

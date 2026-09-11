@@ -7,7 +7,11 @@ Deux modes, à lancer dans cet ordre :
     python 01-scripts/build_lowcontent_validation_set.py --xlsx 99-logs/validation-lc.xlsx
 
 Le second **dépense** : une SERP et un lot d'enrichissement ASIN par requête. Un jeu de
-30 requêtes coûte de l'ordre de 0,15 à 0,25 $ selon ce que le cache a déjà vu. Le plafond
+31 requêtes coûte au pire ~0,80 $ sur un poste résidentiel et ~1,35 $ avec
+BSR_SOURCE=dataforseo (calculé, jamais mesuré : une SERP et six fiches ASIN par requête, la
+réponse du modèle qui grandit avec n, et en production la relance des fiches non enrichies)
+— moins si le cache a déjà vu ces rayons. Les SERP partent une par
+une : compter 20 min à 2 h selon la file DataForSEO. Le plafond
 est passé explicitement au `CostTracker` (`--plafond`), parce qu'une erreur de saisie dans
 le classeur ne doit pas pouvoir se traduire en dépense non bornée.
 
@@ -35,12 +39,17 @@ from pathlib import Path
 
 from autocomplete_expand import Suggestion, expand as _expand
 from cost_tracker import CostTracker
+from ip_filter import filtrer_ip
+from lowcontent_ideator import _norm
+from lowcontent_taxonomy import est_saisonnier
 from lowcontent_validation import (RapportCalibration, RequeteEtiquetee,
                                     charger_etiquettes, exporter_gabarit,
                                     rapport_calibration)
 
-# Généreux mais fini. Un jeu de 30 requêtes mesuré à vide coûte ~0,25 $ ; 2 $ laisse la
-# place à un cache froid et à un jeu plus large sans jamais devenir illimité.
+# Généreux mais fini. Pire cas CALCULÉ (jamais mesuré) pour 31 requêtes, cache froid :
+# ~0,80 $ sur un poste résidentiel (BSR scrapé gratuit), ~1,35 $ avec BSR_SOURCE=dataforseo
+# (les fiches non enrichies sont relancées au tarif ASIN). 2 $ couvre les deux sans jamais
+# devenir illimité. Une ancienne version annonçait « ~0,25 $ mesuré » : ni l'un ni l'autre.
 PLAFOND_USD_DEFAUT = 2.0
 
 _RACINE = Path(__file__).resolve().parent.parent
@@ -53,8 +62,12 @@ def _noop(_msg: str) -> None:
 def _cle(requete: str) -> str:
     """Clé d'appariement. La dédup de l'ideator normalise casse et espaces : comparer
     brut déclarerait « écartée » une requête simplement rendue en minuscules — un faux
-    signalement qui ferait chercher un bug de filtre inexistant."""
-    return " ".join(requete.lower().split())
+    signalement qui ferait chercher un bug de filtre inexistant.
+
+    Delegue a `lowcontent_ideator._norm` (casse, espaces, accents, apostrophes) : c'est la
+    MEME regle qui recale la requete dans l'ideator. Deux copies d'une regle divergent, et
+    ici la divergence produisait des faux negatifs attribues au gate gratuit."""
+    return _norm(requete)
 
 
 def sonder(requetes: list[str], expand_fn=None, pause: float = 0.4, cache=None,
@@ -114,22 +127,39 @@ def construire_rapport(etiquetees: list[RequeteEtiquetee], run=None, sonde=None,
     # `n_ideas` et `n_search` sont bornés à la taille du jeu : laisser `n_search` à son
     # défaut de 6 n'analyserait que 6 des 30 requêtes, et le rapport annoncerait pourtant
     # 30 requêtes calibrées.
+    # `classer_toutes=True` n'est PAS une option : sans lui, la règle de sélection du
+    # prompt fait trier au modèle le jeu qu'on veut mesurer, et le Spearman porte sur ce
+    # qu'il a gardé.
+    journal: list[dict] = []
     scorees = run(seed="validation", n_ideas=max(len(requetes), 1),
                   n_search=max(len(requetes), 1), version=version, cost=cost,
-                  progress=progress, expand_fn=lambda *a, **k: list(suggestions), **kw)
+                  progress=progress, expand_fn=lambda *a, **k: list(suggestions),
+                  classer_toutes=True, journal_rejets=journal, **kw)
+
+    # Les SEULS rejets imputables à un filtre sont recalculés ici, avec les MÊMES fonctions
+    # que le moteur. Tout le reste de ce qui manque en sortie n'a été écarté par personne.
+    _, rejets_ip = filtrer_ip(suggestions)
+    filtrees = {_cle(s.requete) for s, _terme in rejets_ip}
+    if not kw.get("inclure_saisonnier"):
+        filtrees |= {_cle(r) for r in requetes if est_saisonnier(r, version)}
+    # Les rejets APRÈS le modèle (marque glissée dans une annotation) ne se devinent pas en
+    # rejouant le filtre sur la seule requête : le moteur les remonte lui-même.
+    filtrees |= {_cle(d["requete"]) for d in journal}
 
     par_cle = {_cle(s.niche.requete_amazon): s for s in scorees}
-    paires, familles, ecartees = [], [], []
+    paires, familles, ecartees, non_rendues = [], [], [], []
     for e in etiquetees:
         s = par_cle.get(_cle(e.requete))
-        if s is None:
-            ecartees.append((e.requete, e.etiquette))
-        else:
+        if s is not None:
             paires.append((e.etiquette, s))
             familles.append(e.famille)
+        elif _cle(e.requete) in filtrees:
+            ecartees.append((e.requete, e.etiquette))
+        else:
+            non_rendues.append((e.requete, e.etiquette))
 
     return rapport_calibration(paires, familles=familles, ecartees=ecartees,
-                               version=version)
+                               non_rendues=non_rendues, version=version)
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
@@ -141,8 +171,13 @@ def _imprimer(r: RapportCalibration) -> None:
     if r.n_non_mesurees:
         print(f"  SERP tombée ............. {r.n_non_mesurees}")
     if r.ecartees_correctement or r.bonnes_perdues_avant_analyse:
-        print(f"  écartées avant analyse .. "
+        print(f"  écartées par un filtre .. "
               f"{len(r.ecartees_correctement) + len(r.bonnes_perdues_avant_analyse)}")
+    if r.non_rendues:
+        print(f"  NON rendues ............. {len(r.non_rendues)}  (omises, tronquées ou "
+              f"plafond — ni filtre ni gate)")
+    if r.n_demande_non_mesuree:
+        print(f"  demande non mesurée ..... {r.n_demande_non_mesuree}")
     sp = "indéfini" if r.spearman is None else f"{r.spearman:+.3f}"
     print(f"  Spearman ................ {sp}  (porte : ≥ {r.seuil_spearman})")
     print(f"  mortes en 🟢 ............ {len(r.morts_en_vert)}  (porte : 0)")
@@ -182,8 +217,20 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"plafond de dépense du run, en $ (défaut {PLAFOND_USD_DEFAUT})")
     ap.add_argument("--forcer", action="store_true",
                     help="avec --gabarit : écrase un classeur DÉJÀ étiqueté (destructif)")
+    ap.add_argument("--inclure-saisonnier", action="store_true",
+                    help="score aussi les requêtes saisonnières (sinon écartées, comme "
+                         "dans le produit)")
     ap.add_argument("--version", default="fr_v1")
     a = ap.parse_args(argv)
+
+    # La console Windows redirigee encode en cp1252, ou ni « 🟢 », ni « ⚠ », ni « ✅ »
+    # n'existent : le premier avertissement du run levait UnicodeEncodeError. On remplace
+    # l'illisible au lieu de planter — un caractere de moins vaut mieux qu'un run perdu.
+    for flux in (sys.stdout, sys.stderr):
+        try:
+            flux.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
     if a.gabarit:
         try:
@@ -209,14 +256,19 @@ def main(argv: list[str] | None = None) -> int:
     cost = CostTracker(plafond_usd=a.plafond)
     print(f"{len(etiquetees)} requête(s) étiquetée(s). Plafond du run : {a.plafond:.2f} $")
     r = construire_rapport(etiquetees, cost=cost, progress=lambda m: print(f"  {m}"),
-                           version=a.version)
+                           version=a.version, inclure_saisonnier=a.inclure_saisonnier)
+
+    # ECRIT AVANT tout affichage. Le run vient de couter de l'argent reel : le JSON est la
+    # seule trace qui compte, et il ne doit dependre d'aucune ligne decorative. L'ordre
+    # inverse a existe — et `total_usd` formate comme un attribut alors que c'est une
+    # methode garantissait un TypeError entre la depense et l'ecriture.
+    dest = Path(a.out) if a.out else _RACINE / "99-logs" / "rapport-calibration-lc.json"
+    dest.write_text(r.model_dump_json(indent=2), encoding="utf-8")
+
     _imprimer(r)
     # La CLI est l'outil du développeur : le coût s'y affiche, contrairement à l'écran
     # client (§5.27).
-    print(f"\n  coût réel du run : {cost.total_usd:.4f} $")
-
-    dest = Path(a.out) if a.out else _RACINE / "99-logs" / "rapport-calibration-lc.json"
-    dest.write_text(r.model_dump_json(indent=2), encoding="utf-8")
+    print(f"\n  coût réel du run : {cost.total_usd():.4f} $")
     print(f"  rapport écrit : {dest}")
     return 0 if r.porte_franchie else 2
 

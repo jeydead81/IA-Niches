@@ -52,7 +52,8 @@ attaquable ; « coloriage licorne 3 ans fille » en porte trois. « registre » 
 « registre du personnel obligatoire » est un marché. Écarte le reste sans le signaler.
 
 REQUETE_AMAZON : recopie la requête EXACTEMENT telle qu'elle t'est donnée. Ne la reformule \
-pas, ne la corrige pas, ne l'enrichis pas. C'est la seule chose dont on sait qu'elle est \
+pas, ne la corrige pas — même une faute ou une abréviation —, ne l'enrichis pas. C'est la \
+seule chose dont on sait qu'elle est \
 réellement tapée.
 
 FORMAT_CLE : une clé de la liste fournie. Si aucune ne convient, mets « other » et décris le \
@@ -106,16 +107,78 @@ def _default_client():
     return anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
+# La RÈGLE DE SÉLECTION du prompt est voulue dans le PRODUIT : l'arbre rend 80 requêtes,
+# et seules les plus spécifiques désignent un rayon attaquable. Elle est FAUSSE pour un jeu
+# de MESURE : sur les 31 requêtes étiquetées par Baptiste, elle en faisait jeter une
+# quinzaine « sans le signaler » — surtout les génériques, c'est-à-dire ses « morte » —, et
+# la calibration se calculait sur un sous-ensemble choisi par le modèle. En mode
+# `classer_toutes`, le paragraphe est REMPLACÉ, pas seulement contredit plus loin : deux
+# consignes opposées dans un même prompt, c'est laisser le modèle choisir.
+_REGLE_CLASSER_TOUT = (
+    "RÈGLE : classe TOUTES les requêtes fournies, une entrée par requête, sans en écarter "
+    "aucune — même la plus générique. C'est un jeu de MESURE, pas un tri : une requête "
+    "que tu omettrais fausserait la mesure.")
+_DEBUT_REGLE = "RÈGLE DE SÉLECTION"
+_FIN_REGLE = "Écarte le reste sans le signaler."
+
+
+def _system_prompt(classer_toutes: bool) -> str:
+    """Le prompt du produit, ou sa variante de mesure. Les bornes sont cherchées dans le
+    texte : si le paragraphe est réécrit sans elles, `.index` LÈVE — mieux vaut un test
+    rouge qu'une calibration qui trierait en silence."""
+    if not classer_toutes:
+        return SYSTEM_PROMPT
+    debut = SYSTEM_PROMPT.index(_DEBUT_REGLE)
+    fin = SYSTEM_PROMPT.index(_FIN_REGLE) + len(_FIN_REGLE)
+    return SYSTEM_PROMPT[:debut] + _REGLE_CLASSER_TOUT + SYSTEM_PROMPT[fin:]
+
+
+_APOSTROPHES = str.maketrans({"\u2019": "'", "\u2018": "'", "\u02bc": "'",
+                              "`": "'", "\u00b4": "'"})
+
+
+# « anti-stress » et « anti stress » : même requête. Un modèle qui ajoute un tiret
+# faisait sinon écarter une requête RÉELLE comme inventée.
+_TIRETS = str.maketrans({"-": " ", "\u2010": " ", "\u2011": " "})
+
+
 def _norm(s: str) -> str:
-    """Casse, espaces ET accents depouilles. Sans les accents, « carnet suivi glycemie »
-    et « Carnet Suivi Glycemie » (avec accent) passent pour deux requetes distinctes : la
-    dedup ne mordrait pas, et on paierait deux fois la meme SERP en aval."""
-    plat = unicodedata.normalize("NFKD", s or "")
+    """Casse, espaces, accents ET apostrophes depouilles. Sans les accents, « carnet suivi
+    glycemie » et « Carnet Suivi Glycemie » (avec accent) passent pour deux requetes
+    distinctes : la dedup ne mordrait pas, et on paierait deux fois la meme SERP en aval.
+
+    Les apostrophes pour la meme raison, et une de plus : le modele rend volontiers « ’ »
+    la ou la requete reelle porte « ' ». Sans ce repli, « cahier d’ecriture » ne se
+    retrouvait pas dans la liste des requetes donnees, et une requete REELLE etait ecartee
+    comme inventee. C'est aussi la cle d'appariement du jeu de calibration
+    (`build_lowcontent_validation_set._cle`) : une seule regle, pas deux copies."""
+    plat = unicodedata.normalize("NFKD", (s or "").translate(_APOSTROPHES).translate(_TIRETS))
     plat = "".join(c for c in plat if not unicodedata.combining(c))
     return " ".join(plat.lower().split())
 
 
-def build_user_prompt(suggestions, seed, format_cle, n, version) -> str:
+# Budget de REPONSE, pas de facturation : on ne paie que les jetons reellement produits.
+# ~130 jetons par niche mesures sur la forme du schema (requete, niche, format, theme,
+# public, rationale, categorie, satellites, risques) ; 250 laisse la marge d'une rationale
+# bavarde. Le plancher garde le comportement historique des petits runs, le plafond evite
+# de demander un budget que le modele ne tiendrait pas.
+_JETONS_PAR_NICHE = 250
+_JETONS_MARGE = 1000
+_MAX_TOKENS_PLANCHER = 4000
+_MAX_TOKENS_PLAFOND = 16000
+
+
+def _budget_reponse(n: int, n_suggestions: int) -> int:
+    """`max_tokens` dimensionne sur ce que le modele doit RENDRE. Fige a 4000, il tenait
+    12 niches et tronquait 31 : les dernieres niches disparaissaient, et leurs requetes
+    se lisaient ensuite comme ecartees par un filtre qui n'y etait pour rien."""
+    attendues = min(n, n_suggestions) if n_suggestions else n
+    return max(_MAX_TOKENS_PLANCHER,
+               min(_MAX_TOKENS_PLAFOND, attendues * _JETONS_PAR_NICHE + _JETONS_MARGE))
+
+
+def build_user_prompt(suggestions, seed, format_cle, n, version,
+                      classer_toutes: bool = False) -> str:
     """Deux modes, UN seul prompt paramétré — comme le compositeur de trio fiction.
 
     Deux prompts distincts divergeraient : c'est exactement ce qui est arrivé aux
@@ -132,8 +195,13 @@ def build_user_prompt(suggestions, seed, format_cle, n, version) -> str:
                       f"complétées par Amazon. Classe-les, n'en invente aucune :")
         for s in suggestions:
             lignes.append(f"- « {s.requete} »")
-        lignes.append(f"\nRetiens au plus {n} requêtes, les plus spécifiques, via l'outil "
-                      f"proposer_niches.")
+        if classer_toutes:
+            lignes.append(f"\nClasse TOUTES ces {len(suggestions)} requêtes, une entrée par "
+                          f"requête, via l'outil proposer_niches. N'en écarte aucune : c'est "
+                          f"un jeu de MESURE, pas un tri.")
+        else:
+            lignes.append(f"\nRetiens au plus {n} requêtes, les plus spécifiques, via "
+                          f"l'outil proposer_niches.")
     else:
         theme_hint = ", ".join(sorted(taxo["familles_themes"]))
         lignes.append(f"\nMODE IDÉATION — aucune graine fournie. Propose {n} trios "
@@ -150,7 +218,9 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
                                suggestions=None, n: int = 12,
                                inclure_saisonnier: bool = False, version: str = "fr_v1",
                                model: str | None = None, client=None, on_usage=None,
-                               progress=None) -> list[LowContentNiche]:
+                               progress=None,
+                               classer_toutes: bool = False,
+                               journal_rejets: list | None = None) -> list[LowContentNiche]:
     """Rend des `LowContentNiche` classées (ou proposées si aucune suggestion).
 
     `format_cle` inconnu LÈVE : les menus étant peuplés depuis la taxo, une clé inconnue ne
@@ -180,18 +250,25 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
     model = model or DEFAULT_MODEL
     resp = client.messages.create(
         model=model,
-        max_tokens=4000,
-        system=SYSTEM_PROMPT,
+        max_tokens=_budget_reponse(n, len(suggestions or [])),
+        system=_system_prompt(classer_toutes),
         tools=[{"name": "proposer_niches",
                 "description": "Renvoie les niches low-content classées ou proposées.",
                 "input_schema": _SCHEMA}],
         tool_choice={"type": "tool", "name": "proposer_niches"},
         messages=[{"role": "user",
-                   "content": build_user_prompt(suggestions, seed, format_cle, n, version)}],
+                   "content": build_user_prompt(suggestions, seed, format_cle, n, version,
+                                                classer_toutes)}],
     )
     if on_usage is not None and getattr(resp, "usage", None) is not None:
         on_usage(getattr(resp.usage, "input_tokens", 0),
                  getattr(resp.usage, "output_tokens", 0), model)
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        # Meme regle que le classifieur fiction : une troncature ne se rattrape pas, et
+        # la taire ferait lire les niches coupees comme des niches ecartees.
+        progress(f"⚠ réponse tronquée (max_tokens) : le modèle n'a pas pu rendre toutes "
+                 f"les niches demandées ({n}). Celles qui manquent n'ont été écartées par "
+                 f"AUCUN filtre — relancer avec moins de requêtes.")
 
     taxo = load_taxonomy(version)
     publics_ok = set(taxo["publics"])
@@ -211,6 +288,22 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
             k = _norm(requete)
             if not requete or k in vues:
                 continue
+            if suggestions:
+                # Le prompt DEMANDE de recopier la requete telle quelle ; ici on l'IMPOSE
+                # (§4.2 : ce qui n'est pas double en code est une intention). Le texte
+                # garde est celui de la requete REELLE, jamais la version reecrite par le
+                # modele — « tresor » corrige en « tresor » accentue sortait sinon de tout
+                # appariement aval.
+                reelle = par_requete.get(k)
+                if reelle is None:
+                    # En mode classement le modele n'invente rien : une requete qu'on ne
+                    # lui a pas donnee est une demande inventee. La garder avec
+                    # source="autocomplete" la presenterait comme observee.
+                    progress(f"  ⚠ écartée : « {requete} » ne fait pas partie des "
+                             f"requêtes données au modèle — en mode classement, il "
+                             f"n'en invente aucune.")
+                    continue
+                requete = reelle.requete
             vues.add(k)
 
             cle = (d.get("format_cle") or "").strip()
@@ -255,17 +348,41 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
                 n_enfants_autocomplete=s.n_enfants if s else 0,
             ))
 
+    # ── Requêtes FOURNIES et non rendues : un tri se compte, une omission se nomme ──
+    # Le recalage verbatim ne voit que ce que le modèle RENDS ; ce qu'il omet disparaissait
+    # sans aucune trace. En mesure, chaque omise est nommée : elle n'a été écartée par aucun
+    # filtre, et le rapport doit pouvoir le dire. En produit, le tri est voulu (règle de
+    # sélection) — on le compte, parce qu'un tri silencieux se lit comme un rayon vide.
+    if suggestions:
+        omises = [s.requete for s in suggestions if _norm(s.requete) not in vues]
+        if omises and classer_toutes:
+            progress(f"  ⚠ {len(omises)} requête(s) fournie(s) NON classée(s) par le "
+                     f"modèle : " + ", ".join(f"« {r} »" for r in omises)
+                     + " — ni un filtre ni un gate ne les a écartées.")
+        elif omises:
+            progress(f"{len(omises)} requête(s) fournie(s) non retenue(s) par le "
+                     f"classement (règle de sélection, ou plafond de {n}).")
+
     # ── Filtre IP REJOUÉ après le modèle : il peut réintroduire une marque de lui-même ──
     out, rejets = filtrer_ip(out)
     for niche, terme in rejets:
         progress(f"  ⚠ écartée après classement (marque « {terme} ») : "
                  f"« {niche.requete_amazon} »")
+        # Une requête PROPRE peut tomber ici : le modèle a glissé une marque dans le libellé
+        # ou dans ses satellites. C'est un rejet du FILTRE, pas une absence de mesure — et
+        # l'appelant ne peut pas le deviner en rejouant le filtre sur la seule requête.
+        if journal_rejets is not None:
+            journal_rejets.append({"requete": niche.requete_amazon,
+                                   "cause": "ip_apres_modele", "terme": terme})
     if not inclure_saisonnier:
         gardees = []
         for niche in out:
             if est_saisonnier(niche.requete_amazon, version):
                 progress(f"  ⚠ écartée après classement (saisonnière) : "
                          f"« {niche.requete_amazon} »")
+                if journal_rejets is not None:
+                    journal_rejets.append({"requete": niche.requete_amazon,
+                                           "cause": "saisonnier_apres_modele"})
             else:
                 gardees.append(niche)
         out = gardees

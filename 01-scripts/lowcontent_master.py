@@ -32,6 +32,7 @@ from fiction_serp_provider import enrich_asins as _enrich_asins
 from ip_filter import filtrer_ip
 from lowcontent_ideator import generate_lowcontent_niches as _generate
 from lowcontent_scoring import score_lowcontent
+from fiction_taxonomy import label_rayon
 from lowcontent_taxonomy import est_saisonnier, format_
 from marketplace import ACTIF
 from models import LowContentScored
@@ -79,7 +80,9 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
                          cache_path: str | None = None, cost=None, bsr_pause: float = 0.4,
                          bsr_source: str | None = None, fetch_bsr_fn=None,
                          expand_fn=None, ideate=None, validate=None,
-                         enrich_fn=None) -> list[LowContentScored]:
+                         enrich_fn=None,
+                         classer_toutes: bool = False,
+                         journal_rejets: list | None = None) -> list[LowContentScored]:
     """Scout low-content complet. Rend les niches triées par score décroissant."""
     progress = progress or _noop
     expand_fn = expand_fn or _expand
@@ -88,6 +91,13 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     enrich_fn = enrich_fn or _enrich_asins
     cost = cost if cost is not None else CostTracker()
     load_dotenv()
+
+    # La shortlist est prise PARMI les niches classees : si le modele n'en garde que
+    # `n_ideas`, `n_search` ne peut pas en rendre davantage. Un client qui demandait 20
+    # recherches en obtenait 12, sans message — le contraire exact de `_borner`, qui refuse
+    # plutot que de rogner en silence. C'est toujours UN seul appel LLM, mais sa reponse
+    # grandit avec n — et elle se paie : le devis low-content la compte (`devis._MODELES`).
+    n_ideas = max(n_ideas, n_search)
 
     if format_cle:
         format_(format_cle, version)          # lève AVANT toute dépense
@@ -100,8 +110,17 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     graine = _graine(seed, format_cle, version)
     if graine:
         progress(f"Lecture de ce qu'Amazon complète autour de « {graine} » (gratuit)…")
-        suggestions = expand_fn(graine, depth=depth, alphabet=alphabet,
-                                max_probes=max_probes, cache=cache, progress=progress)
+        try:
+            suggestions = expand_fn(graine, depth=depth, alphabet=alphabet,
+                                    max_probes=max_probes, cache=cache, progress=progress)
+        except Exception as e:  # noqa: BLE001
+            # `expand` absorbe déjà une panne PAR sonde ; il ne lève que si AUCUNE n'a
+            # abouti. Continuer basculerait en idéation sur la graine, c'est-à-dire sur une
+            # demande inventée — et payée. On s'arrête AVANT toute dépense, et on le DIT :
+            # le texte de l'exception, lui, n'atteindra pas l'écran (`_erreur_publique`).
+            progress(f"⚠ Autocomplete Amazon indisponible ({type(e).__name__}) — rien "
+                     f"n'a été dépensé. Relancer dans quelques minutes.")
+            raise RuntimeError("autocomplete Amazon indisponible, aucune dépense") from e
         suggestions, rejets = filtrer_ip(suggestions)
         for s, terme in rejets:
             progress(f"  ⚠ écartée (marque « {terme} ») : « {s.requete} »")
@@ -121,7 +140,8 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     niches = ideate(seed=seed, format_cle=format_cle, suggestions=suggestions or None,
                     n=n_ideas, inclure_saisonnier=inclure_saisonnier, version=version,
                     model=model, on_usage=lambda i, o, m: cost.add_llm(m, i, o),
-                    progress=progress)
+                    progress=progress, classer_toutes=classer_toutes,
+                    journal_rejets=journal_rejets)
     if not niches:
         progress("Scout low-content terminé : aucune niche exploitable.")
         return []
@@ -145,9 +165,17 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
         # En idéation, chaque proposition doit être confrontée à l'arbre AVANT de coûter
         # une SERP : sans ça on paierait pour une demande inventée par le modèle.
         for n in niches:
-            arbre = expand_fn(n.requete_amazon, depth=1, alphabet=False,
-                              max_probes=6, cache=cache, progress=_noop)
-            n.n_enfants_autocomplete = len(arbre)
+            try:
+                arbre = expand_fn(n.requete_amazon, depth=1, alphabet=False,
+                                  max_probes=6, cache=cache, progress=_noop)
+                n.n_enfants_autocomplete = len(arbre)
+            except Exception as e:  # noqa: BLE001
+                # APRÈS l'appel LLM payé : une panne ici tuait le run et perdait les jetons.
+                # `None` = jamais sondée (neutre au scoring) — jamais 0, qui serait une
+                # mesure défavorable.
+                n.n_enfants_autocomplete = None
+                progress(f"  ⚠ sonde en panne sur « {n.requete_amazon} » "
+                         f"({type(e).__name__}) — demande non mesurée.")
         validations = validate(niches, pause=0.4, max_queries=3)
 
     par_requete = {n.requete_amazon: n for n in niches}
@@ -204,7 +232,10 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     union = list(dict.fromkeys(tous_asins))
     if union:
         try:
-            cost.verifier()
+            # PRÉDICTIF, comme la boucle SERP : le poste le plus lourd du run était vérifié à
+            # 0, donc ne refusait qu'APRÈS avoir dépassé. Son tarif est connu d'avance ; le
+            # compte ignore les fiches déjà en cache, c'est un pire cas.
+            cost.verifier(dataforseo_cost_usd(len(union), getattr(provider, "priority", 2)))
             economises = len(tous_asins) - len(union)
             progress(f"Enrichissement de {len(union)} ASIN uniques en UN seul batch "
                      f"({economises} économisé(s) par dédup inter-niches)…")
@@ -221,16 +252,39 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     # BSR_SOURCE=dataforseo : à la borne serveur, 240 ASIN au lieu de 120, soit 0,80 $ au
     # lieu de 0,44 $ sur un plafond de 0,60 $. Le gaspillage était invisible — rien dans le
     # rapport ne montrait qu'un ASIN avait été payé deux fois.
-    rangs = {a: b.bsr for a, b in enrichis.items() if b and b.bsr}
-    subcats = {}
+    # Le rang du RAYON LIVRES seulement. Un carnet est souvent classé « en Fournitures de
+    # bureau » : le parseur LIT ce rang (parse_bsr_rank rend le rang quel que soit le
+    # rayon), et il entrait tel quel dans des seuils calés sur des rangs Livres — deux
+    # classements qui ne se comparent pas (§5.5). Mesuré hors ligne : +0,70 sur le score
+    # global d'un rayon de partitions, assez pour faire passer une « morte » en vert.
+    # Même règle que `EnrichedBook.est_payant_dans` en fiction : rayon + pas de gratuit.
+    rayon_livres = label_rayon("papier", version)
+    rangs = {a: b.bsr for a, b in enrichis.items()
+             if b and b.est_payant_dans(rayon_livres)}
+    hors_livres = [a for a, b in enrichis.items()
+                   if b and b.bsr and not b.est_payant_dans(rayon_livres)]
+    if hors_livres:
+        progress(f"  ⚠ {len(hors_livres)} livre(s) classé(s) hors du rayon Livres (ex. "
+                 f"Fournitures de bureau) ou en gratuit : rang NON comparable, écarté des "
+                 f"seuils BSR.")
+    # Les sous-catégories étaient LUES dans l'enrichissement — et facturées — puis jetées :
+    # le dossier annonçait ensuite « donnée non mesurée ». Converties au schéma que lit
+    # `categories.py` ({category, rank}) ; le parseur des fiches écrit {rang, categorie},
+    # et une recopie brute se ferait écarter en silence. Rayon Livres seulement : une
+    # sous-catégorie de Fournitures de bureau n'est pas une catégorie KDP.
+    subcats = {a: [{"category": s.get("categorie"), "rank": s.get("rang")}
+                   for s in (b.bsr_subcats or []) if s.get("categorie")]
+               for a, b in enrichis.items()
+               if b and b.bsr_subcats and b.est_payant_dans(rayon_livres)}
 
     # Seuls les ASIN que l'enrichissement n'a PAS rendus valent un second passage : un
     # payload atypique est absent du dict (jamais une entrée factice), et leur classement
     # reste récupérable par le canal BSR — gratuit en local. Renoncer pour eux perdrait une
     # mesure encore atteignable ; les redemander TOUS ferait payer deux fois les autres.
     # `not in enrichis`, et NON `not in rangs`. Un livre rendu par l'enrichissement mais
-    # sans BSR lisible (un carnet classe « en Fournitures de bureau », jamais « en
-    # Livres ») repartait en facturation pour un second appel qui, sur le MEME payload, ne
+    # sans rang du rayon Livres (un carnet classe « en Fournitures de bureau » : son rang
+    # est LU, mais ne se compare pas, cf. plus haut) repartait en facturation pour un
+    # second appel qui, sur le MEME payload, ne
     # pouvait rien rendre de plus : parse_asin_bsr est strictement plus stricte que
     # parse_bsr_rank. Gaspillage garanti sterile, et recurrent. Seuls les ASIN ABSENTS du
     # dict valent d'etre re-sondes -- ce que le docstring disait deja, et que le code

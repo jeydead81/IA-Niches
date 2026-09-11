@@ -26,6 +26,23 @@ _ASIN_BASE = "https://api.dataforseo.com/v3/merchant/amazon/asin"
 DEFAULT_LOCATION = ACTIF.location_code    # 2250 = France
 DEFAULT_LANGUAGE = ACTIF.language_code    # "fr_FR" et non "fr" — validé en live
 COST_PER_CALL_USD = {1: 0.0015, 2: 0.003}  # standard (~45 min) / priority (~1 min)
+# Maximum de tâches par task_post, documenté par DataForSEO. Au-delà, les tâches ne sont pas
+# créées : 30 niches low-content × 6 ASIN (180) ou 11 trios fiction × 12 ASIN (132) le
+# franchissaient, et la fin du lot perdait son enrichissement en silence.
+LOT_ASIN_MAX = 100
+
+
+class _Payloads(dict):
+    """`{asin: payload | None}`, plus ce que l'appelant doit IMPUTER : `taches_creees`.
+
+    Un dict ordinaire pour tout le reste, les consommateurs existants n'y voient aucune
+    différence. Le compte vient d'ici parce que c'est le seul endroit qui sait combien de
+    tâches DataForSEO a réellement créées — donc facturées."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.taches_creees = 0
+        self.lots_en_echec: list[tuple[int, str]] = []
 
 
 def _resolve_priority(priority: int | None) -> int:
@@ -155,7 +172,7 @@ class DataForSEOProvider:
 
     def product_raw_batch(self, asins, post_json=None, get_json=None,
                           poll_interval: float = 8, max_polls: int = 40) -> dict:
-        """Payloads ASIN bruts de plusieurs ASIN en un seul task_post (jusqu'à 100), collecte
+        """Payloads ASIN bruts de plusieurs ASIN, par task_post de LOT_ASIN_MAX au plus, collecte
         par poll. Retour : {asin: payload dict|None}. HTTP injectable. Seule boucle de poll —
         product_info_batch et le futur enrichissement fiction (M2) s'y branchent."""
         asins = [a for a in asins if a]
@@ -163,25 +180,43 @@ class DataForSEOProvider:
             return {}
         post_json = post_json or self._post
         get_json = get_json or self._get
-        body = [{"asin": a, "location_code": self.location_code,
-                 "language_code": self.language_code, "priority": self.priority} for a in asins]
-        d = post_json(_ASIN_BASE + "/task_post", body)
-        tasks = d.get("tasks") or []
         pending: dict[str, str] = {}          # task_id -> asin
-        for i, t in enumerate(tasks):
-            if t.get("status_code") not in (20000, 20100) or not t.get("id"):
+        lots_en_echec: list[tuple[int, str]] = []
+        # TOUS les lots partent AVANT la première lecture : la file DataForSEO est par
+        # tâche, ~250 s quel que soit le volume. Poster puis poller lot par lot la ferait
+        # payer une fois par lot — exactement ce que le batch unique existe pour éviter.
+        for debut in range(0, len(asins), LOT_ASIN_MAX):
+            lot = asins[debut:debut + LOT_ASIN_MAX]
+            body = [{"asin": a, "location_code": self.location_code,
+                     "language_code": self.language_code, "priority": self.priority}
+                    for a in lot]
+            try:
+                d = post_json(_ASIN_BASE + "/task_post", body)
+            except Exception as exc:              # noqa: BLE001
+                # Un lot qui échoue à l'ENVOI n'a créé aucune tâche : ses ASIN restent None.
+                # Mais les lots déjà ACCEPTÉS sont facturés : lever ici les abandonnait sans
+                # relecture ni imputation, et le low-content les repayait ensuite par le
+                # canal BSR (famille §5.31). On continue, et on relit ce qui a été créé.
+                lots_en_echec.append((len(lot), type(exc).__name__))
                 continue
-            # task_post SEMBLE faire écho à l'ASIN posté (task["data"]["asin"]) — non
-            # vérifié en live, aucune réponse task_post brute n'est capturée en fixture.
-            # On s'y fie quand l'écho appartient au lot posté, sinon repli sur la position
-            # (comportement d'origine) : un écho hors lot classerait le payload sous une
-            # clé fantôme et le perdrait pour l'ASIN demandé.
-            echo = (t.get("data") or {}).get("asin")
-            pos = asins[i] if i < len(asins) else None
-            a = echo if echo in set(asins) else pos
-            if a:
-                pending[t["id"]] = a
-        out: dict = {a: None for a in asins}
+            tasks = d.get("tasks") or []
+            du_lot = set(lot)
+            for i, t in enumerate(tasks):
+                if t.get("status_code") not in (20000, 20100) or not t.get("id"):
+                    continue
+                # task_post SEMBLE faire écho à l'ASIN posté (task["data"]["asin"]) — non
+                # vérifié en live, aucune réponse task_post brute n'est capturée en
+                # fixture. On s'y fie quand l'écho appartient au lot posté, sinon repli sur
+                # la position DANS LE LOT : un écho hors lot classerait le payload sous une
+                # clé fantôme et le perdrait pour l'ASIN demandé.
+                echo = (t.get("data") or {}).get("asin")
+                pos = lot[i] if i < len(lot) else None
+                a = echo if echo in du_lot else pos
+                if a:
+                    pending[t["id"]] = a
+        out = _Payloads({a: None for a in asins})
+        out.taches_creees = len(pending)      # AVANT le poll, qui vide `pending`
+        out.lots_en_echec = lots_en_echec
         for _ in range(max_polls):
             if not pending:
                 break

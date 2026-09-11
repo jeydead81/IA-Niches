@@ -140,12 +140,16 @@ def test_les_doublons_de_requete_sont_ecartes():
 
 
 def test_n_est_un_plafond_reel():
+    """Les dix requêtes rendues sont des requêtes DONNÉES au modèle. L'ancienne fixture n'en
+    donnait qu'une (« carnet ») et en recevait dix autres : elle ne testait le plafond qu'en
+    violant le contrat du module, et elle a cessé de passer le jour où ce contrat a été
+    imposé en code plutôt que seulement demandé au prompt (§4.2)."""
+    sugg = [_sugg(f"carnet suivi {i}") for i in range(10)]
     client = _FauxClient(_payload(*[
         {"requete_amazon": f"carnet suivi {i}", "format_cle": "journal_suivi",
          "theme": "t", "public": "adulte", "niche": f"n{i}", "rationale": "r",
          "categorie": "c"} for i in range(10)]))
-    out = generate_lowcontent_niches(seed="carnet", suggestions=[_sugg("carnet")],
-                                     n=3, client=client)
+    out = generate_lowcontent_niches(seed="carnet", suggestions=sugg, n=3, client=client)
     assert len(out) == 3
 
 
@@ -167,15 +171,21 @@ def test_une_suggestion_sous_marque_ne_coute_aucun_token():
 
 def test_une_marque_qui_repasse_dans_la_reponse_est_rejouee():
     """Le modèle peut réintroduire une marque de lui-même. Le filtre tourne donc des DEUX
-    côtés de l'appel."""
+    côtés de l'appel.
+
+    Testé en mode IDÉATION, le seul où ce rejeu est la dernière barrière. En mode
+    classement, une requête réécrite en « coloriage disney princesses » n'est plus une des
+    requêtes données : elle est écartée plus tôt, comme inventée, et ce test passerait au
+    vert sans jamais atteindre le filtre qu'il prétend vérifier. D'où l'assertion sur le
+    MOTIF, et pas seulement sur la liste vide."""
+    etapes = []
     client = _FauxClient(_payload({
         "requete_amazon": "coloriage disney princesses", "format_cle": "coloriage_enfant",
         "theme": "princesses", "public": "enfant_3_6", "niche": "n", "rationale": "r",
         "categorie": "c"}))
-    out = generate_lowcontent_niches(seed="coloriage",
-                                     suggestions=[_sugg("coloriage princesses")],
-                                     client=client)
+    out = generate_lowcontent_niches(seed=None, client=client, progress=etapes.append)
     assert out == []
+    assert any("marque" in e for e in etapes), "écartée, mais pas par le filtre IP"
 
 
 def test_le_saisonnier_est_ecarte_sauf_opt_in():

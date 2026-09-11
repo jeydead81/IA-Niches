@@ -22,7 +22,19 @@ import time
 import unicodedata
 from dataclasses import dataclass
 
-from amazon_autocomplete import fetch_suggestions as _fetch_suggestions
+import amazon_autocomplete as _aa
+
+
+def _fetch_suggestions(prefixe: str) -> list[str]:
+    """Sonde STRICTE par défaut : une erreur HTTP LÈVE.
+
+    La version laxiste (`amazon_autocomplete.fetch_suggestions`) avale un 503 et rend []
+    — que `_sonder` lisait « zéro complétion », une MESURE, puis écrivait dans le cache
+    MUTUALISÉ pour 15 jours : tous les comptes lisaient ensuite « Amazon ne complète rien »
+    pour ce préfixe. `_sonder` laisse remonter les exceptions précisément pour ne jamais
+    confondre une panne avec un rayon vide ; encore fallait-il que la panne en soit une.
+    Le module est lu à l'appel (`_aa.`), ce qui garde les monkeypatch des tests efficaces."""
+    return _aa.parse_suggestions(_aa.fetch_json_strict(prefixe))
 
 # 15 jours, comme les autres caches courants. Une traîne de requêtes bouge à l'échelle de
 # la saison, pas de la journée : ce qu'on met en cache ici, c'est ce que les gens
@@ -103,6 +115,7 @@ def expand(seed: str, fetch=None, depth: int = 2, alphabet: bool = True,
 
     vues: set[str] = {_plat(seed)}          # la graine ne peut pas se re-proposer
     sondes = 0
+    pannes: list[Exception] = []
     trouvees: dict[str, Suggestion] = {}    # clé normalisée -> Suggestion
 
     def budget_restant() -> bool:
@@ -117,7 +130,19 @@ def expand(seed: str, fetch=None, depth: int = 2, alphabet: bool = True,
         prefixe, parent, prof = file.pop(0)
         if not budget_restant():
             break
-        sugg = _sonder(prefixe, fetch, cache, progress)
+        try:
+            sugg = _sonder(prefixe, fetch, cache, progress)
+        except Exception as exc:          # noqa: BLE001 — voir le commentaire
+            # Une sonde en panne n'est PAS une mesure : rien n'est mis en cache (`_sonder`
+            # lève avant d'écrire), et le parent garde `n_enfants=None`. Mais UNE panne sur
+            # 80 sondes ne tue plus le run. C'était la régression du passage à la sonde
+            # stricte : un 503 passager consommait l'unité de plafond du client sans rien
+            # lui rendre, là où le run continuait avant (§5.29 inversé).
+            sondes += 1
+            pannes.append(exc)
+            if pause and sondes < max_probes:
+                time.sleep(pause)
+            continue
         sondes += 1
         if pause and sondes < max_probes:
             time.sleep(pause)
@@ -142,6 +167,14 @@ def expand(seed: str, fetch=None, depth: int = 2, alphabet: bool = True,
                                       parent=trouvees[kp].parent,
                                       profondeur=trouvees[kp].profondeur,
                                       n_enfants=enfants_retenus)
+
+    if pannes and len(pannes) == sondes:
+        # AUCUNE sonde n'a abouti. Rendre [] se lirait « pas de traîne », et le master
+        # basculerait en idéation sur la graine — sur une demande inventée. On lève.
+        raise pannes[-1]
+    if pannes:
+        progress(f"⚠ {len(pannes)} sonde(s) en panne sur {sondes} — traîne partielle, "
+                 f"rien n'a été mis en cache pour elles.")
 
     out = sorted(trouvees.values(), key=lambda s: (s.profondeur, s.requete))
     progress(f"{len(out)} requête(s) réelle(s) trouvée(s) en {sondes} sonde(s) "

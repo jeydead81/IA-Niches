@@ -296,7 +296,10 @@ def test_le_BSR_est_lu_dans_l_enrichissement_et_non_re_paye():
         return BsrInfo(rank_livres=8000, asin=asin)
 
     def enrich_avec_bsr(asins, **kw):
-        return {a: EnrichedBook(asin=a, title=f"T{a}", bsr=7777,
+        # bsr_rayon="Livres" : un rang lu sur une vraie fiche Livres porte son rayon
+        # (fiction_books.py:139), et le moteur ne compare plus aux seuils Livres un
+        # rang dont le rayon est illisible.
+        return {a: EnrichedBook(asin=a, title=f"T{a}", bsr=7777, bsr_rayon="Livres",
                                 publisher="Independently published",
                                 publication_date="2026-06-01", price=11.99, pages=120)
                 for a in asins}
@@ -320,7 +323,7 @@ def test_les_ASIN_non_enrichis_sont_les_seuls_a_etre_re_sondes():
     def enrich_partiel(asins, **kw):
         # un seul ASIN exploitable sur les trois de la premiere niche
         garde = list(asins)[:1]
-        return {a: EnrichedBook(asin=a, title="T", bsr=1234) for a in garde}
+        return {a: EnrichedBook(asin=a, title="T", bsr=1234, bsr_rayon="Livres") for a in garde}
 
     _run(enrich_fn=enrich_partiel, fetch_bsr_fn=bsr_espion)
     assert demandes and all(d not in ("car0",) for d in demandes[:0] or [])
