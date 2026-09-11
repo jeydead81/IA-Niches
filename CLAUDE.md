@@ -1,4 +1,4 @@
-# CLAUDE.md — IA-Niches (v2, branche `v2-refonte-ideator`)
+# CLAUDE.md — IA-Niches (v2, branche `main`)
 
 > Fichier de contexte permanent, lu en priorité à chaque ouverture du dépôt.
 > Il s'adresse à l'agent et au développeur, pas à l'utilisateur final.
@@ -7,9 +7,9 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-07** (994 tests, 49 modules, 34 variables d'env, 18
-> endpoints, `server.py` 1 157 lignes). Références de ligne revérifiées le **2026-08-19**,
-> après les commits
+> Comptages revérifiés le **2026-09-11** (1 038 tests, 49 modules, 34 variables d'env, 18
+> endpoints, `server.py` 1 157 lignes). Références de ligne revérifiées le **2026-08-22**
+> (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
 > unique).
@@ -64,7 +64,7 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
 mais rien n'est déployé) : FastAPI (`web/server.py`, **1 157 lignes,
 18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-09-07) + un unique
-`web/index.html` de **118 946 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
+`web/index.html` de **125 534 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
 page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
 page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
 externe ».
@@ -481,10 +481,7 @@ extrapolé / estimé.** `ENDPOINTS` couvre bien les **18** routes actuelles et `
 sur `INSCRIPTIONS_OUVERTES` et `COOKIE_SECURE` ; deux tests le tiennent
 (`tests/test_tutoriel_pdf.py:100,118`) en lisant `web/server.py` et les `os.getenv` du code comme
 source de vérité plutôt qu'en figeant une liste. **Trous connus, non couverts par ces
-tests** : (a) `ENV_VARS` ne couvre que **22 des 33** variables lues — il ignore `HOST`, `PORT`,
-`APP_ENV`, `JOBS_MODE`, `WORKER_REPOS_S`, `WORKER_CONCURRENCE`, `RUNS_SIMULTANES_MAX`,
-`PLAFOND_USD_PAR_RUN`, `DEBIT_APPELS_MAX`, `LOWCONTENT_IDEATOR_MODEL` et
-`LOWCONTENT_VERDICT_MODEL`, parce que le test ne vérifie que le sens « documenté ⇒ lu » et jamais
+tests** : (a) `ENV_VARS` ne couvre que **27 des 34** variables lues — il ignore `DEBIT_APPELS_MAX`, `LOWCONTENT_IDEATOR_MODEL`, `LOWCONTENT_VERDICT_MODEL`, `PLAFOND_USD_PAR_RUN`, `RUNS_SIMULTANES_MAX`, `WORKER_CONCURRENCE` et `WORKER_REPOS_S`, parce que le test ne vérifie que le sens « documenté ⇒ lu » et jamais
 l'inverse ; (b) `DEPLOIEMENT` contenait une entrée « Utiliser les travaux asynchrones, pas les
 endpoints SSE » qui référençait des endpoints **supprimés** — corrigée le 2026-08-22. Les `PIEGES`, le `GLOSSAIRE` et
 `DEPLOIEMENT` ne sont vérifiés par personne.
@@ -547,8 +544,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**994 tests** collectés sur **84 fichiers** `tests/test_*.py`, **994 passés, 0 ignoré**,
-aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-07 ; la suite avait connu
+**1038 tests** collectés sur **87 fichiers** `tests/test_*.py`, **1038 passés, 0 ignoré**,
+aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-11, trois fois de suite ; la suite avait connu
 des échecs INTERMITTENTS, cf. §5.33).
 
 **« 0 ignoré » est la moitié importante de cette ligne, et elle a coûté cher à établir.**
@@ -591,7 +588,95 @@ Deux modes du CLI : `--gabarit` écrit un classeur pré-découpé par famille (8
 × 4 lignes, liste déroulante sur la colonne d'étiquette) ; `--xlsx` sonde gratuitement
 chaque requête puis lance le run payant **sur ces requêtes-là** et écrit le rapport JSON.
 Plafond de dépense explicite (`--plafond`, 2 $ par défaut). Coût d'un jeu de 30 requêtes :
-~0,15-0,25 $ selon le cache — **estimation, pas une mesure.**
+au pire **~0,80 $ pour 31 requêtes sur un poste résidentiel, ~1,35 $ avec `BSR_SOURCE=dataforseo`** (`devis.cout_max_estime`, cache vide : une SERP et
+six fiches ASIN par requête, plus un appel LLM) — **calculé, pas mesuré**. L'estimation de
+« 0,15-0,25 $ » écrite ici au départ ne sortait d'aucun calcul et était fausse d'un facteur 3.
+**Durée : les SERP partent UNE PAR UNE** (`lowcontent_master`, phase 3) — 40 à 250 s chacune,
+donc 20 min à 2 h pour 30 requêtes selon la file DataForSEO. `--inclure-saisonnier` fait scorer
+les requêtes saisonnières au lieu de les écarter : le filtre saisonnier est un réglage du
+PRODUIT, pas un seuil qu'on calibre.
+
+**Relu avant le premier run réel, le jeu de 31 requêtes de Baptiste a fait apparaître cinq
+défauts silencieux, tous invisibles à 12 requêtes** (`tests/test_calibration_31_requetes.py`) :
+(1) l'ideator ne FORÇAIT pas la requête verbatim — le prompt le demandait, le code gardait le
+texte réécrit par le modèle (« tresor » accentué), qui sortait ensuite de l'appariement et
+remontait comme un faux négatif attribué au gate gratuit ; (2) une requête inventée en mode
+classement était gardée avec `source="autocomplete"`, soit une demande inventée présentée comme
+observée ; (3) `max_tokens=4000` fixe et `stop_reason` jamais lu — 31 niches tronquaient en
+silence ; (4) `n_ideas` (12) plafonnait la shortlist sans message, ce qui touchait AUSSI le
+produit — un client demandant 20 recherches en obtenait 12 ; (5) la CLI plantait APRÈS la
+dépense et AVANT d'écrire le rapport (`total_usd` formaté comme un attribut alors que c'est une
+méthode, et « 🟢 » / « ⚠ » imprimés sur une sortie cp1252). Le JSON s'écrit désormais avant
+toute ligne d'affichage.
+
+**Puis un pré-mortem adversarial (4 angles, chaque constat soumis à un réfutateur) en a trouvé
+cinq autres, que la répétition à blanc ne pouvait pas voir — son faux modèle rendait TOUT ce
+qu'on lui donnait** (`tests/test_calibration_premortem.py`) :
+
+1. **La RÈGLE DE SÉLECTION du prompt** (« ne retiens que les requêtes à DEUX spécificateurs…
+   écarte le reste sans le signaler ») faisait trier au modèle le jeu qu'on veut mesurer : une
+   quinzaine des 31 requêtes, surtout les « morte ». Elle est voulue dans le PRODUIT (l'arbre
+   rend 80 requêtes) et fausse pour une MESURE. `classer_toutes=True` — imposé par la CLI,
+   jamais optionnel — REMPLACE ce paragraphe (deux consignes opposées dans un même prompt,
+   c'est laisser le modèle choisir) ; toute requête fournie et non rendue est nommée, et en
+   produit le tri est au moins compté. Le rapport sépare `ecartees_*` (filtre IP ou
+   saisonnier, recalculés avec les MÊMES fonctions que le moteur) de `non_rendues` (omises,
+   tronquées, plafond) : aucun gate ne joue en mode classement, les verser dans `ecartees_*`
+   les faisait passer pour des rejets « pour zéro centime » alors qu'elles étaient dans un
+   prompt payé. **Une « morte » non scorée ferme la porte** : « aucune morte en vert » est
+   INDÉCIDABLE pour elle, pas satisfait (règle 3).
+2. **Plus de 100 ASIN en un seul task_post** : la limite DataForSEO tronquait la fin du lot en
+   silence — et la FICTION du produit y était exposée (11 trios × 12 = 132).
+   `product_raw_batch` poste par lots de `LOT_ASIN_MAX=100`, **tous AVANT la première
+   lecture** : la file est par tâche, poster puis poller lot par lot la ferait payer une fois
+   par lot.
+3. **Un rang « Fournitures de bureau » lu comme un rang « Livres »** : `parse_bsr_rank` rend le
+   rang quel que soit le rayon, et un carnet est souvent classé hors Livres. +0,70 mesuré sur
+   un score global, assez pour faire passer une morte en vert (§5.5). Seul le rang du rayon
+   Livres hors gratuits entre dans les seuils — même règle que `est_payant_dans` en fiction.
+   **Un rang au rayon illisible non plus** : l'écarter ne coûte qu'une absence de mesure, le
+   garder pouvait valoir +2 en demande.
+4. **Une sonde autocomplete en panne lue comme « zéro complétion »** : `expand` prenait la
+   version laxiste par défaut, qui avale un 503 et rend `[]` — écrit ensuite dans le cache
+   MUTUALISÉ pour 15 jours, donc « Amazon ne complète rien » pour tous les comptes. La sonde
+   STRICTE est désormais le défaut (`_sonder` laissait déjà remonter les exceptions ; encore
+   fallait-il que la panne en soit une). Côté calibration, une niche à demande non mesurée
+   sort du Spearman (`n_demande_non_mesuree`) : son axe demande reposait sur un minimum
+   inventé (`demand_score=1`).
+5. **Les sous-catégories lues — et facturées — dans le batch ASIN, puis jetées** : le dossier
+   low-content annonçait « donnée non mesurée ». Elles sont reprises, converties au schéma
+   `{category, rank}` que lit `categories.py` (le parseur des fiches écrit `{rang, categorie}`,
+   et une recopie brute se ferait écarter en silence). Rayon Livres seulement.
+
+**Enfin, une revue adversariale du CORRECTIF lui-même (4 angles, 16 agents) a trouvé ce qu'il
+cassait ou corrigeait à moitié** (`tests/test_calibration_revue.py`) :
+
+1. **La sonde stricte tuait le job du produit** — le défaut le plus grave, confirmé par les
+   quatre angles. Passer l'autocomplete en strict pour ne plus écrire une panne dans le cache
+   mutualisé faisait remonter UN seul 503 parmi 80 sondes jusqu'au job : échec, unité de
+   plafond consommée, rien à l'écran — là où le run continuait avant. §5.29 inversé par un
+   correctif de §5.10. **La sonde reste stricte ; c'est `expand` qui absorbe une panne PAR
+   SONDE** (rien en cache, parent à `n_enfants=None`, pannes annoncées) et ne lève que si
+   AUCUNE n'aboutit. Le master s'arrête alors AVANT toute dépense et le dit — continuer
+   basculerait en idéation sur la graine, c'est-à-dire sur une demande inventée. En
+   idéation, la re-sonde de chaque proposition (APRÈS l'appel LLM payé) pose `None` au lieu
+   de tuer le run. Les tests tournent sur le MASTER avec la sonde par défaut : ceux d'avant
+   appelaient `expand` isolé, la régression leur était invisible.
+2. **Un lot ASIN qui échoue abandonnait le lot déjà facturé.** Le découpage par 100 posait un
+   nouveau cas : 2e envoi qui lève → sortie avant tout poll → les 100 tâches du 1er lot, créées
+   donc facturées, ni relues ni imputées, puis repayées par le canal BSR. Un lot en échec est
+   désormais sauté et annoncé, les autres sont relus, et `enrich_asins` impute
+   `taches_creees` (le seul endroit qui sait ce que DataForSEO a réellement créé) — le pire
+   cas si la relecture elle-même lève.
+3. **La porte ne se fermait que pour une voie sur trois.** Une « morte » à SERP tombée
+   (« ⚪ », jamais verte, mais son score n'a jamais vu le rayon) ou à demande non mesurée est
+   aussi indécidable qu'une morte omise. `mortes_indecidables` réunit les trois voies.
+4. **Un rejet du filtre IP APRÈS le modèle** (marque glissée dans le libellé ou les
+   satellites d'une requête propre) finissait en « non rendue ». Il ne se devine pas en
+   rejouant le filtre sur la requête : l'ideator le remonte par `journal_rejets`.
+5. **Le devis ignorait que la réponse du modèle grandit avec n** (poste lu dans l'ideator et
+   la grille de `cost_tracker`, jamais recopié), et l'enrichissement — le poste le plus lourd
+   — était vérifié à 0 : il ne refusait qu'APRÈS avoir dépassé. Il est désormais prédictif.
 
 **Porte du plan, conjointe : Spearman ≥ 0,5 ET aucune requête « morte » en 🟢.** Une
 corrélation honnête qui recommande quand même un rayon mort ferait publier dans le vide.
@@ -788,8 +873,8 @@ sont désormais : `DATA_DIR`, `APP_ENV`, `HOST`/`PORT`, `JOBS_MODE`).
 | `KDP_KEYWORDS_MODEL` | `claude-sonnet-5` (`kdp_keywords.py:19`) | non |
 | `FICTION_IDEATOR_MODEL` | `claude-sonnet-5` (`fiction_ideator.py:34`) | non |
 | `FICTION_CLASSIFIER_MODEL` | `claude-sonnet-5` (`fiction_classifier.py:15`). **Ne pas rétrograder** : Haiku 4.5 mesuré à 42 % d'accord contre 80 % requis | non |
-| `LOWCONTENT_IDEATOR_MODEL` | `claude-sonnet-5` (`lowcontent_ideator.py:30`). **Absente de `.env.example`** | non |
-| `LOWCONTENT_VERDICT_MODEL` | `claude-sonnet-5` (`lowcontent_verdict.py:24`). **Absente de `.env.example`** | non |
+| `LOWCONTENT_IDEATOR_MODEL` | `claude-sonnet-5` (`lowcontent_ideator.py:30`). | non |
+| `LOWCONTENT_VERDICT_MODEL` | `claude-sonnet-5` (`lowcontent_verdict.py:24`). | non |
 | `MARKETPLACE` | `"fr"` (`marketplace.py`). Toute autre valeur **LÈVE**, `"com"` compris : il est décrit et déclaré non prêt (§2.15). Valeur vide → retombe sur `fr`, un `MARKETPLACE=` étant un oubli et non une demande de bascule | non |
 | `APP_ENV` | non défini. `"prod"` est LA variable d'exposition : elle déclenche `_verifier_config_prod` (qui exige `BSR_SOURCE=dataforseo`), **exige `DATA_DIR`** et fait écouter `0.0.0.0`. Refus de démarrer sur une configuration dangereuse, jamais un défaut silencieux | non |
 | `JOBS_MODE` | `"thread"` (`web/server.py:110`). `"worker"` fait que `POST /api/jobs` **empile seulement** : sans ce garde, serveur ET worker exécuteraient le même job — deux fois les SERP, deux fois les tokens | non |
@@ -1093,7 +1178,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 453 tests sans réseau.
+   paramètre — c'est ce qui tient les 1038 tests sans réseau.
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
    un échec partiel ni arrondir un coût vers le bas. Distinguer toujours un chiffre mesuré d'un

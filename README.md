@@ -109,11 +109,12 @@ des fiches Amazon se fait en expressions régulières pures, cf. `amazon_product
 est **conservé** : importé par `01-scripts/fiction_validation.py` **et** trois fichiers de tests
 (`test_build_validation_set.py`, `test_fiction_validation.py`, `test_validate_classifier.py`).
 
-### Variables d'environnement — les 33 lues par le code
+### Variables d'environnement — les 34 lues par le code
 
-`.env.example` en documente **29** : il lui manque `HOST`, `PORT`, `LOWCONTENT_IDEATOR_MODEL` et
-`LOWCONTENT_VERDICT_MODEL`. Deux tests (`tests/test_tutoriel_pdf.py`) tiennent l'invariant, mais
-dans un seul sens — **documenté ⇒ lu**. Rien ne vérifie l'inverse, d'où ces quatre trous.
+`.env.example` les documente **toutes** depuis le 2026-09-07. Deux tests
+(`tests/test_tutoriel_pdf.py`) tiennent l'invariant, mais dans un seul sens —
+**documenté ⇒ lu**. Rien ne vérifie l'inverse : la couverture complète est tenue à la
+main, et peut se dégrader au prochain ajout sans qu'aucun test ne le dise.
 
 **Obligatoires**
 
@@ -139,8 +140,9 @@ Les défauts vides ne font pas échouer le démarrage : l'échec survient au pre
 |---|---|---|
 | `BSR_SOURCE` | `scrape` | `scrape` = fiche amazon.fr grattée gratuitement depuis l'IP locale. `dataforseo` = batché, payant, fiable en datacenter. Toute autre valeur lève `ValueError`. |
 | `DATAFORSEO_PRIORITY` | `2` | `2` = file rapide (~1-4 min, 0,003 $/appel). `1` = file standard, moitié prix, jusqu'à ~45 min. Valeur invalide → avertissement + repli sur 2. |
-| `HOST` | `127.0.0.1` | Lue par le bloc `__main__` de `web/server.py` uniquement (pas par `uvicorn server:app`). Absente de `.env.example`. |
-| `PORT` | `8000` | Idem. Valeur non entière → repli silencieux sur 8000. Absente de `.env.example`. |
+| `HOST` | **déduit** : `0.0.0.0` si `APP_ENV=prod`, `127.0.0.1` sinon | Une valeur explicite prime toujours. Lue par le bloc `__main__` de `web/server.py` uniquement. En conteneur, écouter la boucle locale rend le service injoignable **sans la moindre erreur** (CLAUDE.md §2.17). |
+| `PORT` | `8000` | Idem. Valeur non entière → repli silencieux sur 8000. Les plateformes imposent le leur. |
+| `DATA_DIR` | `99-logs/` | Où vivent les cinq bases. **EXIGÉE dès `APP_ENV=prod`** : sans volume persistant, les bases disparaissent à chaque mise en ligne, sans aucun signal — le serveur refuse donc de démarrer (CLAUDE.md §2.17). |
 
 **Choix des modèles** — toutes valent `claude-sonnet-5` par défaut.
 
@@ -151,8 +153,8 @@ Les défauts vides ne font pas échouer le démarrage : l'échec survient au pre
 | `KDP_KEYWORDS_MODEL` | Mots-clés backend KDP. |
 | `FICTION_IDEATOR_MODEL` | Ideator fiction (trios). |
 | `FICTION_CLASSIFIER_MODEL` | Classifieur de quatrièmes. **Ne pas rétrograder** : Haiku 4.5 mesuré à 42 % d'accord contre 80 % requis. |
-| `LOWCONTENT_IDEATOR_MODEL` | Classement des requêtes low-content. **Absente de `.env.example`.** |
-| `LOWCONTENT_VERDICT_MODEL` | Verdict low-content. **Absente de `.env.example`.** |
+| `LOWCONTENT_IDEATOR_MODEL` | Classement des requêtes low-content. |
+| `LOWCONTENT_VERDICT_MODEL` | Verdict low-content. |
 
 **Charge, dépense et exécution**
 
@@ -164,7 +166,7 @@ Les défauts vides ne font pas échouer le démarrage : l'échec survient au pre
 | `JOBS_MODE` | `thread` | `worker` fait que `POST /api/jobs` **empile seulement**. Sans ce garde, serveur ET worker exécuteraient le même job : deux fois les SERP, deux fois les tokens. |
 | `WORKER_CONCURRENCE` | `5` | Taille du pool de `worker.py`. |
 | `WORKER_REPOS_S` | `2.0` | Attente entre deux `claim_next` quand la file est vide. |
-| `APP_ENV` | non défini | `prod` déclenche `_verifier_config_prod`, qui **refuse de démarrer** sur une configuration dangereuse en exposition. |
+| `APP_ENV` | non défini | `prod` est LA variable d'exposition : `_verifier_config_prod` (exige `BSR_SOURCE=dataforseo`), `DATA_DIR` exigée, écoute sur `0.0.0.0`. **Refus de démarrer** sur une configuration dangereuse, jamais un défaut silencieux. |
 | `MARKETPLACE` | `fr` | Toute autre valeur **LÈVE au démarrage**, `com` compris. Voir §10. |
 
 **Message de fin d'analyse** — éteint par défaut, il faut `NOTIFICATIONS_EMAIL` **et** `SMTP_HOST`.
@@ -243,7 +245,7 @@ serait une régression économique silencieuse.
 ### Interface web (usage normal)
 
 Ouvre `http://127.0.0.1:8000` — adresse et port surchargeables par `HOST` / `PORT` (§2). Page
-unique (`web/index.html`, 118 946 octets, CSS + JS inline, zéro build, aucun `<script src>` ni
+unique (`web/index.html`, 125 534 octets, CSS + JS inline, zéro build, aucun `<script src>` ni
 `<link>`) : écran de connexion, **trois onglets** — non-fiction, fiction avec compositeur de trio,
 low-content avec sélecteur de format —, progression en direct (SSE reconnectable), tableau de
 niches dépliable, glossaire contextuel et **pastille d'aide « ? » fixe** ouvrant un mini-tutoriel
@@ -560,7 +562,7 @@ jusqu'à ~45 min d'attente.
 | Scout fiction, 3 trios | 0,153 $ | 0,113 $ | mesuré |
 | Scout fiction, 8 trios | 0,409 $ | 0,299 $ | extrapolé |
 | Scout low-content, 6 niches | ~0,05 $ | ~0,03 $ | **estimé** — aucune mesure datée |
-| Jeu de calibration low-content, 30 requêtes | 0,15-0,25 $ | — | **estimé**, selon le cache |
+| Jeu de calibration low-content, 31 requêtes | ~0,80 $ au pire (poste résidentiel) · ~1,35 $ (`BSR_SOURCE=dataforseo`) | — | **calculé**, jamais mesuré — moins si le cache a déjà vu ces rayons |
 | Verdict éditorial (1 niche) | 0,028 $ | 0,028 $ | mesuré |
 | Mots-clés KDP (1 niche) | ~0,006 $ | ~0,006 $ | **estimé** — aucune mesure datée |
 | Ideator seul, vivier de 30 idées | 0,0459 $ | 0,0459 $ | mesuré (2026-08-03) |
@@ -605,7 +607,7 @@ vides et n'ont jamais été versionnés. `05-prompts/` subsiste avec **un seul**
 `prompt-onebooklab-template.md` : il sert le workflow manuscrit de Baptiste, hors de cet outil, et
 n'est importé par aucun module.
 
-L'arbre ci-dessous liste **les 48 modules `.py` de `01-scripts/`**, groupés par rôle.
+L'arbre ci-dessous liste **les 49 modules `.py` de `01-scripts/`**, groupés par rôle.
 
 ```
 ├── 01-scripts/                # Le moteur
@@ -626,6 +628,7 @@ L'arbre ci-dessous liste **les 48 modules `.py` de `01-scripts/`**, groupés par
 │   ├── niche_verdict.py / kdp_keywords.py / positioning_pdf.py / dossier_pdf.py  # À la demande
 │   ├── auth.py                    # Comptes, mots de passe (scrypt), sessions
 │   ├── cache.py / cost_tracker.py / jobs.py / usage.py / history.py   # Infrastructure
+│   ├── storage.py                 # Source UNIQUE du répertoire des cinq bases (DATA_DIR)
 │   ├── devis.py                   # Estimation du PIRE cas avant de lancer (§7)
 │   ├── worker.py                  # Exécuteur hors serveur, pool + file équitable
 │   ├── notification.py            # Message de fin d'analyse, éteint par défaut
@@ -637,15 +640,15 @@ L'arbre ci-dessous liste **les 48 modules `.py` de `01-scripts/`**, groupés par
 │   ├── fiction_validation.py, build_validation_set.py, validate_classifier.py   # Outillage dev
 │   └── lowcontent_validation.py, build_lowcontent_validation_set.py             # Calibration (§12)
 ├── web/
-│   ├── server.py                  # FastAPI, 18 routes @app, 1 086 lignes
-│   └── index.html                 # UI complète en un fichier (118 946 octets)
+│   ├── server.py                  # FastAPI, 18 routes @app, 1 157 lignes
+│   └── index.html                 # UI complète en un fichier (125 534 octets)
 ├── data/
 │   ├── fiction_taxonomy_fr_v1.json      # 6 sous-genres : source de vérité unique
 │   ├── lowcontent_taxonomy_fr_v1.json   # 36 formats, 8 familles
 │   ├── lowcontent_criteres.json         # Seuils du scoring LC — HYPOTHÈSES tant que §12 n'est pas fait
 │   ├── kdp_print_costs.json             # Barèmes d'impression KDP, en EUROS, avec date de relevé
 │   └── exclusions_ip.md                 # Corpus du filtre IP
-├── tests/                         # 967 tests sur 83 fichiers, tous hors-ligne
+├── tests/                         # 1038 tests sur 87 fichiers, tous hors-ligne
 ├── docs/
 │   ├── spike_fiction_M0.md            # Spike de conception du moteur fiction
 │   ├── pages-publiques/               # Mentions légales, confidentialité, CGV, landing — BROUILLONS
@@ -659,6 +662,7 @@ L'arbre ci-dessous liste **les 48 modules `.py` de `01-scripts/`**, groupés par
 ├── assets/hedgehog.ico            # Icône du raccourci Windows
 ├── .env / .env.example
 ├── pytest.ini · .gitattributes · .gitignore · LICENSE
+├── Procfile · requirements.txt   # Hébergement (le second INCLUT 01-scripts/requirements.txt)
 ├── CLAUDE.md · ROADMAP.md · README.md
 ├── IA-Niches-Web.bat              # Lance le serveur + ouvre le navigateur
 ├── IA-Niches.bat                  # Lance launcher.py (menu CLI antérieur à l'UI web)
@@ -684,11 +688,11 @@ vérifié par personne — et `DEPLOIEMENT` référence encore des endpoints sup
 
 ```bash
 python -m pytest                    # depuis la racine
-python -m pytest --collect-only     # 967 tests collected, 83 fichiers, 0 erreur de collecte
+python -m pytest --collect-only     # 1038 tests collected, 87 fichiers, 0 erreur de collecte
 ```
 
 `pytest.ini` fixe `pythonpath=01-scripts`, `testpaths=tests`, `python_files=test_*.py`,
-`addopts=-q`. **Les 967 tests sont tous hors-ligne** : chaque dépendance lourde (client Anthropic,
+`addopts=-q`. **Les 1038 tests sont tous hors-ligne** : chaque dépendance lourde (client Anthropic,
 provider DataForSEO, fetch HTTP, sonde autocomplete) est injectable par paramètre. Aucune clé API
 n'est nécessaire pour les faire passer. `tests/conftest.py` coupe en plus le SDK et le HTTP sortant
 avant **chaque** test, et réinitialise les états globaux de module (`server._CRENEAUX`) — un
@@ -700,7 +704,7 @@ avec node (skip explicite si node est absent). C'est ce qui distingue un test de
 de comportement — cf. l'encadré du §6, où la présence passait au vert sur des boutons morts.
 
 **TDD non négociable** : les tests d'abord, **en rouge**, avant toute ligne d'implémentation, et on
-vérifie qu'ils échouent pour la BONNE raison. C'est ce qui tient ces 967 tests sans réseau.
+vérifie qu'ils échouent pour la BONNE raison. C'est ce qui tient ces 1038 tests sans réseau.
 
 ---
 
@@ -833,7 +837,7 @@ veille et les dossiers v1 sont supprimés, pas seulement inutilisés.
 Trois moteurs · comptes et sessions · travaux asynchrones avec file équitable · chaîne complète de
 garde-fous de dépense (devis avant lancement, plafond prédictif par run, plafond mensuel atomique
 par utilisateur, bornes de volume, limiteur de débit) · filtre IP juridique · message de fin
-d'analyse · brouillons des pages légales. **967 tests, tous hors ligne.**
+d'analyse · brouillons des pages légales. **1038 tests, tous hors ligne.**
 
 ### L'étape suivante, et elle n'attend que Baptiste
 
@@ -853,7 +857,9 @@ est la référence. Si l'IA choisissait les requêtes à juger, on calibrerait l
 #    Tout étiqueter « bonne » rendrait la corrélation INDÉFINIE : il faut des cas dont on
 #    connaît la réponse aux deux bouts. Les cas limites sont les plus utiles.
 
-# 3. Lancer la mesure (~10 min, ~0,20 $, plafond explicite à 2 $)
+# 3. Lancer la mesure : ~0,80 $ au pire pour 31 requêtes sur ton poste, plafond
+#    explicite à 2 $. Compter 20 min à 2 h : les SERP partent une par une.
+#    --inclure-saisonnier fait scorer les requêtes saisonnières au lieu de les écarter.
 python 01-scripts/build_lowcontent_validation_set.py --xlsx 99-logs/validation-lc.xlsx
 ```
 

@@ -1,6 +1,6 @@
 # ROADMAP — IA-Niches
 
-Mise à jour : **2026-08-22** · branche `main` · dernier commit lu : `cb6d8b8`.
+Mise à jour : **2026-09-11** · branche `main` · dernier commit lu : `6065585`.
 
 **La source de vérité de ce fichier est le code** (`01-scripts/` et `web/`), pas la
 documentation. `README.md` et `CLAUDE.md` sont tenus à la main : en cas de divergence avec le
@@ -18,9 +18,9 @@ projection de plan, pas une mesure. Tout ce document est classé par rapport à 
 
 ### 1.1 Ce qui est livré
 
-Une application web locale mono-page : FastAPI (`web/server.py`, **1 086 lignes, 18 endpoints**
-`@app.` comptés dans le fichier) plus un unique `web/index.html` de **118 946 octets** (CSS et JS
-inline, zéro build), servi par `GET /`. **48 fichiers `.py`** dans `01-scripts/`. L'hôte et le
+Une application web locale mono-page : FastAPI (`web/server.py`, **1 157 lignes, 18 endpoints**
+`@app.` comptés dans le fichier) plus un unique `web/index.html` de **125 534 octets** (CSS et JS
+inline, zéro build), servi par `GET /`. **49 fichiers `.py`** dans `01-scripts/`. L'hôte et le
 port se règlent par `HOST` / `PORT` (défauts inchangés : `127.0.0.1:8000`), lus uniquement sous
 `if __name__ == "__main__"`.
 
@@ -63,8 +63,8 @@ Limite assumée : l'empreinte suit les **noms** de champs, pas les types ni la s
 le sens d'un champ sans le renommer exige de vider le cache à la main. **Quatre autres** bases
 SQLite locales : `jobs.db`, `usage.db`, `history.db`, et désormais `comptes.db`.
 
-**967 tests collectés, verts** (`python -m pytest`, code de sortie 0, relancé le 2026-08-22), sur
-**83 fichiers** `tests/test_*.py`, aucune erreur de collecte. **Tous hors-ligne** : chaque
+**1038 tests collectés, verts** (`python -m pytest`, code de sortie 0, relancé le 2026-09-11), sur
+**87 fichiers** `tests/test_*.py`, aucune erreur de collecte. **Tous hors-ligne** : chaque
 dépendance lourde (client Anthropic, provider DataForSEO, fetch HTTP, sonde autocomplete) est
 injectable par paramètre. Il n'existe **aucun test d'intégration réseau**.
 
@@ -79,8 +79,7 @@ importé par aucun module de `01-scripts/` ni de `web/` — `server.py` n'import
 `positioning_pdf`. C'est un script autonome (`python 01-scripts/tutoriel_pdf.py` régénère les deux
 PDF à la racine). Deux tests de `tests/test_tutoriel_pdf.py` lisent `web/server.py` comme source de
 vérité : sa constante `ENDPOINTS` porte les routes actuelles, `ENV_VARS` ne cite que des variables
-encore lues — mais l'inverse n'est pas vrai : `HOST`, `PORT`, `LOWCONTENT_IDEATOR_MODEL` et
-`LOWCONTENT_VERDICT_MODEL` y manquent, et le test ne vérifie que le sens « documenté ⇒ lu ». Ce
+encore lues — mais l'inverse n'est pas vrai : `DEBIT_APPELS_MAX`, `LOWCONTENT_IDEATOR_MODEL`, `LOWCONTENT_VERDICT_MODEL`, `PLAFOND_USD_PAR_RUN`, `RUNS_SIMULTANES_MAX`, `WORKER_CONCURRENCE` et `WORKER_REPOS_S` y manquent, et le test ne vérifie que le sens « documenté ⇒ lu ». Ce
 n'est pas pour autant « la doc la plus à jour du projet » : ses `PIEGES`, son `GLOSSAIRE` et son
 `DEPLOIEMENT` ne sont vérifiés par personne, et `DEPLOIEMENT` dit encore « Utiliser les travaux
 asynchrones, pas les endpoints SSE » alors que les endpoints SSE n'existent plus — la consigne
@@ -331,7 +330,7 @@ et les **exécute** avec node.
 
 Classé par ordre de blocage. **Par quoi commencer, en une phrase : §2.2, la calibration du scoring
 low-content — c'est le seul chantier qui n'attend que Baptiste, et il tient en une demi-heure de
-saisie plus dix minutes de run.**
+saisie plus un run de 20 min à 2 h, les recherches Amazon partant une par une.**
 
 ### 2.1 Ce qui manque encore à la couche comptes
 
@@ -371,7 +370,7 @@ d'exploitation qui produiront des demandes de support dès le premier client.
 ### 2.2 Calibrer le scoring low-content — LE chantier suivant
 
 **C'est le seul poste bloquant qui n'attend ni décision produit, ni prestataire, ni argent :
-uniquement une demi-heure de saisie de Baptiste et dix minutes de run.**
+uniquement une demi-heure de saisie de Baptiste et un run de 20 min à 2 h.**
 
 Les seuils de `data/lowcontent_criteres.json` — `variantes_max=6`, `part_indie_bonne=0.5`,
 `redevance_min_bonne=2.0`, et les trois bornes BSR reprises telles quelles du non-fiction — n'ont
@@ -404,7 +403,7 @@ python 01-scripts/build_lowcontent_validation_set.py --xlsx 99-logs/validation-l
   coloriages. C'est le vrai risque de sur-ajustement, et il porte sur la règle, pas sur les sujets.
 - **environ un tiers de chaque étiquette.** Tout étiqueter « bonne » rend la corrélation
   mathématiquement **indéfinie** (série constante → `spearman` renvoie `None`, pas 0.0) : on aurait
-  dépensé 0,20 $ pour ne rien mesurer. Les « morte » sont les plus utiles — elles seules testent le
+  dépensé jusqu'à ~0,80 $ pour ne rien mesurer. Les « morte » sont les plus utiles — elles seules testent le
   second critère de la porte.
 - **des cas limites**, où Baptiste hésite entre deux étiquettes : c'est là qu'un scoring se casse.
   Un jeu ne contenant que des évidences ne prouve pas grand-chose.
@@ -507,20 +506,24 @@ Petites, mais chacune ment sur quelque chose.
    **défaut de `_run_scout_job` et `_valider_volumes`, soit 12**, l'UI n'envoyant jamais
    `n_ideas`. Le commentaire dit 10, le produit fait 12. Soit brancher la constante, soit corriger
    le commentaire — mais pas laisser les deux.
-2. **`.env.example` documente 13 variables, le code en lit 15.** Manquent `HOST` et `PORT`
-   (ajoutées par `60e405a`). Le test de `tutoriel_pdf` ne vérifie que le sens « documenté ⇒ lu »,
-   pas l'inverse : l'écart est donc indétectable automatiquement.
-3. **Les bornes de l'UI et celles du serveur divergent sur la fiction.** Le champ `#fic-n` de
-   `web/index.html` a `max="15"`, `MAX_NICHES_FICTION` vaut 20. Sans conséquence de sécurité (le
-   serveur est plus permissif que le client), mais l'utilisateur ne peut pas atteindre la borne
-   réelle.
-4. **`README.md` et `CLAUDE.md` ont été remis à niveau dans le même passage que ce fichier**
-   (2026-08-03) : les trois décrivent le même état du code. Ce point listait auparavant un
-   README périmé — il ne l'était déjà plus au moment où la phrase a été écrite. En cas de
-   divergence future entre les trois, c'est le code qui tranche, jamais le plus récent des
-   documents.
-5. **Un piège de `tutoriel_pdf.PIEGES` cite encore les « endpoints SSE »** comme alternative à
-   éviter. La consigne reste bonne, sa justification n'existe plus.
+2. ~~`.env.example` incomplet~~ — **résolu le 2026-09-07** : il documente les 34 variables lues.
+   Le test de `tutoriel_pdf` ne vérifie toujours que le sens « documenté ⇒ lu » : la
+   couverture complète est tenue à la main, et peut se dégrader au prochain ajout.
+3. ~~Les bornes de l'UI et celles du serveur divergent sur la fiction~~ — **résolu** : `#fic-n`
+   et `MAX_NICHES_FICTION` valent tous deux **11**, et c'est dérivé du plafond de coût (§1.2).
+   Règle à tenir désormais : le serveur ne doit jamais être PLUS STRICT que le formulaire.
+4. **Les trois documents (`README.md`, `CLAUDE.md`, ce fichier) ont été remis à niveau le
+   2026-08-22**, après un audit adversarial doc/code (42 constats confirmés sur 60). En cas de
+   divergence future, c'est le code qui tranche, jamais le plus récent des documents.
+5. ~~L'entrée `DEPLOIEMENT` de `tutoriel_pdf.py` citait les « endpoints SSE » supprimés~~ —
+   **corrigé le 2026-08-22**, les deux PDF racine régénérés.
+6. **Un run qui échoue AVANT toute dépense consomme quand même une unité de plafond.** Cas
+   désormais visible : l'autocomplete Amazon entièrement indisponible arrête un run
+   low-content à la phase 0, à 0 $. L'unité réservée à la création du job reste consommée
+   (chemin d'échec de `web/server.py` : `solder` puis `fail`). La règle « un échec ne
+   rembourse pas » a été pensée pour les runs qui ont DÉJÀ dépensé — sinon un run qui échoue
+   en boucle serait gratuit — et n'a jamais distingué l'échec à 0 $. **Décision produit, non
+   tranchée.**
 
 ### 2.5 Actions hors code, en attente
 
@@ -564,10 +567,13 @@ dépense qui a cessé d'être comptée. Le seul témoin est `usage.db`.
 Aucune de ces pistes n'est arbitrée. Elles sont listées pour qu'un repreneur ne les redécouvre
 pas, pas pour qu'il les implémente.
 
-- **Déploiement.** Aucun Docker, aucun serveur, aucune base partagée : les cinq SQLite sont des
-  fichiers locaux dans `99-logs/`. Héberger impose au minimum `BSR_SOURCE=dataforseo` et une
-  décision sur le stockage. Deux briques nécessaires existent déjà : `HOST`/`PORT` par variable
-  d'environnement, et le drapeau `Secure` du cookie déduit de `X-Forwarded-Proto`.
+- **Déploiement.** Le dépôt est **DÉPLOYABLE depuis le 2026-09-07** (`CLAUDE.md` §2.17) ;
+  rien n'est déployé. Reste à faire chez l'hébergeur, pas dans le code : créer le
+  service, **monter un volume persistant et le pointer par `DATA_DIR`** — sans lui les
+  cinq bases disparaissent à chaque mise en ligne, sans aucun signal —, poser
+  `APP_ENV=prod` et `BSR_SOURCE=dataforseo`, vérifier que le proxy TLS envoie
+  `X-Forwarded-Proto`. `JOBS_MODE=worker` suppose que serveur et worker voient le MÊME
+  `DATA_DIR` : là où un volume ne s'attache qu'à un seul service, rester en `thread`.
 - **Marketplace anglophone.** `search_providers.py` porte déjà `DEFAULT_LOCATION = 2250` et
   `DEFAULT_LANGUAGE = "fr_FR"` en constantes, et `location_code` / `language_code` sont des
   paramètres du provider. Les exposer ouvrirait `amazon.com` / `.co.uk` / `.de` sans réécrire le
