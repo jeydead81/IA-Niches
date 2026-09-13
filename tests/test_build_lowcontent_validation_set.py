@@ -65,9 +65,10 @@ def test_les_ecartees_ne_ferment_PAS_la_porte():
     """Le critère du plan est « Spearman ≥ 0,5 ET aucune morte en vert ». Ajouter un
     troisième critère de mon propre chef ferait passer une intention pour une règle
     (§4.2). Le faux négatif est annoncé fort, il ne bloque pas."""
-    paires = [("bonne", _scored(f"b{i}", 8.0 + i * 0.1)) for i in range(3)]
-    paires += [("mauvaise", _scored(f"m{i}", 6.0 + i * 0.1)) for i in range(3)]
-    paires += [("morte", _scored(f"d{i}", 2.0 + i * 0.1)) for i in range(3)]
+    lu = dict(part_indie=0.7, redevance_estimee=3.1)   # run nominal : le rayon a été lu
+    paires = [("bonne", _scored(f"b{i}", 8.0 + i * 0.1, **lu)) for i in range(3)]
+    paires += [("mauvaise", _scored(f"m{i}", 6.0 + i * 0.1, **lu)) for i in range(3)]
+    paires += [("morte", _scored(f"d{i}", 2.0 + i * 0.1, **lu)) for i in range(3)]
     r = rapport_calibration(paires, ecartees=[("perdue", "bonne")])
     assert r.porte_franchie is True
     assert r.bonnes_perdues_avant_analyse == ["perdue"]

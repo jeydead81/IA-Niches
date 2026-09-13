@@ -681,6 +681,24 @@ cassait ou corrigeait à moitié** (`tests/test_calibration_revue.py`) :
 **Porte du plan, conjointe : Spearman ≥ 0,5 ET aucune requête « morte » en 🟢.** Une
 corrélation honnête qui recommande quand même un rayon mort ferait publier dans le vide.
 
+**Et une condition de DÉCIDABILITÉ, qui n'est pas un troisième critère** (2026-09-13, avant
+le premier run payant) : `n_part_indie_mesuree` et `n_redevance_mesuree` doivent être non
+nuls. Le trou trouvé : un run dont le batch ASIN tombe garde des scores parfaitement
+calculables — la SERP fournit encore titres, prix, concurrents et variantes, et le BSR est
+rattrapé gratuitement par le canal scrape —, donc un **Spearman calculable et une porte qui
+s'ouvre**, alors que `part_indie` et `redevance_estimee` valent `None` partout
+(`redevance_estimee(12.99, None) is None`, vérifié). La calibration aurait affiché « ✅ PORTE
+FRANCHIE » et serait sortie en code 0 sans avoir pu confronter `part_indie_bonne` ni
+`redevance_min_bonne` — deux des trois seuils qu'elle existe POUR régler. Même logique que
+`mortes_indecidables` : indécidable n'est pas satisfait (règle 3). **Le seuil est « au moins
+une »**, jamais une proportion : exiger « la moitié des niches » inventerait un seuil de son
+propre chef (§4.2) ; les deux compteurs sont dans le rapport, c'est Baptiste qui juge si la
+mesure suffit. **Un correctif proposé par l'audit — `n_calibrees == n_requetes` — a été
+ÉCARTÉ après vérification : dans le scénario même qu'il visait, SERP et sonde ayant réussi,
+les 31 niches restent calibrables et la condition ne se déclenche jamais.** Trois fixtures
+existantes ont dû être rendues réalistes (elles décrivaient sans le dire un enrichissement
+tombé) ; **aucune de leurs assertions n'a été touchée**.
+
 Quatre décisions de mesure :
 
 | Décision | Pourquoi |

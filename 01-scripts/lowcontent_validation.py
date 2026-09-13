@@ -235,12 +235,29 @@ def charger_etiquettes(path: str | Path) -> list[RequeteEtiquetee]:
 class RapportCalibration(BaseModel):
     """Ce qui s'archive dans `99-logs/`, à côté du rapport du classifieur fiction.
 
-    `porte_franchie` ne dépend QUE des deux critères du plan. Les `avertissements` — une
-    famille sous-représentée, des SERP tombées — ne la ferment pas : ils disent sur quoi
-    la mesure ne porte pas, ce qui est une information distincte de « le scoring a tort »."""
+    `porte_franchie` porte les deux critères du plan — Spearman ≥ seuil, aucune « morte »
+    en vert — et rien d'autre qui soit un JUGEMENT. S'y ajoute une seule condition, qui
+    n'est pas un troisième critère mais la DÉCIDABILITÉ des deux premiers : un run dont
+    l'enrichissement ASIN est tombé garde des scores calculables — la SERP fournit encore
+    titres, prix, concurrents et variantes, et le BSR est rattrapé gratuitement par le
+    scrape — donc un Spearman parfaitement calculable. Mais `part_indie` et
+    `redevance_estimee` y valent `None` PARTOUT. La porte s'ouvrirait alors sur un run
+    incapable de régler `part_indie_bonne` et `redevance_min_bonne`, deux des trois seuils
+    que cette calibration existe POUR régler, en affichant un ✅ et en sortant en code 0.
+    Même logique que `mortes_indecidables` : indécidable n'est pas satisfait (règle 3).
+
+    Les `avertissements` — une famille sous-représentée, des SERP tombées, une « bonne »
+    perdue avant analyse — ne la ferment PAS : ils disent sur quoi la mesure ne porte pas,
+    ce qui est une information distincte de « le scoring a tort »."""
     n_requetes: int = 0
     n_calibrees: int = 0
     n_non_mesurees: int = 0
+    # Sur combien de niches CALIBRABLES chacun des deux signaux propres au rayon
+    # low-content a pu être lu. « part_indie médiane = 0,7 » ne se lit pas de la même
+    # façon sur neuf niches et sur une : sans ces compteurs, le tableau des signaux est
+    # illisible pour qui règle les seuils.
+    n_part_indie_mesuree: int = 0
+    n_redevance_mesuree: int = 0
     n_par_etiquette: dict[str, int] = Field(default_factory=dict)
 
     spearman: float | None = None
@@ -358,6 +375,13 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
     r.n_calibrees = len(calibrables)
     r.n_non_mesurees = len(paires) - len(serp_ok)
     r.n_demande_non_mesuree = len(serp_ok) - len(calibrables)
+    # Les DEUX signaux qui ne viennent que de l'enrichissement ASIN (§2.11). Les compter
+    # est la seule façon de savoir si la calibration a pu voir ce qu'elle est venue
+    # régler : un batch ASIN tombé laisse les scores calculables, donc le Spearman aussi,
+    # et rien d'autre dans le rapport ne distinguerait ce run d'un run nominal.
+    r.n_part_indie_mesuree = sum(1 for _, s in calibrables if s.part_indie is not None)
+    r.n_redevance_mesuree = sum(1 for _, s in calibrables
+                                if s.redevance_estimee is not None)
     if r.n_demande_non_mesuree:
         r.avertissements.append(
             f"{r.n_demande_non_mesuree} requête(s) écartée(s) du calcul : demande non "
@@ -418,8 +442,20 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                 f"{', '.join(f'{f} ({r.familles[f]})' for f in maigres)} — la "
                 f"calibration ne porte pas sur ces rayons, elle les frôle.")
 
+    if calibrables and not (r.n_part_indie_mesuree and r.n_redevance_mesuree):
+        r.avertissements.append(
+            f"rayon jamais lu : part indie mesurée sur {r.n_part_indie_mesuree} niche(s), "
+            f"redevance sur {r.n_redevance_mesuree}, sur {len(calibrables)} calibrable(s). "
+            f"L'enrichissement ASIN n'a rendu aucune fiche exploitable — les scores "
+            f"restent calculables (la SERP donne titres, prix et concurrents), mais "
+            f"`part_indie_bonne` et `redevance_min_bonne` ne peuvent être réglés sur ce "
+            f"run. Le critère est INDÉCIDABLE, pas satisfait — porte fermée. Relancer : "
+            f"le cache ne repaiera que ce qui manque.")
+
     r.porte_franchie = (r.spearman is not None
                         and r.spearman >= SEUIL_SPEARMAN
                         and not r.morts_en_vert
-                        and not mortes_indecidables)
+                        and not mortes_indecidables
+                        and bool(r.n_part_indie_mesuree)
+                        and bool(r.n_redevance_mesuree))
     return r

@@ -125,7 +125,11 @@ def _paires_alignees():
 
 
 def test_un_scoring_aligne_franchit_la_porte():
-    r = rapport_calibration(_paires_alignees())
+    """Fixture rendue RÉALISTE : un run nominal lit le rayon, donc `part_indie` et
+    `redevance_estimee` existent. Sans ces champs, ce test décrivait sans le dire un run
+    dont l'enrichissement ASIN était tombé — précisément le cas qui ne doit plus ouvrir
+    la porte. L'assertion, elle, n'a pas bougé d'un caractère."""
+    r = rapport_calibration(_paires_lues())
     assert r.spearman is not None and r.spearman >= 0.5
     assert r.morts_en_vert == []
     assert r.porte_franchie is True
@@ -218,6 +222,74 @@ def test_un_rapport_vide_ne_franchit_rien():
     """Zéro requête n'est pas un scoring parfait."""
     r = rapport_calibration([])
     assert r.porte_franchie is False and r.spearman is None
+
+
+# ── Le rayon a-t-il seulement été LU ? ─────────────────────────────────────────
+#
+# Les deux critères du plan (Spearman, aucune morte en vert) se calculent sur
+# `global_score`. Or ce score reste calculable quand l'enrichissement ASIN est tombé : la
+# SERP fournit encore titres, prix, concurrents et variantes, et le BSR est rattrapé
+# gratuitement par le scrape. Ce qui disparaît, ce sont les DEUX signaux propres au rayon
+# low-content — `part_indie` (aucun éditeur lu) et `redevance_estimee` (`None` dès que
+# `pages_median` manque, vérifié : `redevance_estimee(12.99, None) is None`).
+#
+# La porte pouvait donc s'ouvrir sur un run où `part_indie_bonne` et `redevance_min_bonne`
+# — deux des trois seuils que cette calibration existe POUR régler — n'ont été confrontés
+# à aucune niche. C'est la règle 3 appliquée à la porte elle-même : une absence de mesure
+# lue comme un verdict. Le critère n'est pas « la mesure est bonne », c'est « la mesure
+# est DÉCIDABLE » — exactement la logique de `mortes_indecidables`.
+
+def _paires_lues():
+    """Les mêmes scores que `_paires_alignees`, mais sur des niches dont le rayon a
+    réellement été lu. C'est l'état NOMINAL d'un run : l'enrichissement a rendu des
+    fiches, donc des éditeurs et un nombre de pages."""
+    return [(e, _scored(s.global_score, f"{e}{i}", part_indie=0.7,
+                        redevance_estimee=3.1))
+            for i, (e, s) in enumerate(_paires_alignees())]
+
+
+def test_un_rayon_JAMAIS_LU_ne_franchit_pas_la_porte():
+    """Le cas du batch ASIN tombé. Les scores existent, le Spearman est excellent, aucune
+    morte n'est en vert — et pourtant `part_indie` et `redevance` n'ont été mesurées sur
+    AUCUNE niche. Ouvrir la porte ferait caler `part_indie_bonne` et `redevance_min_bonne`
+    sur du vide, en affichant un ✅ et en sortant en code 0."""
+    r = rapport_calibration(_paires_alignees())
+    assert r.spearman >= 0.5 and r.morts_en_vert == []
+    assert r.porte_franchie is False
+    assert any("indie" in a.lower() or "redevance" in a.lower()
+               for a in r.avertissements)
+
+
+def test_un_rayon_LU_franchit_bien_la_porte():
+    """Le contrôle qui empêche le correctif d'être un « toujours fermé » : mêmes scores,
+    mêmes étiquettes, mais l'enrichissement a fonctionné."""
+    r = rapport_calibration(_paires_lues())
+    assert r.spearman >= 0.5
+    assert r.porte_franchie is True
+
+
+def test_UNE_SEULE_niche_lue_suffit_a_rendre_le_critere_DECIDABLE():
+    """Le critère porte sur la DÉCIDABILITÉ, pas sur la qualité. Exiger une proportion
+    (« la moitié des niches ») inventerait un seuil de mon propre chef (§4.2) : c'est le
+    rapport qui dit sur combien de niches chaque signal a été lu, et Baptiste qui juge si
+    ça suffit pour régler `lowcontent_criteres.json`."""
+    paires = _paires_alignees()
+    e, s = paires[0]
+    paires[0] = (e, _scored(s.global_score, "lue", part_indie=0.7,
+                            redevance_estimee=3.1))
+    r = rapport_calibration(paires)
+    assert r.porte_franchie is True
+
+
+def test_le_rapport_COMPTE_sur_combien_de_niches_chaque_signal_a_ete_lu():
+    """Sans ce comptage, « part_indie médiane = 0,7 » ne dit pas s'il porte sur neuf
+    niches ou sur une. C'est ce chiffre-là qui rend le rapport réglable sans moi."""
+    paires = _paires_lues()
+    e, s = paires[0]
+    paires[0] = (e, _scored(s.global_score, "aveugle"))
+    r = rapport_calibration(paires)
+    assert r.n_part_indie_mesuree == 8
+    assert r.n_redevance_mesuree == 8
 
 
 def test_le_rapport_se_serialise_en_json():

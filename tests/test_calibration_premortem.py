@@ -215,7 +215,14 @@ def test_une_morte_NON_SCOREE_ferme_la_porte():
 
 
 def test_une_bonne_non_rendue_ne_ferme_pas_la_porte_mais_se_dit():
-    r = rapport_calibration(_paires_alignees(),
+    """Fixture rendue réaliste : un run nominal a lu le rayon (`part_indie`,
+    `redevance_estimee`). Sans ces champs, elle décrivait un enrichissement ASIN tombé —
+    cas qui ferme désormais la porte pour une tout autre raison, et l'assertion ne
+    porterait plus sur ce qu'elle prétend tester."""
+    paires = [(e, _scored(s.global_score, f"{e}{i}", part_indie=0.7,
+                          redevance_estimee=3.1))
+              for i, (e, s) in enumerate(_paires_alignees())]
+    r = rapport_calibration(paires,
                             non_rendues=[("livre quizz culture générale", "bonne")])
     assert r.porte_franchie is True
     assert r.non_rendues
