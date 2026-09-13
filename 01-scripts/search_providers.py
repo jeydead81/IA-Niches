@@ -32,6 +32,25 @@ COST_PER_CALL_USD = {1: 0.0015, 2: 0.003}  # standard (~45 min) / priority (~1 m
 LOT_ASIN_MAX = 100
 
 
+def _motif_refus(reponse: dict | None, tache: dict | None = None) -> str:
+    """Le motif d'un refus DataForSEO, LA ou il se trouve.
+
+    Un refus de REQUETE est pose dans la tache ; un refus de COMPTE -- compte non verifie
+    (40104), identifiants refuses, solde -- est pose a la RACINE du JSON, sans aucune tache.
+    Ne lire que la tache affichait « task_post refusé : None None » : c'est ce qu'a rendu,
+    trente et une fois, le premier run reel de calibration (2026-09-13), alors que la reponse
+    disait en toutes lettres « Please verify your account ». Le motif le plus precis prime :
+    la tache, puis la racine. Aucun secret n'y figure : c'est le texte de DataForSEO, pas
+    notre requete (qui, elle, porte les identifiants HTTP Basic)."""
+    for source in (tache or {}, reponse or {}):
+        code = source.get("status_code")
+        if code is not None and code not in (20000, 20100):
+            return f"{code} {source.get('status_message')}"
+    racine = reponse or {}
+    return (f"{racine.get('status_code')} {racine.get('status_message')} "
+            f"(aucune tâche rendue)")
+
+
 class _Payloads(dict):
     """`{asin: payload | None}`, plus ce que l'appelant doit IMPUTER : `taches_creees`.
 
@@ -156,7 +175,7 @@ class DataForSEOProvider:
         d = post_json(_BASE + "/task_post", body)
         task = (d.get("tasks") or [{}])[0]
         if task.get("status_code") not in (20000, 20100):
-            raise RuntimeError(f"task_post refusé : {task.get('status_code')} {task.get('status_message')}")
+            raise RuntimeError(f"task_post refusé : {_motif_refus(d, task)}")
         tid = task.get("id")
         for _ in range(max_polls):
             time.sleep(poll_interval)
@@ -200,9 +219,23 @@ class DataForSEOProvider:
                 lots_en_echec.append((len(lot), type(exc).__name__))
                 continue
             tasks = d.get("tasks") or []
+            if d.get("status_code") not in (None, 20000, 20100) or not tasks:
+                # Refus de COMPTE (non verifie, identifiants, solde) : pose a la RACINE, sans
+                # aucune tache. Rien n'est cree, donc rien n'est facture -- mais le batch
+                # rendait des payloads vides SANS dire pourquoi, ce qu'un solde epuise en
+                # cours de run aurait produit a l'identique. Le motif part a l'ecran par
+                # `lots_en_echec`, que `enrich_asins` annonce deja.
+                lots_en_echec.append((len(lot), _motif_refus(d)))
+                continue
             du_lot = set(lot)
+            refusees: dict[str, int] = {}
             for i, t in enumerate(tasks):
-                if t.get("status_code") not in (20000, 20100) or not t.get("id"):
+                if t.get("status_code") not in (20000, 20100):
+                    # Refus PAR TACHE : saute en silence jusqu'ici. Compte, avec son motif.
+                    motif = _motif_refus({}, t)
+                    refusees[motif] = refusees.get(motif, 0) + 1
+                    continue
+                if not t.get("id"):
                     continue
                 # task_post SEMBLE faire écho à l'ASIN posté (task["data"]["asin"]) — non
                 # vérifié en live, aucune réponse task_post brute n'est capturée en
@@ -214,6 +247,7 @@ class DataForSEOProvider:
                 a = echo if echo in du_lot else pos
                 if a:
                     pending[t["id"]] = a
+            lots_en_echec.extend((n, motif) for motif, n in refusees.items())
         out = _Payloads({a: None for a in asins})
         out.taches_creees = len(pending)      # AVANT le poll, qui vide `pending`
         out.lots_en_echec = lots_en_echec

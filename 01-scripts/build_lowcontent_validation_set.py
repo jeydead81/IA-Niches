@@ -201,8 +201,15 @@ def _imprimer(r: RapportCalibration) -> None:
         for h in r.hors_taxonomie:
             print(f"    · « {h['requete']} » → {h['libelle_observe'] or '(sans libellé)'}")
     print()
-    print("  ✅ PORTE FRANCHIE" if r.porte_franchie else
-          "  ❌ porte NON franchie — corriger data/lowcontent_criteres.json, jamais le code")
+    if r.porte_franchie:
+        print("  ✅ PORTE FRANCHIE")
+    elif r.porte_indecidable:
+        # Une porte fermée faute de mesure ne dit RIEN des seuils. Le premier run réel
+        # (2026-09-13) conseillait ici de les corriger avec 0 niche calibrée.
+        print("  ⚪ porte INDÉCIDABLE — mesure incomplète (voir les avertissements) : "
+              "relancer, sans toucher à data/lowcontent_criteres.json")
+    else:
+        print("  ❌ porte NON franchie — corriger data/lowcontent_criteres.json, jamais le code")
 
 
 def main(argv: list[str] | None = None) -> int:

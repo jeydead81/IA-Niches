@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-11** (1 038 tests, 49 modules, 34 variables d'env, 18
+> Comptages revérifiés le **2026-09-13** (1 056 tests, 49 modules, 34 variables d'env, 18
 > endpoints, `server.py` 1 157 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -544,8 +544,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1038 tests** collectés sur **87 fichiers** `tests/test_*.py`, **1038 passés, 0 ignoré**,
-aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-11, trois fois de suite ; la suite avait connu
+**1056 tests** collectés sur **88 fichiers** `tests/test_*.py`, **1056 passés, 0 ignoré**,
+aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-13 ; la suite avait connu
 des échecs INTERMITTENTS, cf. §5.33).
 
 **« 0 ignoré » est la moitié importante de cette ligne, et elle a coûté cher à établir.**
@@ -698,6 +698,29 @@ mesure suffit. **Un correctif proposé par l'audit — `n_calibrees == n_requete
 les 31 niches restent calibrables et la condition ne se déclenche jamais.** Trois fixtures
 existantes ont dû être rendues réalistes (elles décrivaient sans le dire un enrichissement
 tombé) ; **aucune de leurs assertions n'a été touchée**.
+
+**Premier run RÉEL, le 2026-09-13 : refusé en bloc — et c'est ce refus qui a fait apparaître
+deux défauts** (`tests/test_calibration_run_refuse.py`). Compte DataForSEO neuf, non VÉRIFIÉ :
+toute requête réelle répond `40104` (« Please verify your account »), posé à la RACINE du
+JSON, sans aucune tâche. Coût : 0 $ chez DataForSEO, **0,0905 $ chez Anthropic** — le
+classement part avant la première SERP, et `lowcontent_ideator` n'a aucun cache, donc une
+relance le repaie. **`appendix/user_data` répond `20000` sur un compte non vérifié : il prouve
+l'authentification, pas le droit d'utiliser l'API.** `appendix/errors`, gratuit lui aussi,
+renvoie bien `40104` : c'est lui qui discrimine. Les deux défauts :
+(1) **le motif du refus était jeté.** `search` ne lisait que `tasks[0]` et a affiché
+« task_post refusé : None None » trente et une fois ; `product_raw_batch` ne levait rien, ne
+créait aucune tâche et ne disait pas pourquoi — exactement ce qu'un solde épuisé en cours de
+run produirait. `_motif_refus` (`search_providers.py`) lit la tâche, puis la racine ; le batch
+verse les refus de compte ET les refus par tâche dans `lots_en_echec`, qu'`enrich_asins`
+annonce déjà. Ce motif est le texte de DataForSEO — il ne porte aucun identifiant — mais il
+apparaît aussi dans la progression de l'interface web et y nomme le fournisseur.
+(2) **La CLI conseillait « corriger data/lowcontent_criteres.json » avec 0 niche calibrée** :
+suivi, ce conseil réglait les seuils sur rien. `RapportCalibration.porte_indecidable` (défaut
+PESSIMISTE `True`) sépare une porte fermée faute de mesure complète d'une porte fermée PAR la
+mesure ; seule la seconde renvoie aux critères. Choix assumé : un Spearman calculé et mauvais
+reste indécidable si une « morte » manque. Le code de sortie ne change pas (2 dans les deux
+cas). **Écarté par Baptiste** : un contrôle préalable gratuit par `appendix/errors`, avant
+l'appel Anthropic, qui aurait économisé les 0,0905 $.
 
 Quatre décisions de mesure :
 
@@ -1196,7 +1219,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1038 tests sans réseau.
+   paramètre — c'est ce qui tient les 1056 tests sans réseau.
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
    un échec partiel ni arrondir un coût vers le bas. Distinguer toujours un chiffre mesuré d'un

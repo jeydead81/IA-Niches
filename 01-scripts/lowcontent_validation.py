@@ -264,6 +264,12 @@ class RapportCalibration(BaseModel):
     seuil_spearman: float = SEUIL_SPEARMAN
     morts_en_vert: list[str] = Field(default_factory=list)
     porte_franchie: bool = False
+    # INDÉCIDABLE n'est pas ÉCHOUÉE. Vrai quand la porte est fermée faute de mesure COMPLÈTE
+    # (SERP tombées, « morte » non vérifiable, rayon jamais lu) : relancer, et surtout ne PAS
+    # toucher à `lowcontent_criteres.json`. Seule une porte fermée par une mesure complète dit
+    # que les seuils ont tort. Défaut PESSIMISTE, comme `concurrence_mesuree=False` : un
+    # rapport vierge n'a rien mesuré.
+    porte_indecidable: bool = True
 
     # Distribution des signaux par étiquette — c'est CE tableau qui sert à régler
     # `lowcontent_criteres.json`. Sans lui on ajusterait un seuil au hasard.
@@ -458,4 +464,12 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                         and not mortes_indecidables
                         and bool(r.n_part_indie_mesuree)
                         and bool(r.n_redevance_mesuree))
+    # Le conseil « corriger les critères » ne vaut que sur une mesure COMPLÈTE. Un Spearman
+    # calculé mais mauvais, alors qu'une « morte » manque, reste indécidable : régler les
+    # seuils là-dessus, c'est risquer de les régler sur ce qui manquait. Le premier run réel
+    # (2026-09-13, 0 niche calibrée) affichait « corriger data/lowcontent_criteres.json » —
+    # un conseil qui, suivi, réglait les seuils sur rien.
+    r.porte_indecidable = not r.porte_franchie and (
+        r.spearman is None or bool(mortes_indecidables)
+        or not (r.n_part_indie_mesuree and r.n_redevance_mesuree))
     return r
