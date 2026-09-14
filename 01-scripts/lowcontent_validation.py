@@ -50,6 +50,45 @@ SEUIL_VERT = 7.5               # miroir de lowcontent_scoring : « 🟢 À analy
 
 _ENTETES = ["requete", "famille", "etiquette", "note"]
 
+# Ce qu'une relance TELLE QUELLE ne corrige pas. Le rapport du run 4 promettait « le cache ne
+# repaiera que ce qui manque » : il resservait en fait les 185 fiches LUES par un parseur qui
+# ne trouvait pas la pagination, et le 5e run aurait rendu le même rapport pour ~0,08 $.
+_RELANCE_TELLE_QUELLE = (
+    "Relancer tel quel ne corrige rien : SERP et fiches déjà rendues sont servies par le "
+    "cache pendant 15 j, telles qu'elles ont été LUES ; le classement Anthropic sera repayé "
+    "s'il n'a pas pu être gardé en cache.")
+
+
+class SondeIndisponible(RuntimeError):
+    """La sonde autocomplete est restée muette APRÈS une re-sonde gratuite, là où la porte
+    serait CERTAINEMENT indécidable : toutes les requêtes, ou au moins une « morte ».
+
+    Levée AVANT l'appel Anthropic. Continuer payait le classement, puis les SERP et les
+    fiches, pour un rapport dont la conclusion était connue d'avance : « aucune morte en
+    vert » ne se vérifie pas sur une morte dont la demande n'a pas été mesurée
+    (`mortes_indecidables`). Une « bonne » ou une « mauvaise » muette ne bloque pas : elle
+    sort du calcul et se compte (`n_demande_non_mesuree`), c'est Baptiste qui juge (§2.14)."""
+
+    def __init__(self, requetes: list[str], mortes: list[str]):
+        self.requetes = list(requetes)
+        self.mortes = list(mortes)
+        if mortes:
+            detail = (f"{len(mortes)} requête(s) « morte » non sondée(s) : "
+                      + ", ".join(f"« {m} »" for m in mortes)
+                      + " — « aucune morte en vert » serait INDÉCIDABLE")
+        else:
+            detail = f"les {len(requetes)} requêtes sont restées non sondées"
+        super().__init__(f"sonde autocomplete muette après une re-sonde : {detail}")
+
+
+def requetes_non_sondees(etiquetees: list["RequeteEtiquetee"], mesures: dict,
+                         cle=None) -> list["RequeteEtiquetee"]:
+    """Les requêtes du classeur dont la sonde n'a rendu AUCUNE mesure (`None`, jamais 0 :
+    zéro complétion est une mesure). `cle` est la règle d'appariement de l'appelant — la
+    CLI passe la sienne, qui est celle de l'ideator."""
+    cle = cle or (lambda r: " ".join((r or "").lower().split()))
+    return [e for e in etiquetees if mesures.get(cle(e.requete)) is None]
+
 
 # ── Spearman ───────────────────────────────────────────────────────────────────
 
@@ -294,6 +333,15 @@ class RapportCalibration(BaseModel):
     n_demande_non_mesuree: int = 0
     hors_taxonomie: list[dict[str, str]] = Field(default_factory=list)
     avertissements: list[str] = Field(default_factory=list)
+    # Sur combien de niches calibrables la pagination a été lue : sans elle, « redevance
+    # non mesurée » ne dit pas si la cause est le prix ou les pages.
+    n_pages_mesurees: int = 0
+    # Un rapport REJOUÉ hors ligne (`--rejouer`) : les seuils essayés l'ont été sur le jeu
+    # même, il ne peut donc jamais franchir la porte (voir `rejouer_entrees`).
+    rejeu: bool = False
+    # Devis calculé AVANT toute dépense par la CLI, et dossier des captures du run.
+    devis: dict | None = None
+    dossier_captures: str = ""
 
 
 def _est_vert(s: LowContentScored) -> bool:
@@ -312,15 +360,37 @@ def _mediane(valeurs: list[float | None]) -> float | None:
     return median(connus) if connus else None
 
 
+def _compteurs_diagnostic(lot: list[LowContentScored], c: dict) -> dict:
+    """R20 — combien de niches d'une étiquette ont TOUCHÉ chaque bonus ou malus. Sans seuil
+    ni effet sur la porte : « bonne 7/7 au bonus, morte 8/9 » se lit, et c'est Baptiste qui
+    juge — une proportion d'alerte serait un critère inventé (§2.14).
+
+    Mêmes comparaisons que `score_lowcontent` (>= pour part indie et récents, > pour crit3) :
+    à tenir ensemble si le scoring change."""
+    parts = [s.part_indie for s in lot if s.part_indie is not None]
+    return {
+        "n_bonus_part_indie": sum(1 for p in parts if p >= c["part_indie_bonne"]),
+        "part_indie_min": min(parts) if parts else None,
+        "part_indie_max": max(parts) if parts else None,
+        "n_crit3": sum(1 for s in lot if s.bsr_worst is not None
+                       and s.bsr_worst > c["bsr_crit3_place_a_prendre_min"]),
+        "n_malus_recents": sum(1 for s in lot if s.part_moins_12_mois is not None
+                               and s.part_moins_12_mois >= c["part_recents_afflux"]),
+    }
+
+
 def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                         familles: list[str] | None = None,
                         ecartees: list[tuple[str, str]] | None = None,
                         version: str = "fr_v1",
-                        non_rendues: list[tuple[str, str]] | None = None
-                        ) -> RapportCalibration:
+                        non_rendues: list[tuple[str, str]] | None = None,
+                        criteres: dict | None = None) -> RapportCalibration:
     """`paires` = (étiquette de Baptiste, niche scorée par le moteur), dans le même ordre
     que `familles` si elle est fournie. `ecartees` = (requête, étiquette) des requêtes
-    perdues avant la moindre dépense."""
+    perdues avant la moindre dépense. `criteres` ne sert qu'aux compteurs de diagnostic
+    (défaut : `data/lowcontent_criteres.json`) ; il n'entre pas dans la porte."""
+    from lowcontent_scoring import charger_criteres
+    c = criteres or charger_criteres()
     r = RapportCalibration(n_requetes=len(paires) + len(ecartees or [])
                            + len(non_rendues or []))
     if familles is not None and len(familles) != len(paires):
@@ -388,6 +458,7 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
     r.n_part_indie_mesuree = sum(1 for _, s in calibrables if s.part_indie is not None)
     r.n_redevance_mesuree = sum(1 for _, s in calibrables
                                 if s.redevance_estimee is not None)
+    r.n_pages_mesurees = sum(1 for _, s in calibrables if s.pages_median is not None)
     if r.n_demande_non_mesuree:
         r.avertissements.append(
             f"{r.n_demande_non_mesuree} requête(s) écartée(s) du calcul : demande non "
@@ -407,7 +478,7 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
             f"{len(mortes_indecidables)} requête(s) « morte » NON vérifiable(s) (omise, SERP "
             f"tombée ou demande non mesurée) : " + ", ".join(mortes_indecidables)
             + ". Le critère « aucune morte en vert » est INDÉCIDABLE pour elles, pas "
-              "satisfait — porte fermée. Relancer : le cache ne repaiera que ce qui manque.")
+              "satisfait — porte fermée. " + _RELANCE_TELLE_QUELLE)
     if r.n_non_mesurees:
         r.avertissements.append(
             f"{r.n_non_mesurees} requête(s) écartée(s) du calcul : concurrence non "
@@ -434,7 +505,20 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
             "bsr_best": _mediane([float(s.bsr_best) for s in lot
                                   if s.bsr_best is not None]),
             "part_bsr_ok": sum(1 for s in lot if s.criteres_bsr_ok) / len(lot),
+            # R25 — médianes des QUATRE axes. Le Spearman porte sur le score global : une
+            # étiquette peut être mal ordonnée sur un axe et bien placée au total.
+            "demande": _mediane([s.demande for s in lot]),
+            "penetration": _mediane([s.penetration for s in lot]),
+            "rentabilite": _mediane([s.rentabilite for s in lot]),
+            "faisabilite": _mediane([s.faisabilite for s in lot]),
+            **_compteurs_diagnostic(lot, c),
         }
+    if r.signaux:
+        r.avertissements.append(
+            "diagnostics par étiquette (compteurs de bonus, médianes d'axes) : sans seuil et "
+            "sans effet sur la porte. Ne pas régler les seuils BSR ou de demande à partir du "
+            "Spearman global : il porte sur le score entier, où pénétration et rentabilité "
+            "font aussi descendre « mauvaise ».")
 
     if familles is not None:
         for f in familles_taxonomie(version):
@@ -449,14 +533,28 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                 f"calibration ne porte pas sur ces rayons, elle les frôle.")
 
     if calibrables and not (r.n_part_indie_mesuree and r.n_redevance_mesuree):
-        r.avertissements.append(
-            f"rayon jamais lu : part indie mesurée sur {r.n_part_indie_mesuree} niche(s), "
-            f"redevance sur {r.n_redevance_mesuree}, sur {len(calibrables)} calibrable(s). "
-            f"L'enrichissement ASIN n'a rendu aucune fiche exploitable — les scores "
-            f"restent calculables (la SERP donne titres, prix et concurrents), mais "
-            f"`part_indie_bonne` et `redevance_min_bonne` ne peuvent être réglés sur ce "
-            f"run. Le critère est INDÉCIDABLE, pas satisfait — porte fermée. Relancer : "
-            f"le cache ne repaiera que ce qui manque.")
+        if not r.n_part_indie_mesuree:
+            r.avertissements.append(
+                f"rayon jamais lu : part indie mesurée sur {r.n_part_indie_mesuree} "
+                f"niche(s), redevance sur {r.n_redevance_mesuree}, sur {len(calibrables)} "
+                f"calibrable(s). L'enrichissement ASIN n'a rendu aucune fiche exploitable — "
+                f"les scores restent calculables (la SERP donne titres, prix et "
+                f"concurrents), mais `part_indie_bonne` et `redevance_min_bonne` ne peuvent "
+                f"être réglés sur ce run. Le critère est INDÉCIDABLE, pas satisfait — porte "
+                f"fermée. " + _RELANCE_TELLE_QUELLE)
+        else:
+            # Le run 4 : éditeur lu sur 31 niches, redevance sur 0. Les fiches ÉTAIENT là ;
+            # c'est leur LECTURE qui manquait la pagination. « Aucune fiche exploitable »
+            # faisait chercher une panne d'enrichissement, et « relancer » rachetait le
+            # même rapport.
+            r.avertissements.append(
+                f"redevance jamais calculée : fiches LUES (éditeur mesuré sur "
+                f"{r.n_part_indie_mesuree} niche(s), pagination sur {r.n_pages_mesurees}), "
+                f"redevance sur {r.n_redevance_mesuree}, sur {len(calibrables)} "
+                f"calibrable(s). Cause côté LECTURE (prix ou pagination), pas côté marché : "
+                f"à diagnostiquer avant de relancer — relancer rend les mêmes fiches. "
+                f"`redevance_min_bonne` ne peut être réglé sur ce run : critère INDÉCIDABLE, "
+                f"porte fermée. " + _RELANCE_TELLE_QUELLE)
 
     r.porte_franchie = (r.spearman is not None
                         and r.spearman >= SEUIL_SPEARMAN
@@ -473,3 +571,68 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
         r.spearman is None or bool(mortes_indecidables)
         or not (r.n_part_indie_mesuree and r.n_redevance_mesuree))
     return r
+
+
+# ── Rejeu hors ligne des entrées archivées (R26) ───────────────────────────────
+
+def entrees_vers_arguments(entree: dict) -> dict:
+    """Une entrée du journal (`run_lowcontent_scout(journal_entrees=…)`) redevient les
+    arguments EXACTS de `score_lowcontent`, date comprise : `part_recents` lit la date du
+    jour, et un rejeu un autre jour rescorerait autre chose que le run."""
+    from models import EnrichedBook, LowContentNiche, NicheValidation, SearchResult
+    return dict(
+        niche=LowContentNiche.model_validate(entree["niche"]),
+        validation=NicheValidation.model_validate(entree["validation"]),
+        search=(None if entree.get("search") is None
+                else SearchResult.model_validate(entree["search"])),
+        livres=[EnrichedBook.model_validate(b) for b in entree.get("livres") or []],
+        bsrs=list(entree.get("bsrs") or []),
+        bsr_map=dict(entree.get("bsr_map") or {}),
+        subcats_map=dict(entree.get("subcats_map") or {}),
+        aujourdhui=entree.get("aujourdhui"))
+
+
+def _liste_entrees(entrees) -> list[dict]:
+    return list(entrees.get("entrees") or []) if isinstance(entrees, dict) else list(entrees)
+
+
+def rescorer_entrees(entrees, criteres: dict | None = None
+                     ) -> list[tuple[dict, LowContentScored]]:
+    """Rescore chaque niche archivée avec `criteres` (défaut : le fichier courant). Aucun
+    fournisseur, aucun modèle, aucun réseau : c'est ce qui rend un réglage de seuil
+    essayable sans repayer un run."""
+    from lowcontent_scoring import score_lowcontent
+    return [(e, score_lowcontent(**entrees_vers_arguments(e), criteres=criteres))
+            for e in _liste_entrees(entrees) if e.get("type") == "niche"]
+
+
+def rejouer_entrees(entrees, criteres: dict | None = None,
+                    version: str = "fr_v1") -> RapportCalibration:
+    """Le rapport de calibration recalculé sur les entrées archivées.
+
+    **Il ne franchit JAMAIS la porte.** Un seuil réglé en regardant ce jeu-ci, puis validé
+    sur ce même jeu, mesure l'ajustement, pas le terrain. La porte que le rejeu AURAIT
+    ouverte est dite en avertissement ; la franchir exige un nouveau run payant."""
+    if isinstance(entrees, dict):
+        version = entrees.get("version") or version
+    liste = _liste_entrees(entrees)
+    paires, familles = [], []
+    for e, s in rescorer_entrees(liste, criteres=criteres):
+        if e.get("etiquette") in ETIQUETTES:
+            paires.append((e["etiquette"], s))
+            familles.append(e.get("famille", ""))
+    ecartees = [(e["requete"], e["etiquette"]) for e in liste if e.get("type") == "ecartee"]
+    non_rendues = [(e["requete"], e["etiquette"]) for e in liste
+                   if e.get("type") == "non_rendue"]
+    r = rapport_calibration(paires, familles=familles, ecartees=ecartees,
+                            non_rendues=non_rendues, version=version, criteres=criteres)
+    aurait_franchi = r.porte_franchie
+    r.rejeu, r.porte_franchie, r.porte_indecidable = True, False, True
+    r.avertissements.insert(0, (
+        "REJEU hors ligne : la porte AURAIT été franchie avec ces critères. Réglés sur ce "
+        "jeu même, ils ne s'y valident pas — un nouveau run payant est nécessaire."
+        if aurait_franchi else
+        "REJEU hors ligne : aucune porte ne se franchit sur le jeu qui a servi à régler "
+        "les seuils."))
+    return r
+

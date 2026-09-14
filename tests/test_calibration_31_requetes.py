@@ -193,6 +193,9 @@ def test_le_rapport_est_ECRIT_meme_si_l_affichage_plante(tmp_path, monkeypatch):
     """L'ordre compte. Le run a coûté de l'argent réel : le JSON doit exister avant la
     moindre ligne décorative, sinon une panne d'affichage efface la seule trace du run."""
     import build_lowcontent_validation_set as cli
+    # Isole le VRAI df-cache.db : la CLI chiffre desormais un devis en lisant le cache, et ce
+    # test ne doit pas dependre de ce que le poste a deja achete.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "donnees"))
     monkeypatch.setattr(cli, "construire_rapport", lambda *a, **k: _rapport_parlant())
 
     def plante(_r):
@@ -212,6 +215,9 @@ def test_la_CLI_passe_sur_une_sortie_cp1252_avec_un_vrai_CostTracker(tmp_path, m
     Windows redirigée encode en cp1252, où ni « 🟢 » ni « ⚠ » n'existent. Les deux levaient
     après la dépense. On passe le vrai `CostTracker` : c'est lui que le run utilisera."""
     import build_lowcontent_validation_set as cli
+    # Isole le VRAI df-cache.db : la CLI chiffre desormais un devis en lisant le cache, et ce
+    # test ne doit pas dependre de ce que le poste a deja achete.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "donnees"))
     monkeypatch.setattr(cli, "construire_rapport", lambda *a, **k: _rapport_parlant())
     tampon = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
     monkeypatch.setattr(sys, "stdout", tampon)
@@ -226,6 +232,9 @@ def test_le_filtre_saisonnier_se_leve_EXPLICITEMENT_pour_la_calibration(tmp_path
     Une requête saisonnière étiquetée n'a de valeur pour la calibration que si elle est
     SCORÉE. Le défaut reste celui du produit ; le lever est une décision visible."""
     import build_lowcontent_validation_set as cli
+    # Isole le VRAI df-cache.db : la CLI chiffre desormais un devis en lisant le cache, et ce
+    # test ne doit pas dependre de ce que le poste a deja achete.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "donnees"))
     vus = []
     monkeypatch.setattr(cli, "construire_rapport",
                         lambda *a, **k: vus.append(k) or RapportCalibration())

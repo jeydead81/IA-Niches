@@ -159,7 +159,7 @@ def test_la_calibration_IMPOSE_classer_toutes():
 
     construire_rapport([RequeteEtiquetee(requete="kakuro adulte", famille="grilles",
                                          etiquette="mauvaise")],
-                       run=run, sonde=lambda rs, **kw: [])
+                       run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert vus.get("classer_toutes") is True
 
 
@@ -172,7 +172,7 @@ def test_une_requete_OMISE_par_le_classement_n_est_PAS_imputee_au_gate():
                             etiquette="mauvaise"),
            RequeteEtiquetee(requete="carnet a", famille="carnets", etiquette="bonne")]
     r = construire_rapport(etq, run=lambda **kw: [_scored(8.0, "carnet a")],
-                           sonde=lambda rs, **kw: [])
+                           sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert r.ecartees_correctement == []
     assert r.non_rendues == [{"requete": "livre de coloriage dinosaure",
                               "etiquette": "mauvaise"}]
@@ -182,7 +182,7 @@ def test_une_requete_REELLEMENT_filtree_reste_imputee_au_filtre():
     from build_lowcontent_validation_set import construire_rapport
     etq = [RequeteEtiquetee(requete="coloriage pat patrouille", famille="coloriage",
                             etiquette="morte")]
-    r = construire_rapport(etq, run=lambda **kw: [], sonde=lambda rs, **kw: [])
+    r = construire_rapport(etq, run=lambda **kw: [], sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert r.ecartees_correctement == ["coloriage pat patrouille"]
     assert r.non_rendues == []
 
@@ -193,9 +193,9 @@ def test_le_saisonnier_leve_n_est_plus_impute_au_filtre():
     from build_lowcontent_validation_set import construire_rapport
     etq = [RequeteEtiquetee(requete="livre escape game enfant noel", famille="jeux",
                             etiquette="bonne")]
-    avec_filtre = construire_rapport(etq, run=lambda **kw: [], sonde=lambda rs, **kw: [],
+    avec_filtre = construire_rapport(etq, run=lambda **kw: [], sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs],
                                      inclure_saisonnier=False)
-    sans_filtre = construire_rapport(etq, run=lambda **kw: [], sonde=lambda rs, **kw: [],
+    sans_filtre = construire_rapport(etq, run=lambda **kw: [], sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs],
                                      inclure_saisonnier=True)
     assert avec_filtre.bonnes_perdues_avant_analyse == ["livre escape game enfant noel"]
     assert sans_filtre.bonnes_perdues_avant_analyse == []

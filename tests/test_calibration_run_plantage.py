@@ -153,6 +153,9 @@ def _classeur(tmp_path):
 
 def _lancer(tmp_path, monkeypatch, capsys, exception):
     import build_lowcontent_validation_set as cli
+    # Isole le VRAI df-cache.db : la CLI chiffre desormais un devis en lisant le cache, et ce
+    # test ne doit pas dependre de ce que le poste a deja achete.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "donnees"))
 
     def construire(*a, cost=None, **k):
         cost.add_llm("claude-sonnet-5", 6000, 8750)    # l'appel Anthropic est revenu

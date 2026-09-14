@@ -8,7 +8,10 @@ reviendrait à ne plus jamais tester le chemin réel."""
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "web"))
+import pytest
+
+_RACINE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_RACINE / "web"))
 
 MDP_TEST = "un-mot-de-passe-solide"
 
@@ -53,3 +56,26 @@ def ouvrir_session(client, email: str = "test@example.com") -> str:
                     json={"email": email, "mot_de_passe": MDP_TEST})
     assert r.status_code == 201, r.text
     return r.json()["user_id"]
+
+
+@pytest.fixture(autouse=True)
+def _calibration_hors_des_donnees_reelles(monkeypatch, tmp_path):
+    """Deux gardes de COMPORTEMENT pour la CLI de calibration, posés sur TOUS les tests.
+
+    - Les captures de run partent sous `tmp_path`, jamais dans le vrai `99-logs/captures/`.
+    - Une purge dont le cache résolu est le vrai `99-logs/df-cache.db` LÈVE avant d'ouvrir
+      quoi que ce soit. L'ancien garde cherchait `--cache` dans les 160 caractères précédant
+      l'option, dans un seul fichier : une liste d'arguments rangée dans une variable, ou un
+      appel écrit ailleurs, passait. Le garde vit ici, dans le harnais de TEST — dans le code
+      de production il interdirait à Baptiste la purge qu'il a décidée (R2, voie A)."""
+    import build_lowcontent_validation_set as cli
+    monkeypatch.setattr(cli, "RACINE_CAPTURES", tmp_path / "captures", raising=False)
+    vrai = (_RACINE / "99-logs" / "df-cache.db").resolve()
+    reelle = cli.purger_fiches_sans_pages
+
+    def purge_gardee(requetes, chemin_cache, *a, **k):
+        if Path(chemin_cache).resolve() == vrai:
+            raise AssertionError(f"un test vise le vrai cache mutualisé : {vrai}")
+        return reelle(requetes, chemin_cache, *a, **k)
+    monkeypatch.setattr(cli, "purger_fiches_sans_pages", purge_gardee)
+

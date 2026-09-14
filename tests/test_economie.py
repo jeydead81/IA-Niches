@@ -152,8 +152,13 @@ def test_un_ASIN_sans_BSR_est_memorise_pour_ne_pas_etre_re_paye():
             self.lots = []
 
         def product_info_batch(self, asins):
+            # La fiche a été LUE, sans classement : c'est cette mesure-là, et elle seule,
+            # qui se mémorise. Un batch qui n'a rien lu (panne, lot refusé) n'écrit rien.
+            from search_providers import _Payloads
             self.lots.append(list(asins))
-            return {a: None for a in asins}
+            lu = _Payloads({a: None for a in asins})
+            lu.lus = set(asins)
+            return lu
 
     prov = _PCompteur()
     espion = _CacheEspion()

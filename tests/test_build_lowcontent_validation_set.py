@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from autocomplete_expand import Suggestion
 from build_lowcontent_validation_set import construire_rapport, sonder
 from lowcontent_validation import RequeteEtiquetee, rapport_calibration
 from models import LowContentNiche, LowContentScored
@@ -131,7 +132,7 @@ def _run_factice(scores):
 def test_le_rapport_apparie_etiquette_et_score_par_requete():
     etq = [_etq("carnet a", "bonne"), _etq("mots meles seniors", "morte", "jeux_esprit")]
     run = _run_factice({"mots meles seniors": 2.0, "carnet a": 8.4})
-    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert r.n_calibrees == 2
     assert r.signaux["bonne"]["score"] == pytest.approx(8.4)
     assert r.signaux["morte"]["score"] == pytest.approx(2.0)
@@ -142,7 +143,7 @@ def test_le_run_recoit_TOUTES_les_requetes_sans_troncature():
     que 6 des 30 requêtes de Baptiste, et le rapport annoncerait pourtant 30."""
     etq = [_etq(f"carnet {i}", "bonne") for i in range(9)]
     run = _run_factice({f"carnet {i}": 7.0 for i in range(9)})
-    construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert run.vus["n_search"] >= 9 and run.vus["n_ideas"] >= 9
 
 
@@ -152,7 +153,7 @@ def test_l_ideator_ne_choisit_PAS_les_requetes():
     corrélerait le produit avec lui-même."""
     etq = [_etq("carnet suivi glycemie", "bonne")]
     run = _run_factice({"carnet suivi glycemie": 8.0})
-    construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     fournies = run.vus["expand_fn"]("peu importe la graine")
     assert [s.requete for s in fournies] == ["carnet suivi glycemie"]
 
@@ -163,7 +164,7 @@ def test_une_requete_absente_du_resultat_est_comptee_ECARTEE():
     pour 27 réellement mesurées."""
     etq = [_etq("carnet a", "bonne"), _etq("coloriage pat patrouille", "bonne")]
     run = _run_factice({"carnet a": 8.0})
-    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert r.bonnes_perdues_avant_analyse == ["coloriage pat patrouille"]
     assert r.n_calibrees == 1
 
@@ -173,14 +174,14 @@ def test_l_appariement_ignore_la_casse_et_les_espaces():
     requête — la déclarer écartée serait un faux signalement."""
     etq = [_etq("Carnet Suivi Glycémie ", "bonne")]
     run = _run_factice({"carnet suivi glycémie": 8.0})
-    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert r.n_calibrees == 1 and r.bonnes_perdues_avant_analyse == []
 
 
 def test_les_familles_du_xlsx_remontent_dans_le_rapport():
     etq = [_etq("carnet a", "bonne", "carnets"), _etq("registre b", "morte", "pro")]
     run = _run_factice({"carnet a": 8.0, "registre b": 2.0})
-    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     assert r.familles["carnets"] == 1 and r.familles["pro"] == 1
     assert any("sous-représentée" in a for a in r.avertissements)
 
@@ -188,7 +189,7 @@ def test_les_familles_du_xlsx_remontent_dans_le_rapport():
 def test_le_rapport_final_s_ecrit_en_json(tmp_path):
     etq = [_etq("carnet a", "bonne")]
     run = _run_factice({"carnet a": 8.0})
-    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [])
+    r = construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs])
     p = tmp_path / "rapport.json"
     p.write_text(r.model_dump_json(indent=2), encoding="utf-8")
     assert "porte_franchie" in json.loads(p.read_text(encoding="utf-8"))
@@ -199,5 +200,5 @@ def test_le_cout_est_borne_par_un_plafond_explicite():
     passé au tracker, une erreur de saisie sur le xlsx dépenserait sans borne."""
     etq = [_etq("carnet a", "bonne")]
     run = _run_factice({"carnet a": 8.0})
-    construire_rapport(etq, run=run, sonde=lambda rs, **kw: [], plafond_usd=1.5)
+    construire_rapport(etq, run=run, sonde=lambda rs, **kw: [Suggestion(requete=q, n_enfants=3) for q in rs], plafond_usd=1.5)
     assert run.vus["cost"].plafond_usd == pytest.approx(1.5)

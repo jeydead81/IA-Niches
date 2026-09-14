@@ -7,8 +7,8 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-13** (1 069 tests, 49 modules, 34 variables d'env, 18
-> endpoints, `server.py` 1 157 lignes). Références de ligne revérifiées le **2026-08-22**
+> Comptages revérifiés le **2026-09-14** (1 231 tests sur 100 fichiers, 49 modules, 34
+> variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
@@ -62,8 +62,8 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 ## 2. ARCHITECTURE RÉELLE
 
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
-mais rien n'est déployé) : FastAPI (`web/server.py`, **1 157 lignes,
-18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-09-07) + un unique
+mais rien n'est déployé) : FastAPI (`web/server.py`, **1 171 lignes,
+18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-09-14) + un unique
 `web/index.html` de **125 534 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
 page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
 page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
@@ -139,7 +139,7 @@ construite dessus. Voir §3.
 | 2 — Validation demande | `validate(candidates, pause=0.4, max_queries=3)` — par défaut `niche_validator.validate_niches` — interroge `completion.amazon.fr` sur la requête courte puis les satellites. `demand_score` = nb de suggestions distinctes ; `validated` = au moins une requête auto-complétée. Tri par `(validated, demand_score)` décroissant (`niche_validator.py:153`). **Lit aussi le CONTENU des suggestions** (§2.3) | **gratuit** |
 | — **Gate de coût** | `shortlist = validated[:n_search]` (défaut 6 côté `run_scout`, 4 côté formulaire). **Une niche non validée ne coûte jamais un appel payant.** Shortlist vide → retour `[]` immédiat | — |
 | A — Concurrence | Par niche : cache `search` (clé keyword+location+language, **TTL 15 j**, `scout_master.py:28`), sinon `provider.search()` sur `merchant/amazon/products` en task_post + poll (8 s d'intervalle, 40 polls max, ~320 s), `search_param=i=stripbooks` si `books_only`. **Un échec est attrapé** (`scout_master.py:89-91`) : avertissement en progress, `sr = None`, le run continue — et la niche ressort marquée `concurrence_mesuree=False` (§4.1). On retient les 3 premiers ASIN **organiques** (`n_bsr_per_niche=3`) | DataForSEO |
-| B — BSR batché | `resolve_bsrs()` sur l'**union** des ASIN de toutes les niches : dédup, cache par ASIN — **TTL 15 j pour un RANG** (`BSR_TTL_S`, `bsr_source.py:10`) et **3 j seulement pour une ABSENCE de classement** (`ECHEC_BSR_TTL_S`, `:15`) : un livre peut entrer au classement, figer 15 j une non-mesure nous rendrait aveugles à son arrivée —, puis selon `BSR_SOURCE` (§3) | gratuit ou payant |
+| B — BSR batché | `resolve_bsrs()` sur l'**union** des ASIN de toutes les niches : dédup, cache par ASIN — **TTL 15 j pour un RANG** (`BSR_TTL_S`, `bsr_source.py:10`) et **3 j seulement pour une ABSENCE de classement** (`ECHEC_BSR_TTL_S`, `:15`) : un livre peut entrer au classement, figer 15 j une non-mesure nous rendrait aveugles à son arrivée ; une fiche NON LUE (panne, tâche jamais prête) n'est, elle, jamais mémorisée, cf. §5.10 —, puis selon `BSR_SOURCE` (§3) | gratuit ou payant |
 | C — Scoring | `scoring.py`, fonctions pures : `bsr_stats`, `count_targeted`, **`prix_stats`**, `score_niche` (3 axes pondérés 0,4 / 0,4 / 0,2). Tri par `global_score` décroissant. Si `search is None`, aucun bonus ni malus de concurrence n'est appliqué et le verdict devient « Concurrence non mesurée — à relancer » | 0 |
 | D — Verdict IA | `n_verdict=0` **par défaut**, et **aucun appelant ne le remplit** : ni la CLI, ni `_run_scout_job`. Gate de coût assumé (3 verdicts pesaient 78 % du coût d'un run). Le verdict se demande à la pièce via `POST /api/verdict` — mais l'UI ne l'appelle pas, cf. §5.26 | — |
 
@@ -284,7 +284,7 @@ Amazon, lui, ne complète que ce que des gens tapent réellement, et il le donne
 | Phase | Ce qui se passe | Coût |
 |---|---|---|
 | 0 — Arbre | `autocomplete_expand.expand()` descend les complétions. `alphabet=True` sonde aussi « seed a »…« seed z » : Amazon ne rend qu'une dizaine de complétions par préfixe, la fin de l'alphabet ne sort jamais du préfixe seul. Filtres IP et saisonnalité appliqués ICI, avant tout appel payant | **gratuit** |
-| 1 — Classement | `lowcontent_ideator` : le LLM **CLASSE** les requêtes réelles (format × thème × public), il n'en propose pas. Sans graine il bascule en idéation, et chaque proposition repasse par l'arbre — `source="ideation"` dit alors que la demande est une HYPOTHÈSE | LLM |
+| 1 — Classement | `lowcontent_ideator` : le LLM **CLASSE** les requêtes réelles (format × thème × public), il n'en propose pas. Sans graine il bascule en idéation, et chaque proposition repasse par l'arbre — `source="ideation"` dit alors que la demande est une HYPOTHÈSE. En mode classement seulement, la réponse BRUTE de l'outil est mise en cache PARTAGÉ 15 j (`llmlc:`, §2.14) | LLM |
 | 2 — Validation | En mode classement elle est DÉJÀ acquise : ces requêtes viennent de l'autocomplete. Les re-sonder confirmerait une tautologie. **Conséquence à connaître : un `validate` injecté est IGNORÉ dans ce mode** | gratuit |
 | 3 — SERP | Une par niche, plafond vérifié entre deux. Shortlist triée par `n_enfants` puis profondeur — une requête que les acheteurs affinent ENCORE porte une intention plus forte | DataForSEO |
 | 4 — UN batch ASIN | Union dédupliquée. **Le BSR est LU DANS L'ENRICHISSEMENT** : `parse_enriched_book` le parse déjà, et un second `resolve_bsrs` sur les mêmes ASIN les facturait DEUX fois (§5.31) | DataForSEO |
@@ -395,7 +395,7 @@ l'exiger).
 | POST | `/api/auth/deconnexion` | cookie | 204. Ferme la session **côté serveur** ET retire le cookie : effacer le seul cookie laisserait le jeton valide pour quiconque en a copie |
 | GET | `/api/auth/moi` | oui | `{user_id, email}` de la session en cours |
 | GET | `/api/lowcontent/formats` | oui | `[{cle, label, famille, norme, effort}]` triés, lus depuis `data/lowcontent_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur de format ; `norme` est exposé pour que l'UI pose son badge sans re-déduire la taxonomie |
-| POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. **Quand `inclure_mots_cles` est demandé, c'est un QUATRIÈME chemin payant** : gardé par `_verifier_plafond` **et** `_reserver_appel` (`web/server.py:1039-1040`), il impute `n_analyses=0` — il exige une marge sous le plafond sans la consommer. Un dossier sans mots-clés ne dépense rien et n'est pas gardé. `/api/pdf` est conservé comme ALIAS et sert le même document |
+| POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. **Quand `inclure_mots_cles` est demandé, c'est un QUATRIÈME chemin payant** : gardé par `_verifier_plafond` **et** `_reserver_appel` (`web/server.py:1076-1077`), il impute `n_analyses=0` — il exige une marge sous le plafond sans la consommer. En low-content c'est `scored.niche` (`LowContentNiche`, qui porte requête, catégorie et satellites) qui part au générateur : le `LowContentScored` entier levait AVANT l'appel, l'exception était avalée, et le dossier sortait sans mots-clés, créneau consommé (corrigé le 2026-09-14). Un dossier sans mots-clés ne dépense rien et n'est pas gardé. `/api/pdf` est conservé comme ALIAS et sert le même document |
 | GET | `/api/fiction/sous-genres` | oui | `[{cle, label}]` triés, lus depuis `data/fiction_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur : jamais de liste dupliquée en dur côté JS |
 | GET | `/api/fiction/taxonomie/{sous_genre}` | oui | `{sous_genre, tropes, decors}` — alimente les menus du compositeur. Sous-genre inconnu → 400 |
 | POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
@@ -403,10 +403,10 @@ l'exiger).
 | GET | `/api/jobs` | oui | Liste de l'utilisateur de la session, plus récents d'abord. `limit` (20). **Aucun paramètre `user_id`** |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
 | GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_analyses, cout_usd}`. Le backend rend toujours le coût ; **l'UI n'affiche que le nombre d'analyses** (§5.27) |
-| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** (la `ScoredNiche` entière dans le body ; body invalide → 400). Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée |
+| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** (la `ScoredNiche` entière dans le body ; body invalide → 400). Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
-| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0` |
-| POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1071`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
+| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` |
+| POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
 
 ### 2.7 Gardes de sécurité (revue adversariale, commits `d443ba8` + `8d37ab8`)
 
@@ -415,7 +415,7 @@ l'exiger).
 | Garde | Où | Ce qu'il ferme |
 |---|---|---|
 | `user_id` exclusivement issu du cookie | `web/server.py:246-258` | Plafond contournable à volonté ; lecture de l'historique d'autrui |
-| `_verifier_plafond` | défini `web/server.py:367-376`, appelé en **trois** endroits : `:957` (`/api/verdict`), `:991` (`/api/kdp-keywords`) et `:1039` (`/api/dossier`, **uniquement** dans la branche `inclure_mots_cles` — un dossier sans mots-clés ne dépense rien). `POST /api/jobs` ne l'appelle pas : il **réserve atomiquement** (`UsageMeter.reserver_analyse`, `:797-801`), après le devis et les bornes | `UsageMeter.autorise` n'avait **qu'un** site d'appel, `POST /api/jobs`, que l'interface n'empruntait pas : le plafond ne protégeait que le chemin inutilisé. **Les trois endpoints qui dépensent vérifient désormais.** `POST /api/pdf` n'a pas de garde parce qu'il ne dépense rien |
+| `_verifier_plafond` | défini `web/server.py:394`, appelé en **trois** endroits : `:984` (`/api/verdict`), `:1024` (`/api/kdp-keywords`) et `:1076` (`/api/dossier`, **uniquement** dans la branche `inclure_mots_cles` — un dossier sans mots-clés ne dépense rien). `POST /api/jobs` ne l'appelle pas : il **réserve atomiquement** (`UsageMeter.reserver_analyse`, `:797-801`), après le devis et les bornes | `UsageMeter.autorise` n'avait **qu'un** site d'appel, `POST /api/jobs`, que l'interface n'empruntait pas : le plafond ne protégeait que le chemin inutilisé. **Les trois endpoints qui dépensent vérifient désormais.** `POST /api/pdf` n'a pas de garde parce qu'il ne dépense rien |
 | Bornes de volume `_borner` | `_borner` défini `web/server.py:242` ; `MAX_IDEES=30` (`:135`), `MAX_RECHERCHES=20` (`:136`), **`MAX_NICHES_FICTION=11`** (`:144`, **DÉRIVÉ** du plafond de coût, cf. §2.13), `MAX_RECHERCHES_LC=20` (`:147`) | Le plafond compte des ANALYSES, pas des appels payants : une seule « analyse » avec `search=9999` déclenchait des milliers de requêtes DataForSEO pour une unité de plafond. **Borner le volume est la seule protection réelle du MONTANT.** `_borner` **refuse (400) plutôt que de rogner en silence** — un utilisateur qui demande 9999 doit savoir qu'il ne l'aura pas |
 | `origine_sure` (anti-CSRF) | `web/server.py:252-277`, appelé sur `/api/auth/inscription` (`:464`), `/api/auth/connexion` (`:505`), `POST /api/jobs` (`:762`) — **3 sites** | Lancer un run dépense de l'argent réel ; `SameSite=Lax` laisse partir le cookie sur une navigation de premier niveau. S'appuie sur `Sec-Fetch-Site` (en-tête interdit au script, non falsifiable) puis sur `Origin` vs `Host`. **Absent = client hors navigateur** (curl, tests) : laissé passer, un tel client n'a pas de cookie ambiant à voler |
 | Cloisonnement des jobs | `web/server.py:563` et `:596-597` | Connaître un identifiant suffisait à lire le run, le résultat et le coût d'autrui |
@@ -447,18 +447,31 @@ rayons mesurés en live).
 gratuit de §2.2, `validate_niches` triant par `(validated, demand_score)`, **et
 `lire_suggestions`**, §2.3) · `amazon_autocomplete.py` (deux variantes volontairement distinctes :
 `fetch_json_strict` qui lève, `_default_fetch_json` qui avale) · `amazon_product.py` (BSR gratuit
-par scraping direct) · `util.py` (`http_get` : headers navigateur + retry, `getter` injectable ;
+par scraping direct ; même partage : `fetch_bsr_strict` lève sur une fiche non lue et n'est le
+défaut que de `resolve_bsrs`, `fetch_bsr` garde son `None` pour `launcher` et `demo_free`) · `util.py` (`http_get` : headers navigateur + retry, `getter` injectable ;
 il **re-lève après ses retries** — c'est ce qui permet à §5.10 de distinguer une panne d'un
 signal absent) · `fiction_serp_provider.py` (scindé en `fetch_shelf_asins` rapide appelable
 N fois et `enrich_asins`, la file lente appelée une fois) · `fiction_books.py` (mappe un payload
-ASIN réel vers `EnrichedBook`, gère les formes atypiques observées sans jamais lever) ·
+ASIN réel vers `EnrichedBook`, gère les formes atypiques observées sans jamais lever ; lit la
+pagination sous « Nombre de pages de l'édition imprimée », §5.37) ·
 `fiction_autocomplete.py` (sonde à deux barreaux).
 
 **LLM** — `niche_ideator.py` · `niche_verdict.py` · `kdp_keywords.py` · `fiction_ideator.py` ·
-`fiction_classifier.py`. Tous en **tool-use forcé**, jamais de parsing de texte libre.
-**Seul `lowcontent_ideator` est en mode STRICT** (`strict: true`, depuis le 2026-09-13,
-§2.14) : les autres lisent `block.input` sans garantie de forme, et un run peut lever
-APRÈS l'appel payé.
+`fiction_classifier.py` · `lowcontent_ideator.py` · `lowcontent_verdict.py`. Tous en **tool-use
+forcé**, jamais de parsing de texte libre. **Cinq sont en mode STRICT** (`strict: true` et
+`additionalProperties: false` sur CHAQUE objet) : `lowcontent_ideator` depuis le 2026-09-13
+(§2.14), puis `lowcontent_verdict`, `fiction_ideator`, `kdp_keywords` et `fiction_classifier`
+depuis le 2026-09-14 (`tests/test_strict_lecture_defensive.py`, qui lit l'outil ENVOYÉ, §5.32).
+Le strict ne protège pas d'une troncature : ces quatre-là lisent aussi `block.input`
+DÉFENSIVEMENT (`_json_si_texte` décode une chaîne JSON valide ; le reste est écarté et compté,
+jamais deviné). Trois formes de ce « deviné » existaient : `kdp_keywords` faisait `extend` d'une
+CHAÎNE (le rejeu a rendu sept emplacements d'une lettre, qu'une sonde confirmait) ; une
+`confiance` illisible valait `0/10` dans `lowcontent_verdict` (elle LÈVE désormais, un zéro se
+lirait comme un jugement) ; un seul champ mal typé emportait les 19 autres classifications
+payées d'un lot du classifieur. **Acceptation du strict par l'API avec les propriétés
+facultatives de ces quatre schémas : non vérifiée** (seul `lowcontent_ideator` l'est, par le run
+réel). `niche_ideator` et `niche_verdict` restent hors strict : ils passent par pydantic et
+lèvent une `ValidationError` typée.
 
 **Place de marché** — `marketplace.py` (§2.15) : source unique de `location_code`,
 `language_code`, identifiant d'autocomplete et domaine des fiches. `MARKETPLACE=fr` par
@@ -547,9 +560,23 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1069 tests** collectés sur **89 fichiers** `tests/test_*.py`, **1069 passés, 0 ignoré**,
-aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-13 ; la suite avait connu
-des échecs INTERMITTENTS, cf. §5.33).
+**1231 tests** sur **100 fichiers** `tests/test_*.py`, **1231 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -q -p no:warnings`, relancé le 2026-09-14,
+marqueurs de progression comptés ; la suite avait connu des échecs INTERMITTENTS, cf. §5.33).
+
+**Données RÉELLES d'abord, et tout écart DÉCLARÉ dans le docstring** — règle née du run 4
+(§5.37). Fixtures réelles versionnées : `fixtures/fiction/v2_asin_payloads.json` (8 captures
+amazon.fr du 2026-07-20), `fixtures/cache_calibration_run4_reel.json` (état du cache après le
+run 4 pour les 31 requêtes du classeur : 31 SERP, 185 fiches, 84 classifications, extrait en
+`?mode=ro` ; seule altération, les organiques tronqués aux 12 premiers), et
+`fixtures/bsr_scrape_fr_reel.json` (29 extraits `BsrInfo.raw` réels, déjà débalisés et tronqués
+à 300 caractères — pas le HTML complet). Versionner l'état du cache n'est pas un luxe : les
+tests qui COPIAIENT `99-logs/df-cache.db` (ignoré par git) sortaient IGNORÉS sur tout clone
+neuf. Pour la même raison, `fixtures/asin_fr_raw.json` (ignoré par git) ne sert à aucun test
+versionné. `tests/outils_calibration.py` porte ce chargement ; `conftest` redirige sous
+`tmp_path` les captures de la CLI de calibration et fait LEVER toute purge dont le cache résolu
+est le vrai `99-logs/df-cache.db` — garde de TEST : dans le code de production il interdirait à
+Baptiste la purge qu'il a décidée.
 
 **« 0 ignoré » est la moitié importante de cette ligne, et elle a coûté cher à établir.**
 `httpx` et `pypdf` ne sont importés par aucun module de production — ils ne figuraient donc
@@ -587,9 +614,10 @@ Baptiste CORRIGE des étiquettes que l'IA a produites. Ici il étiquette des req
 toute analyse (`bonne` / `mauvaise` / `morte`) : son jugement est la référence. Si l'IA
 choisissait les requêtes à juger, on calibrerait le scoring sur lui-même.
 
-Deux modes du CLI : `--gabarit` écrit un classeur pré-découpé par famille (8 familles
+Modes du CLI : `--gabarit` écrit un classeur pré-découpé par famille (8 familles
 × 4 lignes, liste déroulante sur la colonne d'étiquette) ; `--xlsx` sonde gratuitement
-chaque requête puis lance le run payant **sur ces requêtes-là** et écrit le rapport JSON.
+chaque requête puis lance le run payant **sur ces requêtes-là** et écrit le rapport JSON ;
+`--rejouer` et `--purger-fiches-sans-pages` ne dépensent rien (voir « quatrième run » plus bas).
 Plafond de dépense explicite (`--plafond`, 2 $ par défaut). Coût d'un jeu de 30 requêtes :
 au pire **~0,80 $ pour 31 requêtes sur un poste résidentiel, ~1,35 $ avec `BSR_SOURCE=dataforseo`** (`devis.cout_max_estime`, cache vide : une SERP et
 six fiches ASIN par requête, plus un appel LLM) — **calculé, pas mesuré**. L'estimation de
@@ -706,8 +734,8 @@ tombé) ; **aucune de leurs assertions n'a été touchée**.
 deux défauts** (`tests/test_calibration_run_refuse.py`). Compte DataForSEO neuf, non VÉRIFIÉ :
 toute requête réelle répond `40104` (« Please verify your account »), posé à la RACINE du
 JSON, sans aucune tâche. Coût : 0 $ chez DataForSEO, **0,0905 $ chez Anthropic** — le
-classement part avant la première SERP, et `lowcontent_ideator` n'a aucun cache, donc une
-relance le repaie. **`appendix/user_data` répond `20000` sur un compte non vérifié : il prouve
+classement part avant la première SERP, et `lowcontent_ideator` n'avait alors aucun cache,
+donc une relance le repayait (cache du classement depuis le 2026-09-14, plus bas). **`appendix/user_data` répond `20000` sur un compte non vérifié : il prouve
 l'authentification, pas le droit d'utiliser l'API.** `appendix/errors`, gratuit lui aussi,
 renvoie bien `40104` : c'est lui qui discrimine. Les deux défauts :
 (1) **le motif du refus était jeté.** `search` ne lisait que `tasks[0]` et a affiché
@@ -741,10 +769,65 @@ nommées « non classées ». (2) **La CLI ne laissait aucune trace d'un run qui
 rapport s'écrivait avant l'affichage, mais après `construire_rapport`. Une exception — ou un
 Ctrl-C, qui pendant le batch ASIN brûle 0,558 $ sans rien mettre en cache — produit désormais
 un rapport INDÉCIDABLE portant la cause et le coût déjà engagé, code de sortie **4**
-(exception) ou **130** (Ctrl-C). **Le même défaut latent reste dans `fiction_classifier`,
-`fiction_ideator`, `kdp_keywords` et `lowcontent_verdict`**, qui lisent `block.input` sans mode
-strict — tâche séparée ; `niche_ideator` et `niche_verdict` passent par pydantic et lèvent une
-`ValidationError` typée.
+(exception) ou **130** (Ctrl-C). Le même défaut latent, dans `fiction_classifier`,
+`fiction_ideator`, `kdp_keywords` et `lowcontent_verdict`, est corrigé depuis le 2026-09-14
+(§2.8).
+
+**Quatrième run réel (0,7208 $) : complet, et porte INDÉCIDABLE — puis un rejeu à blanc hors
+ligne a trouvé ce qui aurait brûlé le cinquième.** Éditeur lu sur 31 niches, redevance sur 0 :
+la pagination n'était jamais lue (§5.37), et le cache mutualisé ressert ces 185 fiches telles
+quelles pendant 15 jours (§5.38). Relancé tel quel, le run aurait rendu le même rapport en
+repayant le classement. Le brut de ces fiches est perdu. Ce qui est désormais codé :
+
+| Correctif | Ce qu'il ferme |
+|---|---|
+| **Codes de sortie** : 0 porte franchie · 2 non franchie OU indécidable (inchangé) · 4 exception après le début · 130 Ctrl-C · **5 refus AVANT toute dépense** | « Rien n'a été dépensé » se confondait avec une porte indécidable après dépense |
+| **Devis de la CLI** (`devis_calibration`), avant la sonde et avant Anthropic | Lit le cache EN LECTURE SEULE (`?mode=ro`, aucune ligne écrite) : SERP en cache / à payer, fiches utiles / en cache SANS pagination / à payer. N lu dans la signature de `run_lowcontent_scout`, poste LLM lu dans `devis.ventilation_max_estimee` — rien recopié (§5.32). Refuse (code 5) si le total atteint `--plafond` (`>=`, comme `CostTracker.verifier`) ou si AUCUNE fiche utile n'est ni en cache ni à payer — le cas exact du run 4. N'inclut pas la relance BSR payante des fiches non enrichies : le plafond du run reste le filet. `devis.cout_max_estime` (cache vide, pire cas produit) est inchangé |
+| **Re-sonde** (`requetes_non_sondees`, `SondeIndisponible`) | UNE re-sonde gratuite des requêtes à `None` ; si toutes restent muettes, ou une « morte », arrêt AVANT le classement (code 5) : « aucune morte en vert » serait indécidable à coup sûr. Une « bonne » ou « mauvaise » muette ne bloque pas, elle se compte (`n_demande_non_mesuree`) |
+| **Rapport jamais écrasé** | Un fichier existant fait prendre un nom horodaté à côté : le rapport du run 4, non versionné, s'effaçait au run suivant sans `--out` |
+| **Captures brutes** (`JournalCapture`), CLI de calibration seulement | Sous `99-logs/captures/calibration-<horodatage>/` (racine FIXE, ignorée par git — elle suivait `--out` et pouvait tomber dans un dossier versionnable) : `asin.jsonl` (payload écrit au moment où le poll le lit, donc conservé après un Ctrl-C), `serp.jsonl` (réponses de `task_post`, refus compris, et de `task_get`), `classement.jsonl` (entrées de l'outil, `stop_reason`, jetons, écrits AVANT lecture), `progression.log`, `entrees.json`, `cout.json`. **Jamais dans le cache partagé** (décision de Baptiste). Ni identifiants ni corps posté. Une écriture qui échoue est comptée, jamais levée. Les fiches servies par le cache n'y figurent pas : leur brut n'existe plus |
+| **`--rejouer ENTREES.json [--criteres JSON]`** (`rejouer_entrees`) | `run_lowcontent_scout(journal_entrees=…)` archive les ENTRÉES exactes de `score_lowcontent` par niche (format, risques, `n_enfants`, validation, SERP, fiches, BSR, sous-catégories), **date du jour comprise, passée explicitement** : `part_recents` lit la date, un rejeu un autre jour rescorait autre chose. Aucun fournisseur, aucun modèle. **Un rejeu ne franchit JAMAIS la porte** (`rejeu=True`, indécidable) : des seuils réglés sur ce jeu ne s'y valident pas ; il dit seulement s'il l'AURAIT franchie. Code de sortie 2 |
+| **Purge ciblée** `--purger-fiches-sans-pages` (décision de Baptiste, voie A) | APERÇU par défaut. `--confirmer` exige `--ecrites-avant <date du correctif du parseur>` : `pages=None` ne distingue pas une fiche mal lue d'une VRAIE absence (livre audio B0FS7JQNJ6), qui serait sinon rachetée à chaque purge. Sauvegarde horodatée (base, `-wal`, `-shm`), vérification que la sauvegarde porte les clés, puis suppression en `BEGIN IMMEDIATE` avec revérification de chaque ligne. Visées : EXACTEMENT les clés `book:` valides des N premiers organiques des SERP en cache du classeur. Jamais `search:`, `clf:`, ni une autre fiche. Serveur arrêté, hors run. **Jamais exécutée par un agent sur le vrai cache** |
+| **Cache du classement** (`lowcontent_ideator`, mode classement SEULEMENT) | Clé `llmlc:` + SHA1 de modèle, consigne système, prompt utilisateur et outils (`strict` compris) — une empreinte, jamais un compteur. TTL 15 j, **mutualisé** : les requêtes sont des complétions publiques d'Amazon (§1). On garde la réponse BRUTE de l'outil, relue par la logique courante. Écrite seulement si complète : ni `max_tokens`, ni entrée illisible, ni requête hors liste, ni omise en `classer_toutes`. Jamais en idéation, où une relance est voulue. Le premier run paie le classement de toute façon |
+| **Garde prédictif du batch ASIN** | Il comptait l'union ENTIÈRE : un plafond calé au plus juste refusait un batch à 0 $, puis le canal BSR repartait scraper chaque ASIN. Seules les fiches absentes du cache sont vérifiées, et le garde est AUSSI dans `enrich_asins`, juste avant l'envoi : les 185 fiches du run 4 expirent dans la même seconde, une phase 4 à cheval sur cet instant achetait 0,555 $ (calculé) sans vérification. Refus → les fiches du cache sont rendues, rien ne lève |
+| **Tâches facturées non imputées** | `TaskPostRefuse` est la SEULE panne de SERP non imputée : poll épuisé, relecture illisible et Ctrl-C surviennent APRÈS la création de la tâche (5 SERP créées imputées 0 $ au rejeu), sur les trois moteurs. Une relecture illisible pendant le poll du batch ne jette plus le lot (`lectures_en_echec`, tâche relue au cycle suivant). Un Ctrl-C impute le pire cas (`enrich_asins`, `resolve_bsrs`, phase 3 : 185 tâches créées imputées 0 $ au rejeu) ; la CLI écrit « au moins X $ engagés » et ne prétend plus que les fiches d'un batch interrompu sont en cache. Une écriture de cache refusée ne jette plus un batch payé |
+| **Refus de COMPTE** (`RefusCompte`, sous-classe de `TaskPostRefuse`) | Refus posé à la RACINE sans aucune tâche, sans liste de codes. Au premier : plus aucun appel au fournisseur, le cache CONTINUE de servir, les niches restantes sortent ⚪ et comptées (31 `task_post` en rafale au premier run). Même traitement sur les trois moteurs. Côté batch ASIN (`product_raw_batch`), les lots suivants ne partent plus : ils sont comptés, pas envoyés (relevé au rejeu final, 100 + 85) ; une exception à l'envoi, elle, n'arrête rien. **Statut du job produit et remboursement de l'unité de plafond : inchangés** (décision). Non couvert : un refus de solde posé PAR TÂCHE (forme jamais capturée) |
+| **Avertissements et conseils** (`_conseil_indecidable`, `n_pages_mesurees`) | « aucune fiche exploitable » quand l'éditeur était lu sur 31 niches, et « le cache ne repaiera que ce qui manque » alors qu'il resservait les fiches mal lues : faux tous deux. Le conseil suit désormais la cause (SERP tombées → compte ; redevance jamais calculée avec éditeur lu → LECTURE, rejeu du brut, purge) |
+| **Progression** | « N/M recherche(s) Amazon servie(s) par le cache — non relue(s) » et « N/M fiche(s) servie(s) par le cache » : c'était exactement l'alerte qui manquait. Jamais « à payer » (§5.27) |
+| **Diagnostics par étiquette** dans `signaux` | Compteurs `n_bonus_part_indie`, `part_indie_min`/`max`, `n_crit3`, `n_malus_recents` et médianes des QUATRE axes. Sans seuil, sans effet sur la porte : c'est Baptiste qui juge |
+
+**HORS PÉRIMÈTRE, et une porte franchie ne voudra donc PAS dire « seuils calibrés »**. Ces
+défauts de DÉFINITION du score demandent une décision de Baptiste, qui contredirait la lettre
+de « jamais le code » plus bas. Aucun n'est codé :
+
+- **R17**, `n_concurrents_cibles` : malus sur **28/31** niches. Rejoué sur les 31 SERP réelles
+  du cache, la mesure dépend de la longueur de la SERP. `scoring.count_targeted` est partagée
+  avec la non-fiction, dont `history.db` stocke la valeur.
+- **R18**, `n_variantes_quasi_identiques` grossit avec la profondeur. Sur les 50 SERP du cache,
+  une fenêtre de 12 titres ne dépasse jamais 6, et rho vaut **+0,018 / +0,085 / +0,062**
+  (fenêtres 12 / 24 / 48) : aucune fenêtre ne le rend discriminant.
+- **R19**, crit3 « place à prendre » (+1,5) : il touche **8/9 mortes, 12/15 mauvaises, 6/7
+  bonnes**, et toujours 8/9 mortes sur le top 3. Il grandit avec le pire BSR, plus élevé dans
+  un rayon mort, et aucune valeur du seuil n'inverse ce sens.
+- **Saturation de `part_indie`** : 1,0 sur **24/31** niches au run 4. Seuls les compteurs de
+  diagnostic ci-dessus sont codés.
+- **R22**, `redevance_min_bonne=2,0` saturerait sur **21 à 27/31** une fois les pages lues
+  (**CALCULÉ**, pages supposées). Le bonus revient à « prix ≥ 8,10 € » sous 110 pages.
+- **R24**, poids des axes et constantes codés en dur. Le prix est le signal le plus corrélé
+  (+0,53 ; intervalle de Fisher ~[0,22 ; 0,75] **calculé**) : rien ne se règle sur une porte
+  indécidable.
+- **R27**, malus pris sur les `risques` rendus par le LLM sans vérification (saisonnier −1,
+  TOS −2), appliqués même sous `--inclure-saisonnier`. Une seule des 31 requêtes est
+  saisonnière selon `est_saisonnier`, qui ne voit pas « autumn ».
+- **R30**, la progression cliente recopie encore le motif brut du fournisseur (compromis
+  ci-dessus) : à filtrer à la frontière client avant l'ouverture des inscriptions.
+- **R31** : seul le relibellé est fait. Page 2 du dossier : « estimation de l'IA, non
+  calculée ». Page 1 : « non mesuré » sans unité. Pas de redevance calculée depuis l'angle.
+
+Corriger les pages ne peut pas faire passer une morte en vert : +0,4 point global au plus, score
+maximal 6,01 contre un seuil vert à 7,5 (**calculé** sur le rejeu). Hors code, le prochain run
+suppose la purge des 185 fiches par Baptiste, avec sauvegarde, et un solde DataForSEO vérifié
+dans le tableau de bord.
 
 Quatre décisions de mesure :
 
@@ -1048,7 +1131,12 @@ Section critique. Chacun a coûté un bug réel.
     non-fiction (`models.py:103-107`), `lire_suggestions` ne conclut rien sur zéro suggestion, et
     `amazon_autocomplete.py` maintient deux fonctions (`fetch_json_strict` qui lève,
     `_default_fetch_json` qui avale) précisément pour ne jamais confondre une panne réseau avec
-    « personne ne cherche ça ».
+    « personne ne cherche ça ». **Même partage côté BSR depuis le 2026-09-14** : `resolve_bsrs`
+    écrivait une fiche NON LUE (503, tâche jamais prête) 3 jours dans le cache MUTUALISÉ comme
+    « absence de classement », pour tous les comptes. Seul un `None` RENDU par une fiche lue
+    (`fetch_bsr_strict`, `_Payloads.lus`) se mémorise désormais ; les pannes sont annoncées.
+    **Trou connu** : un captcha servi en 200 se lit encore comme une absence (aucune capture HTML
+    réelle d'un blocage, donc aucun discriminant codé).
 11. **L'autocomplete ne gate jamais seul.** Le spike M0 §V3 est formel et le code le respecte :
     `_matrix_mesuree` (`fiction_scoring.py:168-183`) n'utilise nulle part l'autocomplete pour
     arbitrer `demand_matrix`.
@@ -1072,7 +1160,8 @@ Section critique. Chacun a coûté un bug réel.
     (le blurb l'a été en M4) sert des objets amputés en silence — 15 jours pour `book:`,
     **30 jours pour `clf:`** — et durcir le prompt n'a aucun effet sur les livres déjà vus.
     **Limite assumée** : l'empreinte suit les noms, pas les types ni la sémantique — changer le
-    sens d'un champ sans le renommer exige de vider le cache à la main.
+    sens d'un champ sans le renommer exige de vider le cache à la main. Ni la logique du PARSEUR :
+    le run 4 l'a payé (§5.38).
     **Corollaire des derniers commits** : `ScoredNiche` a gagné quatre champs de prix et quatre
     drapeaux de suggestions, mais **il n'est pas mis en cache** — aucune purge n'était nécessaire.
 15. **Le cache est mutualisé entre tous les utilisateurs, par conception** (`cache.py:1`, rappelé
@@ -1221,6 +1310,36 @@ Section critique. Chacun a coûté un bug réel.
     parsing produirait le même signal qu'un rayon vide, et ce signal est le plus flatteur
     possible. Si elle est observée en live, c'est ce test-là qu'il faudra retourner.
 
+37. **Une fixture INVENTÉE a fait payer 185 fiches pour rien.** `asin_fr_lowcontent.json`
+    (ASIN `B0LOWCONT1`, commit `feacd71`) écrivait la pagination sous une clé de FORMAT :
+    `{"Broché": "120 pages"}`. Le parseur de `fiction_books.py` a été écrit pour elle, et ses
+    tests passaient au vert. Or amazon.fr écrit « Nombre de pages de l'édition imprimée » : 8
+    captures réelles sur 8, ebook Kindle compris. Aucune n'a jamais porté la forme inventée.
+    Au run 4, `pages=None` sur les 185 fiches payées : redevance jamais calculée, porte
+    indécidable, 0,7208 $. La fixture est supprimée, le parseur lit la vraie clé (la clé de
+    format reste un simple repli), et `format_papier`, jamais observé, reste `None`.
+    **Le cliquet est `tests/test_fixtures_pagination_reelles.py`** : seule une capture réelle
+    DÉCLARÉE peut fonder une assertion `.pages` sur une sortie de `parse_enriched_book`.
+    **Même famille, même jour** : l'expression `_SUB` du scraping BSR avait été réglée sur une
+    fixture HTML inventée. Sur 29 extraits réels, elle perdait 11 sous-catégories sur 75 et en
+    polluait 7. **Règle** : un test qui valide un parseur contre une forme que personne n'a
+    observée ne prouve que l'accord de son auteur avec lui-même. Toute forme d'une source
+    externe vient d'une capture ; une fixture inventée le DIT dans son docstring (§2.10).
+
+38. **Le cache garde des objets ANALYSÉS : corriger un parseur ne rattrape rien.** `book:` et
+    `search:` stockent l'`EnrichedBook` et le `SearchResult` déjà parsés. Leur empreinte suit
+    les NOMS des champs (§5.14), pas la logique du parseur. Le parseur corrigé laisse donc le
+    cache MUTUALISÉ resservir, 15 jours et à tous les comptes, les fiches qu'il avait mal lues.
+    Le rapport conseillait pourtant de « relancer ». **Voie retenue par Baptiste : la purge
+    ciblée à la main** (§2.14), avec sauvegarde et date butoir. Une empreinte du source du
+    parseur dans la clé aurait invalidé aussi le cache FICTION à chaque retouche de
+    `fiction_books.py`. Le brut, lui, ne va jamais dans le cache partagé : seule la CLI de
+    calibration l'écrit dans des fichiers de run, et le produit ne capture rien. **Choix
+    inverse, et délibéré, pour le classement low-content** : on y garde la réponse BRUTE de
+    l'outil, justement pour qu'un correctif de lecture s'applique sans rien repayer.
+    **Corollaire de lecture** : après un correctif de parseur, la ligne « N/M fiche(s)
+    servie(s) par le cache » est l'alerte, pas une bonne nouvelle.
+
 
 **Invariant transversal**
 
@@ -1229,8 +1348,12 @@ Section critique. Chacun a coûté un bug réel.
     (`scout_master.py:89-91`) **et marquée `concurrence_mesuree=False`**, ce qui la prive de tout
     bonus de pénétration, lui donne un verdict explicite et l'exclut de l'historique
     (`_consigner_scout`, `web/server.py:381-382` : un point qu'on sait faux produirait au passage
-    suivant un delta spectaculaire et mensonger) ; scrape BSR en échec sur un ASIN → `None` pour
-    cet ASIN ; niche fiction en échec → écartée et comptée, rayons déjà payés conservés
+    suivant un delta spectaculaire et mensonger) ; SERP créée puis non lue (poll épuisé,
+    relecture illisible, Ctrl-C) → **imputée**, seul un `TaskPostRefuse` explicite ne l'est pas ;
+    refus de COMPTE (`RefusCompte`) → plus aucun appel au fournisseur, le cache continue de
+    servir, niches restantes non mesurées et comptées ; scrape BSR en échec sur un ASIN → `None`
+    pour cet ASIN, jamais mémorisé comme absence ; lecture illisible après un appel LLM payé sur
+    `/api/verdict` ou `/api/kdp-keywords` → 502, coût soldé dans un `finally` ; niche fiction en échec → écartée et comptée, rayons déjà payés conservés
     (`fiction_master.py:96-100`) ; livre au payload atypique → `None` au lieu d'une
     `ValidationError` qui tuerait le run ; job en échec → **le coût déjà engagé reste imputé**
     (`web/server.py:549-552`) ; base absente à la reprise des données locales → l'inscription
@@ -1243,7 +1366,8 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1069 tests sans réseau.
+   paramètre — c'est ce qui tient les 1231 tests sans réseau. Données réelles d'abord ; une
+   fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
    un échec partiel ni arrondir un coût vers le bas. Distinguer toujours un chiffre mesuré d'un
@@ -1307,7 +1431,8 @@ Section critique. Chacun a coûté un bug réel.
   endpoint ne les sert et chacun porte des `[[A COMPLETER : … ]]` (identité légale,
   hébergeur, prix, délai de rétractation). `tests/test_pages_publiques.py` verrouille le
   lien : dès qu'une route sert un de ces fichiers, il ne doit plus rester un marqueur.
-- **Calibration du scoring low-content** : l'outillage existe (§2.14), **la mesure non**.
+- **Calibration du scoring low-content** : l'outillage existe (§2.14), **la mesure non** —
+  quatre runs payants (2026-09-13/14), aucune porte décidable.
   Les seuils de `data/lowcontent_criteres.json` restent des hypothèses tant que Baptiste n'a
   pas rempli le gabarit et fait tourner `build_lowcontent_validation_set.py --xlsx`. Ne
   jamais citer ces seuils comme des critères établis.

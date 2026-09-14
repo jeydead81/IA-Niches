@@ -5,6 +5,7 @@ Asymétrie assumée avec fiction_ideator.py : l'ideator INVENTE des trios, donc 
 taxonomie y est un bruit qu'on écarte. Le classifieur OBSERVE de vrais livres : un trope
 hors taxonomie vu en vrai est une information qui fait évoluer la taxonomie, pas un déchet
 -> il part dans `other`, jamais à la poubelle (cf. plan M4)."""
+import json
 import os
 
 from dotenv import load_dotenv
@@ -102,11 +103,24 @@ LIVRES_INPUT_SCHEMA = {
                 # est_roman REQUIS : omis valait "roman" par défaut, le filtre non-roman
                 # n'était donc pas garanti si le LLM oubliait simplement le champ.
                 "required": ["asin", "tropes", "est_roman"],
+                "additionalProperties": False,      # exigé par le mode STRICT
             },
         }
     },
     "required": ["livres"],
+    "additionalProperties": False,
 }
+
+
+def _json_si_texte(v):
+    """Une chaîne JSON valide est DÉCODÉE (contenu du modèle, seulement sérialisé) ; le reste
+    est rendu tel quel et ignoré par l'appelant, jamais deviné."""
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v
+    return v
 
 
 def build_user_prompt(sous_genre_cle: str, livres: list[EnrichedBook],
@@ -200,9 +214,12 @@ def _classify_lot(lot: list[EnrichedBook], sous_genre_cle: str, version: str, mo
         # et une valeur non-défaut renvoie une 400. La stabilité des étiquettes se joue dans
         # le prompt (règles explicites, plafond de tropes, décor à justifier), pas ici.
         system=SYSTEM_PROMPT,
+        # STRICT : sans lui, l'API ne garantit pas la forme de `tool_use.input` (2026-09-13).
+        # Il ne change ni le prompt ni les champs : la clé du cache `clf:` reste juste.
         tools=[{
             "name": "classer_livres",
             "description": "Renvoie la classification tropes/décor de chaque livre.",
+            "strict": True,
             "input_schema": LIVRES_INPUT_SCHEMA,
         }],
         tool_choice={"type": "tool", "name": "classer_livres"},
@@ -220,19 +237,35 @@ def _classify_lot(lot: list[EnrichedBook], sous_genre_cle: str, version: str, mo
     asins_lot = {b.asin for b in lot}
     asins_vus: set[str] = set()          # un ASIN rendu deux fois -> une seule classification
     out: list[TropeClassification] = []
+    illisibles: set[str] = set()
     for block in resp.content:
         if getattr(block, "type", None) != "tool_use":
             continue
-        for l in ((block.input or {}).get("livres") or []):
+        entree = _json_si_texte(block.input)
+        livres = _json_si_texte(entree.get("livres")) if isinstance(entree, dict) else None
+        if not isinstance(livres, list):
+            continue                        # réponse illisible -> les livres sortent « absents »
+        for l in livres:
             if not isinstance(l, dict):
                 continue                    # entrée non-dict (LLM fautif) -> ignorée, pas de crash
             asin = l.get("asin")
-            if asin not in asins_lot or asin in asins_vus:
+            if not isinstance(asin, str) or asin not in asins_lot or asin in asins_vus:
                 continue                    # ASIN hors du lot -> le LLM ne peut pas inventer un livre
+            try:
+                classification = _parse_livre(l, tropes_ok, decors_ok, version)
+            except (TypeError, ValueError):
+                # UN champ mal typé (ValidationError) emportait les 19 autres classifications
+                # du lot, déjà payées. Ce livre-là est écarté et nommé, jamais deviné.
+                illisibles.add(asin)
+                continue
             asins_vus.add(asin)
-            out.append(_parse_livre(l, tropes_ok, decors_ok, version))
+            out.append(classification)
 
-    manquants = asins_lot - asins_vus
+    illisibles -= asins_vus
+    if illisibles and progress:
+        progress(f"⚠ {len(illisibles)}/{len(lot)} livres à la réponse illisible (champ hors "
+                 f"schéma), écartés sans être devinés : {sorted(illisibles)}")
+    manquants = asins_lot - asins_vus - illisibles
     if manquants and progress:
         progress(f"⚠ {len(manquants)}/{len(lot)} livres du lot absents de la réponse : "
                  f"{sorted(manquants)}")

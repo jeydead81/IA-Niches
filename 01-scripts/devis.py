@@ -92,21 +92,33 @@ def _volume(type_: str, params: dict) -> tuple[dict, int]:
     return modele, max(1, n)
 
 
+def ventilation_max_estimee(type_: str, params: dict | None = None) -> dict:
+    """Les postes du devis, séparés. La CLI de calibration y lit le poste LLM au lieu de
+    le recopier : elle remplace SERP et fiches par ce que le cache lui dit réellement."""
+    modele, n = _volume(type_, params or {})
+    n_asin = n * modele["asin_par_unite"]
+    n_classif = n * modele["classif_par_unite"]
+    llm = (_LLM_IDEATOR                   # un seul appel d'idéation par run
+           + n_classif * _LLM_CLASSIF_PAR_LIVRE
+           + n * modele.get("jetons_sortie_par_unite", 0) * _SORTIE_USD_PAR_JETON)
+    return {"n": n, "n_asin": n_asin, "serp_usd": n * _TARIF,
+            "asin_usd": n_asin * _TARIF, "llm_usd": llm,
+            "_classif": n_classif, "_jetons": n * modele.get("jetons_sortie_par_unite", 0)}
+
+
 def cout_max_estime(type_: str, params: dict | None = None) -> float:
     """Coût maximal en dollars, cache supposé VIDE.
 
     Suppose aussi `BSR_SOURCE=dataforseo`, c'est-à-dire la configuration de production :
     en local le scraping est gratuit et le run coûte moins, mais un devis calé sur le
     poste de Baptiste ne protégerait personne en production."""
-    modele, n = _volume(type_, params or {})
-    n_asin = n * modele["asin_par_unite"]
-    n_classif = n * modele["classif_par_unite"]
+    v = ventilation_max_estimee(type_, params)
     return round(
-        n * _TARIF                        # une SERP par niche
-        + n_asin * _TARIF                 # les fiches ASIN (BSR, éditeur, prix, pages)
+        v["serp_usd"]                     # une SERP par niche
+        + v["asin_usd"]                   # les fiches ASIN (BSR, éditeur, prix, pages)
         + _LLM_IDEATOR                    # un seul appel d'idéation par run
-        + n_classif * _LLM_CLASSIF_PAR_LIVRE
-        + n * modele.get("jetons_sortie_par_unite", 0) * _SORTIE_USD_PAR_JETON,
+        + v["_classif"] * _LLM_CLASSIF_PAR_LIVRE
+        + v["_jetons"] * _SORTIE_USD_PAR_JETON,
         4)
 
 

@@ -372,12 +372,14 @@ class EnrichedBook(BaseModel):
     publisher: str | None = None
     # Sans interet en fiction, ils SONT le produit en low-content : la redevance KDP se
     # calcule sur le nombre de pages (cout d'impression fixe sous 110 pages, au-dela cout
-    # par page) et le format papier decide de la grille. `dimensions` reste du TEXTE brut :
+    # par page), le prix et l'encre. `format_papier` n'y entre PAS : jamais observe dans les
+    # puces de detail amazon.fr (captures v2 du 2026-07-20, fiche B0CF4P1N9S), consomme par
+    # aucun module, il reste a None. `dimensions` reste du TEXTE brut :
     # "15.24 x 0.71 x 22.86 cm" est ce qu'Amazon affiche, et l'ordre des axes n'est garanti
     # nulle part -- le decouper en trois flottants inventerait une precision absente.
     pages: int | None = None
     dimensions: str | None = None
-    format_papier: str | None = None       # libelle Amazon : "Broche", "Relie", "Poche"
+    format_papier: str | None = None       # jamais observe sur amazon.fr : reste a None
     langue: str | None = None
     serie_tome: int | None = None                       # clé « Livre N sur M »
     serie_total: int | None = None

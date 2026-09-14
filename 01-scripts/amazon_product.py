@@ -12,10 +12,17 @@ from models import BsrInfo
 _BLOCK = re.compile(r"Classement des meilleures ventes.{0,4000}", re.I | re.S)
 # rang principal : "N en Livres" (catégorie racine)
 _MAIN = re.compile(r"([\d][\d\s. \xa0]{0,14}?)\s*en\s+Livres(?!\s+\w)", re.I)  # lookahead : « Livres » = le RAYON, pas « Livres electroniques de ... » (ebooks)
-# sous-catégories : "N en <NomCatégorie>" — s'arrête avant une parenthèse pour ne
-# pas avaler un qualificatif du type "(Livres)" tout en gardant le nom de la catégorie
+# sous-catégories : "N en <NomCatégorie>". Le nom s'arrête avant le rang suivant, avant un
+# qualificatif "(Livres)", ou avant le bruit RÉEL qui suit le bloc sur une fiche amazon.fr :
+# « Commentaires client » et le CSS « .ask-product-docs-expander-content { ». Mesuré sur 29
+# extraits réels (tests/fixtures/bsr_scrape_fr_reel.json) — des `BsrInfo.raw` déjà débalisés
+# et TRONQUÉS à 300 caractères, pas le HTML complet des fiches : la branche `$` et ce qui suit
+# la liste sur une page entière n'y sont pas exercés. Sur ces extraits, le plafond de 50 et
+# une branche `\s{2,}` morte — les espaces sont normalisés AVANT — perdaient 11
+# sous-catégories sur 75 et en polluaient 7. 80 couvre le plus long nom observé (58).
 _SUB = re.compile(
-    r"([\d][\d\s. \xa0]{0,14}?)\s*en\s+([A-Za-zÀ-ÿ][^\d(]{2,50}?)(?=\s{2,}|\s+\d|\s*\(|$)",
+    r"([\d][\d\s. \xa0]{0,14}?)\s*en\s+([A-Za-zÀ-ÿ][^\d(]{2,80}?)"
+    r"(?=\s+\d|\s*\(|\s+Commentaires client|\s+\.[a-z-]+\s*\{|$)",
     re.I,
 )
 
@@ -63,6 +70,32 @@ def _default_fetch_html(asin: str) -> str | None:
         return r.text
     print(f"[bsr] HTTP {status} pour {asin} (fiche bloquée ?)")
     return None
+
+
+class BsrIndisponible(RuntimeError):
+    """La fiche n'a pas été LUE (statut non-200, blocage). Rien n'est su de son classement."""
+
+
+def fetch_bsr_strict(asin: str, fetch_html=None) -> BsrInfo | None:
+    """Comme `fetch_bsr`, mais LÈVE quand la fiche n'est pas lue ; `None` veut alors dire
+    « fiche lue, sans classement Livres ».
+
+    C'est le défaut de `resolve_bsrs`, et de lui seul : `fetch_bsr` avalait un 503 en `None`,
+    que `resolve_bsrs` écrivait 3 jours dans le cache MUTUALISÉ comme absence de classement
+    — pour tous les comptes. Même partage que `fetch_json_strict` / `_default_fetch_json`
+    côté autocomplete. `launcher` et `demo_free` gardent `fetch_bsr` et son `None`.
+
+    Trou connu, NON couvert : une page de captcha servie en 200 se parse en `None` et reste
+    lue comme une absence. Aucun discriminant n'est codé faute de capture HTML réelle d'un
+    captcha amazon.fr ; en inventer un reviendrait à deviner la forme du blocage."""
+    fetch_html = fetch_html or _default_fetch_html
+    html = fetch_html(asin)
+    if not html:
+        raise BsrIndisponible(f"fiche {asin} non lue")
+    info = parse_bsr(html)
+    if info:
+        info.asin = asin
+    return info
 
 
 def fetch_bsr(asin: str, fetch_html=None) -> BsrInfo | None:

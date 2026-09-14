@@ -21,6 +21,7 @@ Invariant §5.29 : un échec n'interrompt jamais le run, il est toujours compté
 lit jamais comme une mesure.
 """
 import os
+from datetime import date
 
 from dotenv import load_dotenv
 
@@ -37,7 +38,7 @@ from lowcontent_taxonomy import est_saisonnier, format_
 from marketplace import ACTIF
 from models import LowContentScored
 from niche_validator import validate_niches as _validate_niches
-from search_providers import get_provider
+from search_providers import RefusCompte, TaskPostRefuse, get_provider
 
 _SEARCH_TTL_S = 15 * 24 * 3600
 
@@ -57,6 +58,17 @@ def _graine(seed: str | None, format_cle: str | None, version: str) -> str:
         patron = format_(format_cle, version)["patterns"][0]
         return patron.replace("{theme}", "").strip()
     return ""
+
+
+def _fiche_en_cache(cache, asin: str, loc: int) -> bool:
+    """Une fiche illisible en cache compte comme ABSENTE : le devis prend le pire cas,
+    jamais une économie supposée (règle 2)."""
+    if cache is None:
+        return False
+    try:
+        return cache.get_book(asin, loc) is not None
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _rang_shortlist(n_enfants: int | None, profondeur: int, demand: int) -> tuple:
@@ -82,8 +94,21 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
                          expand_fn=None, ideate=None, validate=None,
                          enrich_fn=None,
                          classer_toutes: bool = False,
-                         journal_rejets: list | None = None) -> list[LowContentScored]:
-    """Scout low-content complet. Rend les niches triées par score décroissant."""
+                         journal_rejets: list | None = None,
+                         journal_brut: list | None = None,
+                         journal_entrees: list | None = None) -> list[LowContentScored]:
+    """Scout low-content complet. Rend les niches triées par score décroissant.
+
+    `journal_brut` (crochet de capture de la calibration) est transmis au classement, au
+    fournisseur construit ici et au batch ASIN ; il n'est PAS posé sur un fournisseur
+    injecté. Absent, rien n'est transmis : les `ideate`/`enrich_fn` injectés gardent leur
+    signature.
+
+    `journal_entrees` (calibration) reçoit, par niche scorée, les ENTRÉES exactes de
+    `score_lowcontent` : niche (format, risques, `n_enfants`), validation, SERP, fiches, BSR,
+    sous-catégories et la date du jour passée explicitement. Le rapport du run 4 n'en gardait
+    rien : un réglage de seuil ne pouvait s'essayer qu'en repayant un run."""
+    _jb = {"journal_brut": journal_brut} if journal_brut is not None else {}
     progress = progress or _noop
     expand_fn = expand_fn or _expand
     ideate = ideate or _generate
@@ -141,7 +166,7 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
                     n=n_ideas, inclure_saisonnier=inclure_saisonnier, version=version,
                     model=model, on_usage=lambda i, o, m: cost.add_llm(m, i, o),
                     progress=progress, classer_toutes=classer_toutes,
-                    journal_rejets=journal_rejets)
+                    journal_rejets=journal_rejets, cache=cache, **_jb)
     if not niches:
         progress("Scout low-content terminé : aucune niche exploitable.")
         return []
@@ -196,7 +221,7 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
         progress("Scout low-content terminé : aucune niche validée.")
         return []
 
-    provider = provider or get_provider("dataforseo")
+    provider = provider or get_provider("dataforseo", **_jb)
     loc = getattr(provider, "location_code", ACTIF.location_code)
     lang = getattr(provider, "language_code", ACTIF.language_code)
 
@@ -204,12 +229,26 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     par_niche = []
     tous_asins: list[str] = []
     n_non_traitees = 0
+    prio = getattr(provider, "priority", 2)
+    # Refus de COMPTE : toutes les requêtes suivantes seraient refusées de même. On cesse
+    # d'appeler le fournisseur — 31 `task_post` en rafale au premier run réel — mais on
+    # continue de LIRE le cache : une SERP déjà achetée reste une mesure, la jeter pour
+    # « arrêter proprement » perdrait gratuitement ce qui est su.
+    compte_refuse: str | None = None
+    n_non_mesurees_compte = 0
+    n_serp_cache = 0
     for i, v in enumerate(shortlist, 1):
         q = v.requete_amazon or v.niche
         sr = cache.get_search(q, loc, lang) if cache else None
+        if sr is not None:
+            n_serp_cache += 1
+        if sr is None and compte_refuse is not None:
+            n_non_mesurees_compte += 1
+            par_niche.append((v, None, []))
+            continue
         if sr is None:
             try:
-                cost.verifier(dataforseo_cost_usd(1, getattr(provider, "priority", 2)))
+                cost.verifier(dataforseo_cost_usd(1, prio))
             except PlafondCoutAtteint as e:
                 n_non_traitees = len(shortlist) - i + 1
                 progress(f"  ⚠ {e}")
@@ -217,34 +256,73 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
             progress(f"[{i}/{len(shortlist)}] Concurrence Amazon « {q} »…")
             try:
                 sr = provider.search(q, books_only=True)
-                cost.add_dataforseo(1, getattr(provider, "priority", 2))
-                if cache:
-                    cache.set_search(q, loc, lang, sr, _SEARCH_TTL_S)
-            except Exception as e:  # noqa: BLE001 — un échec ne coule jamais le run
+            except RefusCompte as e:
+                compte_refuse = str(e)
+                n_non_mesurees_compte += 1
+                progress(f"  ⚠ {e} — plus aucun appel au fournisseur, cache seul.")
+                sr = None
+            except BaseException as e:  # noqa: BLE001 — un échec ne coule jamais le run
+                # Tâche CRÉÉE puis non lue : facturée (seul un refus explicite ne l'est
+                # pas). Un Ctrl-C est imputé de même, puis relancé.
+                if not isinstance(e, TaskPostRefuse):
+                    cost.add_dataforseo(1, prio)
+                if not isinstance(e, Exception):
+                    raise
                 progress(f"  ⚠ search échec ({e}) — niche scorée sans concurrence.")
                 sr = None
+            else:
+                cost.add_dataforseo(1, prio)
+                if cache:
+                    try:
+                        cache.set_search(q, loc, lang, sr, _SEARCH_TTL_S)
+                    except Exception as e:  # noqa: BLE001 — la SERP est lue, et payée
+                        progress(f"  ⚠ SERP non mise en cache ({e}).")
         asins = [o.asin for o in (sr.organic if sr else []) if o.asin][:n_enrich_per_niche]
         par_niche.append((v, sr, asins))
         tous_asins.extend(asins)
+
+    if cache is not None and shortlist:
+        # Une SERP servie par le cache n'a pas été relue : elle dit le rayon tel qu'il était
+        # au jour de l'achat. Le taire faisait lire une donnée de 15 jours comme une mesure
+        # du jour. Jamais « à payer » : ligne à l'écran du client (§5.27).
+        progress(f"{n_serp_cache}/{len(shortlist)} recherche(s) Amazon servie(s) par le "
+                 f"cache — non relue(s).")
 
     # ── Phase 4 — UN SEUL batch ASIN ──
     enrichis: dict = {}
     union = list(dict.fromkeys(tous_asins))
     if union:
-        try:
-            # PRÉDICTIF, comme la boucle SERP : le poste le plus lourd du run était vérifié à
-            # 0, donc ne refusait qu'APRÈS avoir dépassé. Son tarif est connu d'avance ; le
-            # compte ignore les fiches déjà en cache, c'est un pire cas.
-            cost.verifier(dataforseo_cost_usd(len(union), getattr(provider, "priority", 2)))
-            economises = len(tous_asins) - len(union)
-            progress(f"Enrichissement de {len(union)} ASIN uniques en UN seul batch "
-                     f"({economises} économisé(s) par dédup inter-niches)…")
-            enrichis = enrich_fn(union, provider=provider, cache=cache, cost=cost,
-                                 progress=progress) or {}
-        except PlafondCoutAtteint as e:
-            progress(f"  ⚠ {e} — éditeurs et pagination non lus.")
-        except Exception as e:  # noqa: BLE001
-            progress(f"  ⚠ enrichissement indisponible ({e}) — éditeurs non lus.")
+        # PRÉDICTIF, comme la boucle SERP : le poste le plus lourd du run était vérifié à 0,
+        # donc ne refusait qu'APRÈS avoir dépassé. Mais il ne compte que les fiches ABSENTES
+        # du cache : compter l'union refusait, sous un plafond calé au plus juste, un batch
+        # qui ne coûtait rien — puis le canal BSR repartait sonder chaque ASIN « non
+        # enrichi ». Compte refusé : rien ne partira chez le fournisseur, rien n'est prévu.
+        en_cache = [a for a in union if _fiche_en_cache(cache, a, loc)]
+        deja = set(en_cache)
+        a_relire = [] if compte_refuse else [a for a in union if a not in deja]
+        lot = union
+        if a_relire:
+            try:
+                cost.verifier(dataforseo_cost_usd(len(a_relire), prio))
+            except PlafondCoutAtteint as e:
+                progress(f"  ⚠ {e} — éditeurs et pagination non lus pour {len(a_relire)} "
+                         f"ASIN absent(s) du cache.")
+                # Les fiches en cache ne coûtent rien et restent une mesure : `enrich_fn`
+                # est appelé quand même, sur elles seules — c'est lui qui SERT le cache.
+                lot = en_cache
+        if lot:
+            try:
+                economises = len(tous_asins) - len(union)
+                progress(f"Enrichissement de {len(lot)} ASIN uniques en UN seul batch "
+                         f"({economises} économisé(s) par dédup inter-niches)…")
+                # `cache_seul` n'est passé QUE sur refus : les `enrich_fn` injectés ailleurs
+                # gardent leur signature.
+                enrichis = enrich_fn(lot, provider=provider, cache=cache, cost=cost,
+                                     progress=progress,
+                                     **({"cache_seul": True} if compte_refuse else {}),
+                                     **_jb) or {}
+            except Exception as e:  # noqa: BLE001
+                progress(f"  ⚠ enrichissement indisponible ({e}) — éditeurs non lus.")
 
     # ── BSR : LU DANS L'ENRICHISSEMENT, jamais re-payé ──
     # `enrich_asins` parse déjà le BSR de chaque fiche (`parse_enriched_book`). Appeler
@@ -298,26 +376,33 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
             # parfaitement previsible ici. Le canal scrape reste a 0 : il est gratuit,
             # rien ne doit le brider.
             _src = (bsr_source or os.getenv("BSR_SOURCE", "scrape")).strip().lower()
-            _prevu = (dataforseo_cost_usd(len(manquants),
-                                          getattr(provider, "priority", 2))
-                      if fetch_bsr_fn is None and _src == "dataforseo" else 0.0)
+            _payant = fetch_bsr_fn is None and _src == "dataforseo"
+            if compte_refuse and _payant:
+                # Même compte : ce canal serait refusé à l'identique.
+                raise RefusCompte(compte_refuse)
+            _prevu = dataforseo_cost_usd(len(manquants), prio) if _payant else 0.0
             cost.verifier(_prevu)
             progress(f"Classement de {len(manquants)} livre(s) non enrichi(s)…")
             bsr_map = resolve_bsrs(manquants, source=bsr_source, provider=provider,
                                    fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
-                                   cost=cost, bsr_pause=bsr_pause)
+                                   cost=cost, bsr_pause=bsr_pause, progress=progress)
             rangs.update({a: info.rank_livres for a, info in (bsr_map or {}).items()
                           if info and info.rank_livres})
             subcats.update({a: (info.subcategories or [])
                             for a, info in (bsr_map or {}).items() if info})
         except PlafondCoutAtteint as e:
             progress(f"  ⚠ {e} — classement des livres non enrichis abandonné.")
+        except RefusCompte:
+            progress(f"  ⚠ classement de {len(manquants)} livre(s) non enrichi(s) non "
+                     f"demandé : compte DataForSEO refusé.")
         except Exception as e:  # noqa: BLE001
             progress(f"  ⚠ classement indisponible ({e}).")
 
     # ── Phase 5 — scoring ──
     out: list[LowContentScored] = []
     n_other = 0
+    # UNE date pour tout le run, passée explicitement : c'est elle que le journal archive.
+    aujourdhui = date.today()
     for v, sr, asins in par_niche:
         niche = par_requete.get(v.requete_amazon)
         if niche is None:
@@ -326,13 +411,33 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
             n_other += 1
         livres = [enrichis[a] for a in asins if a in enrichis]
         bsrs = [rangs[a] for a in asins if a in rangs]
+        if journal_entrees is not None:
+            # Seuls les ASIN organiques de CETTE niche : le scoring ne lit les deux tables
+            # que pour ses meilleurs organiques.
+            organiques = {o.asin for o in (sr.organic if sr else []) if o.asin}
+            journal_entrees.append({
+                "type": "niche", "requete": v.requete_amazon,
+                "niche": niche.model_dump(mode="json"),
+                "validation": v.model_dump(mode="json"),
+                "search": sr.model_dump(mode="json") if sr else None,
+                "asins": list(asins),
+                "livres": [b.model_dump(mode="json") for b in livres],
+                "bsrs": list(bsrs),
+                "bsr_map": {a: r for a, r in rangs.items() if a in organiques},
+                "subcats_map": {a: sc for a, sc in subcats.items() if a in organiques},
+                "aujourdhui": aujourdhui.isoformat()})
         out.append(score_lowcontent(niche, v, sr, livres, bsrs, bsr_map=rangs,
-                                    subcats_map=subcats))
+                                    subcats_map=subcats, aujourdhui=aujourdhui))
     out.sort(key=lambda s: s.global_score, reverse=True)
 
     if n_other:
         progress(f"{n_other} niche(s) hors taxonomie (« other ») — matériau de la "
                  f"prochaine version de la taxonomie.")
+    if n_non_mesurees_compte:
+        # Dire le NOMBRE et la cause : une niche ⚪ faute de compte ne se lit pas comme une
+        # SERP tombée par hasard, et relancer sans régler le compte reproduirait le refus.
+        progress(f"⚠ {n_non_mesurees_compte} niche(s) non mesurée(s) : compte DataForSEO "
+                 f"refusé ({compte_refuse}).")
     b = cost.breakdown()
     if n_non_traitees:
         progress(f"Scout low-content terminé — RAPPORT PARTIEL sur {len(out)} niche(s) : "

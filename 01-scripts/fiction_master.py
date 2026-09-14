@@ -29,6 +29,7 @@ from fiction_scoring import build_report
 from fiction_serp_provider import enrich_asins as _enrich_asins
 from fiction_serp_provider import fetch_shelf_asins as _fetch_shelf_asins
 from models import FictionNicheReport, FictionShelf
+from search_providers import RefusCompte
 
 
 def _noop(_msg: str) -> None:
@@ -88,6 +89,11 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     par_niche: list[tuple] = []          # [(niche, search_param, [asins])]
     n_niches_echouees = 0
     n_non_traitees = 0
+    # Refus de COMPTE : les SERP fiction ne sont pas en cache, il n'y a donc plus rien à
+    # mesurer pour les trios suivants. On cesse d'appeler le fournisseur au lieu d'enchaîner
+    # un refus par trio, et on les COMPTE : écartés faute de mesure, pas sur mesure.
+    compte_refuse: str | None = None
+    n_non_mesurees_compte = 0
     for i, niche in enumerate(niches, 1):
         # Plafond vérifié AVANT de payer, et prédictivement : le tarif d'une SERP est
         # connu (COST_PER_CALL_USD), donc rien n'oblige à la payer pour découvrir
@@ -101,6 +107,11 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
         progress(f"[{i}/{len(niches)}] SERP « {niche.query} »…")
         try:
             sp, asins = serp_fn(niche, n_top=n_top, depth=depth, cost=cost, version=version)
+        except RefusCompte as e:
+            compte_refuse = str(e)
+            n_non_mesurees_compte = len(niches) - i + 1      # celle-ci et toutes les suivantes
+            progress(f"  ⚠ {e} — plus aucun appel au fournisseur.")
+            break
         except Exception as e:  # noqa: BLE001 — une niche en échec ne coule pas le run
             n_niches_echouees += 1
             progress(f"  ⚠ échec SERP sur « {niche.query} » : {e} — niche écartée, "
@@ -108,6 +119,9 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
             continue
         par_niche.append((niche, sp, asins))
 
+    if n_non_mesurees_compte:
+        progress(f"⚠ {n_non_mesurees_compte} niche(s) non mesurée(s) : compte DataForSEO "
+                 f"refusé ({compte_refuse}).")
     if not par_niche:
         progress("Scout fiction terminé : aucun rayon exploitable.")
         return []
@@ -120,7 +134,9 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     progress(f"Enrichissement de {len(all_asins)} ASIN uniques en UN seul batch "
              f"({economises} économisé(s) par dédup inter-niches, sur {total_demande} "
              f"demandés)…")
-    enriched = enrich_fn(all_asins, cache=cache, cost=cost, progress=progress)
+    # `cache_seul` n'est passé QUE sur refus : les `enrich_fn` injectés gardent leur signature.
+    enriched = enrich_fn(all_asins, cache=cache, cost=cost, progress=progress,
+                         **({"cache_seul": True} if compte_refuse else {}))
 
     # D) Classification groupée — un seul sous-genre pour tout le run, donc un seul appel
     # (par lots de LOT_MAX côté classify_books), pas un groupement par sous-genre comme

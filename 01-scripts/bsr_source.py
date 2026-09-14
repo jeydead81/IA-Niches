@@ -4,7 +4,7 @@ Source (env BSR_SOURCE) : 'scrape' (gratuit, IP résidentielle, défaut local) o
 import os
 import time
 
-from amazon_product import fetch_bsr as _scrape_bsr
+from amazon_product import fetch_bsr_strict as _scrape_bsr
 from marketplace import ACTIF
 
 BSR_TTL_S = 15 * 24 * 3600     # 15 jours. Le cache est MUTUALISE entre tous les comptes : allonger sa duree
@@ -21,8 +21,12 @@ ECHEC_BSR_TTL_S = 3 * 24 * 3600
 
 def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=None,
                  location: int = ACTIF.location_code, bsr_priority: int = 2, cost=None,
-                 bsr_pause: float = 0.4) -> dict:
-    """Retour : {asin: BsrInfo|None}. Dédup, cache (par ASIN), et comptage coût pour DataForSEO."""
+                 bsr_pause: float = 0.4, progress=None) -> dict:
+    """Retour : {asin: BsrInfo|None}. Dédup, cache (par ASIN), et comptage coût pour DataForSEO.
+
+    `None` recouvre deux choses que le CACHE, lui, doit distinguer : une fiche LUE sans
+    classement (mémorisée 3 jours, c'est une mesure) et une fiche NON LUE (panne, tâche
+    jamais prête, lot refusé), qui n'apprend rien et n'est jamais écrite comme absence."""
     uniq = list(dict.fromkeys(a for a in asins if a))
     out: dict = {}
     misses: list[str] = []
@@ -39,6 +43,7 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
         else:
             misses.append(a)
 
+    en_panne: set[str] = set()
     if misses:
         source = source or os.getenv("BSR_SOURCE", "scrape")
         if fetch_bsr_fn is not None or source == "scrape":
@@ -48,15 +53,30 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
                     out[a] = fn(a)
                 except Exception:  # noqa: BLE001 — un échec réseau/scrape sur 1 ASIN ne coule pas le run
                     out[a] = None
+                    en_panne.add(a)
                 if bsr_pause and fetch_bsr_fn is None:
                     time.sleep(bsr_pause)
         elif source == "dataforseo":
             if provider is None:
                 raise ValueError("source=dataforseo requiert un provider")
-            batch = provider.product_info_batch(misses)
+            prio = getattr(provider, "priority", bsr_priority)
+            try:
+                batch = provider.product_info_batch(misses)
+            except BaseException:
+                # Même motif qu'`enrich_asins` : les tâches partent AVANT le poll, donc un
+                # Ctrl-C en plein poll (que le fournisseur laisse remonter exprès) les laisse
+                # créées et facturées. Pire cas imputé, jamais zéro (règle 2), puis on relance.
+                if cost is not None:
+                    cost.add_dataforseo(len(misses), prio)
+                raise
             out.update(batch)
+            # Seul ce que le batch a LU peut se mémoriser comme absence. Un fournisseur qui
+            # ne le dit pas n'apprend rien au cache : le pire cas est de repayer, jamais de
+            # figer une panne pour tous les comptes.
+            lus = getattr(batch, "lus", set())
+            en_panne.update(a for a in misses if batch.get(a) is None and a not in lus)
             if cost is not None:
-                cost.add_dataforseo(len(misses), getattr(provider, "priority", bsr_priority))
+                cost.add_dataforseo(getattr(batch, "taches_creees", len(misses)), prio)
         else:
             raise ValueError(f"BSR_SOURCE inconnu : {source}")
 
@@ -64,13 +84,16 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
             for a in misses:
                 if out.get(a) is not None:
                     cache.set_bsr(a, location, out[a], BSR_TTL_S)
-                else:
+                elif a not in en_panne:
                     # ECHEC MEMORISE, et c'est une economie reelle : sans lui, les memes
                     # ASIN sans classement repartaient en facturation a CHAQUE run,
-                    # indefiniment. Un echec mesure est une information.
+                    # indefiniment. Un echec MESURE est une information.
                     # TTL RACCOURCI : un livre peut entrer au classement (il vient d'etre
                     # publie, ou il vient de vendre). Memoriser l'absence 15 jours nous
                     # rendrait aveugles a son arrivee ; 3 jours suffisent a tuer le
                     # gaspillage sans figer une non-mesure.
                     cache.set_bsr_absent(a, location, ECHEC_BSR_TTL_S)
+        if en_panne and progress:
+            progress(f"  ⚠ {len(en_panne)} classement(s) non lu(s) (panne ou fiche "
+                     f"bloquée) — non mémorisé(s) comme absence, à relire au prochain run.")
     return out

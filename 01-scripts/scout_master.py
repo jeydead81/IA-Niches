@@ -6,6 +6,7 @@ ideator (niches IA) → validation demande (autocomplete, gratuit) → search (D
 (affichage CLI ou stream UI). Toutes les dépendances lourdes sont injectables (tests hors-ligne).
 """
 import argparse
+import os
 
 from dotenv import load_dotenv
 
@@ -18,7 +19,7 @@ from niche_ideator import generate_niches as _generate_niches
 from niche_validator import validate_niches as _validate_niches
 from niche_verdict import generate_verdict as _generate_verdict
 from scoring import score_niche
-from search_providers import get_provider
+from search_providers import RefusCompte, TaskPostRefuse, get_provider
 
 
 def _noop(_msg: str) -> None:
@@ -81,40 +82,69 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
     per_niche = []          # (validation, SearchResult|None, [asins top-n])
     all_asins: list[str] = []
     n_non_traitees = 0
+    prio = getattr(provider, "priority", 2)
+    # Refus de COMPTE : même traitement que lowcontent_master — plus aucun appel au
+    # fournisseur, le cache continue de servir ce qui est déjà acheté.
+    compte_refuse: str | None = None
+    n_non_mesurees_compte = 0
     for i, v in enumerate(shortlist, 1):
         q = v.requete_amazon or v.niche
         progress(f"[{i}/{len(shortlist)}] Concurrence Amazon « {q} »…")
         sr = cache.get_search(q, loc, lang) if cache else None
+        if sr is None and compte_refuse is not None:
+            n_non_mesurees_compte += 1
+            per_niche.append((v, None, []))
+            continue
         if sr is None:
             # Le plafond se vérifie AVANT l'appel, et seulement sur un défaut de cache :
             # une niche servie par le cache ne coûte rien, l'arrêter serait arbitraire.
             # Vérifier APRÈS coup signalerait un dépassement déjà payé.
             try:
-                cost.verifier(dataforseo_cost_usd(1, getattr(provider, "priority", 2)))
+                cost.verifier(dataforseo_cost_usd(1, prio))
             except PlafondCoutAtteint as e:
                 n_non_traitees = len(shortlist) - i + 1
                 progress(f"  ⚠ {e}")
                 break
             try:
                 sr = provider.search(q, books_only=books_only)
-                cost.add_dataforseo(1, getattr(provider, "priority", 2))
-                if cache:
-                    cache.set_search(q, loc, lang, sr, _SEARCH_TTL_S)
-            except Exception as e:  # noqa: BLE001 — on n'interrompt jamais le run
+            except RefusCompte as e:
+                compte_refuse = str(e)
+                n_non_mesurees_compte += 1
+                progress(f"  ⚠ {e} — plus aucun appel au fournisseur, cache seul.")
+                sr = None
+            except BaseException as e:  # noqa: BLE001 — on n'interrompt jamais le run
+                # Tâche CRÉÉE puis non lue : facturée. Seul un refus explicite ne l'est pas.
+                if not isinstance(e, TaskPostRefuse):
+                    cost.add_dataforseo(1, prio)
+                if not isinstance(e, Exception):
+                    raise
                 progress(f"  ⚠ search échec ({e}) — niche scorée sans concurrence.")
                 sr = None
+            else:
+                cost.add_dataforseo(1, prio)
+                if cache:
+                    try:
+                        cache.set_search(q, loc, lang, sr, _SEARCH_TTL_S)
+                    except Exception as e:  # noqa: BLE001 — la SERP est lue, et payée
+                        progress(f"  ⚠ SERP non mise en cache ({e}).")
         asins = [o.asin for o in (sr.organic if sr else []) if o.asin][:n_bsr_per_niche]
         per_niche.append((v, sr, asins))
         all_asins.extend(asins)
 
     # Phase B — BSR global (batché, dédup + cache)
     bsr_map = {}
+    _src = (bsr_source or os.getenv("BSR_SOURCE", "scrape")).strip().lower()
     try:
         cost.verifier()
         progress(f"Récupération des BSR ({len(set(all_asins))} livres uniques)…")
-        bsr_map = resolve_bsrs(all_asins, source=bsr_source, provider=provider,
-                               fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
-                               bsr_priority=bsr_priority, cost=cost, bsr_pause=bsr_pause)
+        if compte_refuse and fetch_bsr_fn is None and _src == "dataforseo":
+            # Le canal payant est le même compte : il serait refusé à l'identique.
+            progress("  ⚠ BSR non récupérés : compte DataForSEO refusé.")
+        else:
+            bsr_map = resolve_bsrs(all_asins, source=bsr_source, provider=provider,
+                                   fetch_bsr_fn=fetch_bsr_fn, cache=cache, location=loc,
+                                   bsr_priority=bsr_priority, cost=cost,
+                                   bsr_pause=bsr_pause, progress=progress)
     except PlafondCoutAtteint as e:
         # Sans BSR, `bsr_stats` rend crit1/2/3 à False : aucun bonus « place à prendre »
         # n'est accordé sur une absence de mesure. Le rayon ressort donc prudent, pas
@@ -151,6 +181,9 @@ def run_scout(seed: str | None = None, signals: dict | None = None,
                 progress(f"  ⚠ verdict indisponible ({e})")
 
     scored = [sc for sc, _ in pairs]
+    if n_non_mesurees_compte:
+        progress(f"⚠ {n_non_mesurees_compte} niche(s) non mesurée(s) : compte DataForSEO "
+                 f"refusé ({compte_refuse}).")
     b = cost.breakdown()
     # Le MONTANT ne passe plus par `progress` : ce canal alimente l'interface, qui ne
     # montre plus aucun coût en dollars (facturation à venir en jetons/abonnement). Le

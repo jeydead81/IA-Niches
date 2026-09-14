@@ -109,6 +109,66 @@ def test_le_motif_du_refus_ASIN_ARRIVE_a_l_ecran():
     assert any("40104" in e for e in etapes)
 
 
+def test_un_refus_de_COMPTE_sur_le_batch_n_envoie_PAS_les_lots_suivants():
+    """Relevé par le rejeu final du 2026-09-14 : 185 ASIN font deux lots (100 + 85). Le lot
+    de 100 refusé en 40104 (forme RÉELLE), le lot de 85 partait QUAND MÊME — un task_post
+    refusé de plus, gratuit, mais c'est précisément la rafale qu'un compte refusé ne doit
+    plus recevoir (suspension 40201 au run 3). Même critère que `RefusCompte` côté SERP :
+    refus à la RACINE, sans aucune tâche. ASIN INVENTÉS : seul le volume compte."""
+    envois = []
+
+    def faux_post(url, body):
+        envois.append(len(body))
+        return _COMPTE_NON_VERIFIE
+
+    asins = [f"B0INV{i:05d}" for i in range(150)]
+    out = _fournisseur().product_raw_batch(asins, post_json=faux_post,
+                                           get_json=lambda url: {}, poll_interval=0)
+    assert envois == [100]
+    assert out.taches_creees == 0
+    assert sum(n for n, _ in out.lots_en_echec) == 150
+    assert all("40104" in cause for _, cause in out.lots_en_echec)
+
+
+def test_une_panne_RESEAU_sur_un_lot_n_arrete_PAS_les_lots_suivants():
+    """Témoin. Une exception à l'envoi (coupure, 502 HTML) n'est pas un refus de compte :
+    rien ne dit que le lot suivant sera refusé, il doit toujours partir. ASIN INVENTÉS ;
+    la réponse task_get `{"status_code": 20100}` (« pas encore prête ») est INVENTÉE aussi."""
+    envois = []
+
+    def faux_post(url, body):
+        envois.append(len(body))
+        if len(envois) == 1:
+            raise ConnectionError("coupure")
+        return {"status_code": 20000, "tasks": [
+            {"status_code": 20100, "id": f"T{i}", "data": {"asin": it["asin"]}}
+            for i, it in enumerate(body)]}
+
+    asins = [f"B0INV{i:05d}" for i in range(150)]
+    out = _fournisseur().product_raw_batch(
+        asins, post_json=faux_post, poll_interval=0, max_polls=1,
+        get_json=lambda url: {"tasks": [{"status_code": 20100}]})
+    assert envois == [100, 50]
+    assert out.taches_creees == 50
+
+
+def test_un_refus_PAR_TACHE_n_arrete_PAS_les_lots_suivants():
+    """Témoin. La racine dit « Ok » : c'est la requête qui est refusée, pas le compte.
+    Code 40501 et ASIN INVENTÉS."""
+    envois = []
+
+    def faux_post(url, body):
+        envois.append(len(body))
+        return {"status_code": 20000, "tasks": [
+            {"status_code": 40501, "status_message": "Invalid Field."} for _ in body]}
+
+    asins = [f"B0INV{i:05d}" for i in range(150)]
+    out = _fournisseur().product_raw_batch(asins, post_json=faux_post,
+                                           get_json=lambda url: {}, poll_interval=0)
+    assert envois == [100, 50]
+    assert out.taches_creees == 0
+
+
 # ══ 2. Une porte INDÉCIDABLE n'est pas une porte ÉCHOUÉE ════════════════════════
 
 def _scored(score, requete, **kw):
@@ -198,6 +258,9 @@ def _classeur(tmp_path):
 
 def _sortie_cli(tmp_path, monkeypatch, capsys, rapport):
     import build_lowcontent_validation_set as cli
+    # Isole le VRAI df-cache.db : la CLI chiffre desormais un devis en lisant le cache, et ce
+    # test ne doit pas dependre de ce que le poste a deja achete.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "donnees"))
     monkeypatch.setattr(cli, "construire_rapport", lambda *a, **k: rapport)
     code = cli.main(["--xlsx", str(_classeur(tmp_path)),
                      "--out", str(tmp_path / "r.json")])

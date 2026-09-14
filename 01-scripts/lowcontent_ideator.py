@@ -17,6 +17,7 @@ une intention, pas une règle :
 - le filtre IP tourne des DEUX côtés de l'appel, et surtout AVANT : sans ça on paierait
   des tokens pour classer « coloriage pat patrouille » et on le verrait revenir.
 """
+import hashlib
 import os
 import json
 import unicodedata
@@ -29,6 +30,13 @@ from lowcontent_taxonomy import (est_norme, est_saisonnier, format_, load_taxono
 from models import LowContentNiche
 
 DEFAULT_MODEL = os.getenv("LOWCONTENT_IDEATOR_MODEL", "claude-sonnet-5")
+
+# Classement mis en cache PARTAGÉ, mode classement seulement. Chaque relance de la
+# calibration repayait ~0,08-0,09 $ (mesuré, 2026-09-13) pour reclasser les mêmes 31
+# requêtes avec le même modèle et la même consigne. Les requêtes sont des complétions
+# PUBLIQUES d'Amazon, sans rien du compte : mutualiser est l'économie de §1, comme pour les
+# SERP. Même TTL qu'elles — la traîne bouge à l'échelle de la saison.
+CLASSEMENT_TTL_S = 15 * 24 * 3600
 
 # Une requête utile porte au moins deux spécificateurs au-delà du format : « coloriage
 # enfant » ne dit rien, « coloriage licorne 3 ans » désigne un rayon. C'est le prompt qui
@@ -181,7 +189,7 @@ def _budget_reponse(n: int, n_suggestions: int) -> int:
                min(_MAX_TOKENS_PLAFOND, attendues * _JETONS_PAR_NICHE + _JETONS_MARGE))
 
 
-def _niches_lisibles(entree, progress) -> list[dict]:
+def _niches_lisibles(entree, progress, anomalies: list | None = None) -> list[dict]:
     """Les niches rendues par l'outil, LUES défensivement — jamais une exception.
 
     Le 2026-09-13, le modèle a rendu des niches sous forme de TEXTE là où le schéma attend
@@ -194,26 +202,56 @@ def _niches_lisibles(entree, progress) -> list[dict]:
     modèle, seulement sérialisé. Tout le reste — chaîne illisible, type inattendu, élément
     qui n'est pas un objet — est ignoré et COMPTÉ, jamais deviné : une requête dont on ne lit
     ni le format ni le thème ne se classe pas sans inventer. L'appelant nomme ensuite ces
-    requêtes « non classées », ce qu'elles sont."""
+    requêtes « non classées », ce qu'elles sont.
+
+    `anomalies` reçoit une trace de tout ce qui a été ignoré : une réponse amputée ne doit
+    jamais être mise en cache, elle y serait resservie 15 jours à tous les comptes."""
+    anomalies = anomalies if anomalies is not None else []
     brut = entree.get("niches") if isinstance(entree, dict) else None
     if isinstance(brut, str):
         try:
             brut = json.loads(brut)
         except ValueError:
+            anomalies.append("texte JSON invalide")
             progress("  ⚠ réponse du modèle illisible (niches : texte JSON invalide) — "
                      "ignorée, jamais devinée.")
             return []
     if brut is None:
+        anomalies.append("niches absentes")
         return []
     if not isinstance(brut, list):
+        anomalies.append(type(brut).__name__)
         progress(f"  ⚠ réponse du modèle illisible (niches : {type(brut).__name__} au lieu "
                  f"d'une liste) — ignorée, jamais devinée.")
         return []
     objets = [d for d in brut if isinstance(d, dict)]
     if len(objets) < len(brut):
+        anomalies.append("entrées hors schéma")
         progress(f"  ⚠ {len(brut) - len(objets)} entrée(s) du modèle illisible(s) (forme "
                  f"hors schéma) — ignorée(s), jamais devinée(s).")
     return objets
+
+
+def _cle_classement(model: str, system: str, user: str, tools: list) -> str:
+    """Tout ce qui change la RÉPONSE du modèle, et rien d'autre : modèle, consigne système,
+    prompt utilisateur (requêtes, formats et publics de la taxonomie) et outils — schéma et
+    `strict` compris. Une empreinte calculée, jamais un numéro de version : un compteur
+    manuel s'oublie exactement au moment où il compte (§5.14). Ce qui n'y est pas (n_enfants,
+    remappage des formats) est relu au présent à chaque passage."""
+    brut = json.dumps([model, system, user, tools], sort_keys=True, ensure_ascii=False)
+    return "llmlc:" + hashlib.sha1(brut.encode("utf-8")).hexdigest()
+
+
+def _lire_classement(cache, cle: str) -> dict | None:
+    """Un cache illisible est un cache absent : on repaie le classement, on ne l'invente
+    pas."""
+    try:
+        valeur = cache.get(cle)
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(valeur, dict) and isinstance(valeur.get("inputs"), list):
+        return valeur
+    return None
 
 
 def build_user_prompt(suggestions, seed, format_cle, n, version,
@@ -259,12 +297,19 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
                                model: str | None = None, client=None, on_usage=None,
                                progress=None,
                                classer_toutes: bool = False,
-                               journal_rejets: list | None = None) -> list[LowContentNiche]:
+                               journal_rejets: list | None = None,
+                               cache=None,
+                               journal_brut: list | None = None) -> list[LowContentNiche]:
     """Rend des `LowContentNiche` classées (ou proposées si aucune suggestion).
 
     `format_cle` inconnu LÈVE : les menus étant peuplés depuis la taxo, une clé inconnue ne
     peut venir que d'une requête forgée, et l'ignorer ferait croire à l'auteur que sa
-    contrainte est appliquée."""
+    contrainte est appliquée.
+
+    `cache` (mode classement seulement) : la réponse BRUTE de l'outil est gardée, jamais les
+    niches analysées — la relecture repasse par la logique courante, un correctif de cette
+    logique s'applique donc sans rien repayer. `journal_brut` reçoit cette même réponse
+    brute (entrées de l'outil, `stop_reason`, jetons) AVANT toute lecture."""
     progress = progress or (lambda _m: None)
     if format_cle:
         format_(format_cle, version)          # lève si inconnu
@@ -285,34 +330,66 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
             progress("Aucune requête exploitable après filtrage — aucun appel payant.")
             return []
 
-    client = client or _default_client()
     model = model or DEFAULT_MODEL
-    resp = client.messages.create(
-        model=model,
-        max_tokens=_budget_reponse(n, len(suggestions or [])),
-        system=_system_prompt(classer_toutes),
-        # STRICT : sans lui, l'API ne garantit pas que la reponse respecte le schema. Le
-        # 2026-09-13, des niches sont revenues en TEXTE et le run a leve APRES l'appel paye.
-        # Pris en charge sur claude-sonnet-5, sans beta ; exige additionalProperties false
-        # sur chaque objet. Ne protege PAS d'une troncature : voir `_niches_lisibles`.
-        tools=[{"name": "proposer_niches",
-                "description": "Renvoie les niches low-content classées ou proposées.",
-                "strict": True,
-                "input_schema": _SCHEMA}],
-        tool_choice={"type": "tool", "name": "proposer_niches"},
-        messages=[{"role": "user",
-                   "content": build_user_prompt(suggestions, seed, format_cle, n, version,
-                                                classer_toutes)}],
-    )
-    if on_usage is not None and getattr(resp, "usage", None) is not None:
-        on_usage(getattr(resp.usage, "input_tokens", 0),
-                 getattr(resp.usage, "output_tokens", 0), model)
-    if getattr(resp, "stop_reason", None) == "max_tokens":
-        # Meme regle que le classifieur fiction : une troncature ne se rattrape pas, et
-        # la taire ferait lire les niches coupees comme des niches ecartees.
-        progress(f"⚠ réponse tronquée (max_tokens) : le modèle n'a pas pu rendre toutes "
-                 f"les niches demandées ({n}). Celles qui manquent n'ont été écartées par "
-                 f"AUCUN filtre — relancer avec moins de requêtes.")
+    system = _system_prompt(classer_toutes)
+    user = build_user_prompt(suggestions, seed, format_cle, n, version, classer_toutes)
+    # STRICT : sans lui, l'API ne garantit pas que la reponse respecte le schema. Le
+    # 2026-09-13, des niches sont revenues en TEXTE et le run a leve APRES l'appel paye.
+    # Pris en charge sur claude-sonnet-5, sans beta ; exige additionalProperties false
+    # sur chaque objet. Ne protege PAS d'une troncature : voir `_niches_lisibles`.
+    tools = [{"name": "proposer_niches",
+              "description": "Renvoie les niches low-content classées ou proposées.",
+              "strict": True,
+              "input_schema": _SCHEMA}]
+
+    # Jamais en IDÉATION : la graine est une intention de l'utilisateur, et une relance y
+    # est voulue — resservir la même proposition la lui refuserait.
+    # `cle_cache`, pas `cle` : la boucle de lecture plus bas nomme `cle` la clé de FORMAT,
+    # et l'écrasait — le classement partait en cache sous la clé « journal_suivi ».
+    cle_cache = (_cle_classement(model, system, user, tools)
+                 if (cache is not None and suggestions) else None)
+    en_cache = _lire_classement(cache, cle_cache) if cle_cache else None
+    if en_cache is not None:
+        entrees, stop_reason = en_cache["inputs"], en_cache.get("stop_reason")
+        progress("Classement repris du cache (0 appel) : mêmes requêtes, même modèle, "
+                 "même consigne.")
+        if journal_brut is not None:
+            journal_brut.append({"type": "classement", "source": "cache", "modele": model,
+                                 "stop_reason": stop_reason, "usage": None,
+                                 "inputs": entrees})
+    else:
+        client = client or _default_client()
+        resp = client.messages.create(
+            model=model,
+            max_tokens=_budget_reponse(n, len(suggestions or [])),
+            system=system,
+            tools=tools,
+            tool_choice={"type": "tool", "name": "proposer_niches"},
+            messages=[{"role": "user", "content": user}],
+        )
+        stop_reason = getattr(resp, "stop_reason", None)
+        entrees = [block.input for block in resp.content
+                   if getattr(block, "type", None) == "tool_use"]
+        usage = getattr(resp, "usage", None)
+        if journal_brut is not None:
+            # AVANT toute lecture : une réponse illisible pour le code est exactement celle
+            # qu'il faut garder pour comprendre (le TEXTE du 2026-09-13).
+            journal_brut.append({
+                "type": "classement", "source": "api", "modele": model,
+                "stop_reason": stop_reason,
+                "usage": None if usage is None else {
+                    "input_tokens": getattr(usage, "input_tokens", 0),
+                    "output_tokens": getattr(usage, "output_tokens", 0)},
+                "inputs": entrees})
+        if on_usage is not None and usage is not None:
+            on_usage(getattr(usage, "input_tokens", 0),
+                     getattr(usage, "output_tokens", 0), model)
+        if stop_reason == "max_tokens":
+            # Meme regle que le classifieur fiction : une troncature ne se rattrape pas, et
+            # la taire ferait lire les niches coupees comme des niches ecartees.
+            progress(f"⚠ réponse tronquée (max_tokens) : le modèle n'a pas pu rendre toutes "
+                     f"les niches demandées ({n}). Celles qui manquent n'ont été écartées par "
+                     f"AUCUN filtre — relancer avec moins de requêtes.")
 
     taxo = load_taxonomy(version)
     publics_ok = set(taxo["publics"])
@@ -324,10 +401,10 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
     out: list[LowContentNiche] = []
     vues: set[str] = set()
     n_other = 0
-    for block in resp.content:
-        if getattr(block, "type", None) != "tool_use":
-            continue
-        for d in _niches_lisibles(block.input, progress):
+    anomalies: list[str] = []
+    n_hors_liste = 0
+    for entree in entrees:
+        for d in _niches_lisibles(entree, progress, anomalies):
             requete = (d.get("requete_amazon") or "").strip()
             k = _norm(requete)
             if not requete or k in vues:
@@ -346,6 +423,7 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
                     progress(f"  ⚠ écartée : « {requete} » ne fait pas partie des "
                              f"requêtes données au modèle — en mode classement, il "
                              f"n'en invente aucune.")
+                    n_hors_liste += 1
                     continue
                 requete = reelle.requete
             vues.add(k)
@@ -397,6 +475,7 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
     # sans aucune trace. En mesure, chaque omise est nommée : elle n'a été écartée par aucun
     # filtre, et le rapport doit pouvoir le dire. En produit, le tri est voulu (règle de
     # sélection) — on le compte, parce qu'un tri silencieux se lit comme un rayon vide.
+    omises: list[str] = []
     if suggestions:
         omises = [s.requete for s in suggestions if _norm(s.requete) not in vues]
         if omises and classer_toutes:
@@ -406,6 +485,21 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
         elif omises:
             progress(f"{len(omises)} requête(s) fournie(s) non retenue(s) par le "
                      f"classement (règle de sélection, ou plafond de {n}).")
+
+    # ── Mise en cache : une réponse COMPLÈTE seulement ──
+    # Tronquée, partiellement illisible, porteuse d'une requête inventée, ou — en mesure —
+    # amputée d'une requête omise : la garder la resservirait 15 jours à tous les comptes,
+    # et la relance, qui est le seul remède, deviendrait impossible. En produit, des omises
+    # sont le tri voulu (règle de sélection) : elles n'empêchent rien.
+    if cle_cache and en_cache is None:
+        complete = (entrees and stop_reason != "max_tokens" and not anomalies
+                    and not n_hors_liste and not (classer_toutes and omises))
+        if complete:
+            try:
+                cache.set(cle_cache, {"inputs": entrees, "stop_reason": stop_reason,
+                                "modele": model}, CLASSEMENT_TTL_S)
+            except Exception as e:  # noqa: BLE001 — le classement est lu, et payé
+                progress(f"  ⚠ classement non mis en cache ({type(e).__name__}).")
 
     # ── Filtre IP REJOUÉ après le modèle : il peut réintroduire une marque de lui-même ──
     out, rejets = filtrer_ip(out)

@@ -986,8 +986,14 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
     cost = CostTracker()
     fabrique = (generate_lowcontent_verdict if type_ == "lowcontent"
                 else generate_verdict)
-    verdict = fabrique(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
-    UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
+    try:
+        verdict = fabrique(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+    except Exception as e:  # noqa: BLE001 — la réponse a pu être PAYÉE avant de lever
+        raise HTTPException(status_code=502, detail=_erreur_publique(e)) from None
+    finally:
+        # Soldé même quand la lecture lève : les jetons sont facturés dès la réponse, et
+        # une réservation laissée à 0 $ effaçait la dépense d'usage.db (§5.29).
+        UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
     return {**verdict.model_dump(), "_cout": cost.breakdown()}
 
 
@@ -1018,9 +1024,13 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
     _verifier_plafond(user_id)
     ligne = _reserver_appel(user_id, "kdp_keywords")          # même raisonnement que /api/verdict
     cost = CostTracker()
-    mots = generer_mots_cles(scored, titre=scored.niche,
-                             on_usage=lambda i, o, m: cost.add_llm(m, i, o))
-    UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
+    try:
+        mots = generer_mots_cles(scored, titre=scored.niche,
+                                 on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+    except Exception as e:  # noqa: BLE001 — même raisonnement que /api/verdict
+        raise HTTPException(status_code=502, detail=_erreur_publique(e)) from None
+    finally:
+        UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
     return {**mots.model_dump(), "_cout": cost.breakdown()}
 
 
@@ -1067,7 +1077,11 @@ async def api_dossier(request: Request, user_id: str = Depends(utilisateur_coura
         ligne = _reserver_appel(user_id, "dossier")
         cost = CostTracker()
         try:
-            mots = generer_mots_cles(scored, titre=titre,
+            # En low-content, la requete, la categorie et les satellites vivent sur
+            # `scored.niche` (LowContentNiche) : passer le LowContentScored entier levait
+            # AVANT l'appel, avale ci-dessous -- dossier sans mots-cles, creneau consomme.
+            mots = generer_mots_cles(scored.niche if type_ == "lowcontent" else scored,
+                                     titre=titre,
                                      on_usage=lambda i, o, m: cost.add_llm(m, i, o))
         except Exception as e:  # noqa: BLE001 — le document reste utile sans eux (5.29)
             _LOG.warning("mots-cles indisponibles pour le dossier : %s", e)

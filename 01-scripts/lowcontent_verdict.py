@@ -14,6 +14,7 @@ suffit pas, parce que le coût d'un oubli est porté par l'acheteur, pas par l'a
 La garde ne peut que DÉGRADER, jamais remonter : un « No-Go » qui deviendrait « Go prudent »
 parce qu'une source est citée serait une inversion absurde.
 """
+import json
 import os
 
 from dotenv import load_dotenv
@@ -56,7 +57,9 @@ TU PRODUIS (via l'outil rendre_verdict_lc, OBLIGATOIRE) :
 - 1 à 3 ANGLES, chacun avec un titre, un sous-titre, une direction de couverture, un prix, ET \
 SURTOUT une spec_interieur PRÉCISE : format en cm, nombre de pages, structure exacte d'une \
 page type, sections. C'est ce qui se fabrique. Un angle sans spec ne se produit pas ;
-- redevance_estimee : ce que l'auteur touche par vente au prix proposé, en une phrase.
+- redevance_estimee : ce que l'auteur touche par vente au prix proposé, en une phrase, en \
+disant le coût d'impression que tu supposes — ou, si tu ne peux pas le chiffrer, dis que tu \
+ne peux pas le chiffrer plutôt que d'avancer un montant.
 
 RESPECTE les Lignes directrices métadonnées KDP : pas de bourrage de mots-clés dans le titre, \
 aucune marque, aucun personnage, aucune franchise. Et les règles « Livres à contenu limité » : \
@@ -92,6 +95,7 @@ _ANGLE = {
                                                 "référence et mentions imposées"},
     },
     "required": ["angle", "pourquoi", "risque", "titre", "sous_titre", "spec_interieur"],
+    "additionalProperties": False,          # exigé par le mode STRICT sur chaque objet
 }
 
 VERDICT_LC_SCHEMA = {
@@ -107,6 +111,7 @@ VERDICT_LC_SCHEMA = {
         "risque_ip": {"type": "string"},
     },
     "required": ["verdict", "confiance", "facteur_decisif", "angles"],
+    "additionalProperties": False,
 }
 
 
@@ -181,15 +186,53 @@ def build_user_prompt(s: LowContentScored) -> str:
     return "\n".join(lignes)
 
 
+def _json_si_texte(v):
+    """Une chaîne JSON valide est DÉCODÉE : c'est le contenu structuré du modèle, seulement
+    sérialisé — la forme exacte reçue par `lowcontent_ideator` le 2026-09-13. Tout le reste
+    est rendu tel quel : à l'appelant de le déclarer illisible, jamais de le deviner."""
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v
+    return v
+
+
+def _texte(v) -> str:
+    return v if isinstance(v, str) else ""
+
+
+def _angles_lisibles(brut) -> tuple[list[AngleAttaque], int]:
+    """Les angles lisibles, et le NOMBRE d'angles écartés. Un angle mal formé n'emporte pas
+    les autres, et n'est pas deviné non plus."""
+    brut = _json_si_texte(brut)
+    if brut is None:
+        return [], 0
+    if not isinstance(brut, list):
+        return [], 1
+    angles, illisibles = [], 0
+    for a in brut:
+        try:
+            angles.append(AngleAttaque(**a))
+        except (TypeError, ValueError):      # pas un objet, ou hors schéma (ValidationError)
+            illisibles += 1
+    return angles, illisibles
+
+
 def generate_lowcontent_verdict(s: LowContentScored, model: str | None = None,
                                 client=None, on_usage=None) -> NicheVerdict:
-    """Verdict éditorial d'UNE niche low-content. Tool-use forcé."""
+    """Verdict éditorial d'UNE niche low-content. Tool-use forcé, outil STRICT."""
     client = client or _default_client()
     model = model or DEFAULT_MODEL
+    # STRICT : sans lui, l'API ne garantit pas que `tool_use.input` respecte le schéma — le
+    # défaut qui a fait lever `lowcontent_ideator` APRÈS l'appel payé (2026-09-13). Il exige
+    # additionalProperties false sur chaque objet et ne protège pas d'une troncature : la
+    # lecture reste défensive.
     resp = client.messages.create(
         model=model, max_tokens=4000, system=SYSTEM_PROMPT,
         tools=[{"name": "rendre_verdict_lc",
                 "description": "Rend le verdict éditorial low-content.",
+                "strict": True,
                 "input_schema": VERDICT_LC_SCHEMA}],
         tool_choice={"type": "tool", "name": "rendre_verdict_lc"},
         messages=[{"role": "user", "content": build_user_prompt(s)}])
@@ -197,19 +240,30 @@ def generate_lowcontent_verdict(s: LowContentScored, model: str | None = None,
         on_usage(getattr(resp.usage, "input_tokens", 0),
                  getattr(resp.usage, "output_tokens", 0), model)
 
-    d = None
+    trouve, d = False, None
     for block in resp.content:
         if getattr(block, "type", None) == "tool_use":
-            d = block.input or {}
+            trouve, d = True, _json_si_texte(block.input)
             break
-    if d is None:
+    if not trouve:
         # Tool-use FORCÉ : une réponse sans bloc d'outil est une anomalie, pas un verdict
         # vide qu'on afficherait comme une analyse.
         raise ValueError("le modèle n'a pas rendu de verdict (aucun bloc tool_use)")
+    if not isinstance(d, dict):
+        raise ValueError(f"réponse du modèle illisible ({type(d).__name__} au lieu d'un objet)")
+    # Une confiance illisible ne devient JAMAIS « 0/10 » : ce zéro se lirait comme le jugement
+    # du modèle (règle 3). `bool` est un `int` en Python, d'où le test explicite.
+    confiance = d.get("confiance")
+    if isinstance(confiance, bool) or not isinstance(confiance, int):
+        raise ValueError(f"réponse du modèle illisible (confiance : {confiance!r})")
 
-    angles = [AngleAttaque(**a) for a in (d.get("angles") or [])]
-    verdict = d.get("verdict") or "Go prudent"
-    facteur = d.get("facteur_decisif") or ""
+    angles, n_illisibles = _angles_lisibles(d.get("angles"))
+    verdict = _texte(d.get("verdict")) or "Go prudent"
+    facteur = _texte(d.get("facteur_decisif"))
+    if n_illisibles:
+        # Dit à l'écran : un verdict amputé d'un angle ne doit pas se lire comme complet.
+        facteur = (f"{n_illisibles} angle(s) illisible(s) écarté(s), jamais deviné(s) ; "
+                   + facteur).strip()
 
     # ── LA garde des formats normés ──
     # On a demandé la source au prompt ; on vérifie ici qu'elle est là. Un « Go »
@@ -224,8 +278,8 @@ def generate_lowcontent_verdict(s: LowContentScored, model: str | None = None,
         facteur = ("source réglementaire non fournie — à vérifier avant publication ; "
                    + facteur).strip()
 
-    return NicheVerdict(verdict=verdict, confiance=int(d.get("confiance") or 0),
+    return NicheVerdict(verdict=verdict, confiance=confiance,
                         facteur_decisif=facteur, angles=angles,
-                        saturation=d.get("saturation") or "",
-                        faux_concurrent=d.get("faux_concurrent") or "",
-                        differenciation=d.get("differenciation") or "")
+                        saturation=_texte(d.get("saturation")),
+                        faux_concurrent=_texte(d.get("faux_concurrent")),
+                        differenciation=_texte(d.get("differenciation")))

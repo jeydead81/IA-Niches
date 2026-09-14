@@ -56,6 +56,12 @@ def _pct(v) -> str:
     return "non mesuré" if v is None else f"{round(v * 100)} %"
 
 
+def _eur(v, suffixe: str = "") -> str:
+    """Un montant, ou « non mesuré » SANS unité : « non mesuré EUR par vente » posait une
+    unité sur une absence de mesure, et se relisait comme un montant manquant de chiffre."""
+    return "non mesuré" if v is None else f"{_nb(v)} EUR{suffixe}"
+
+
 def _lire(s) -> dict:
     """Ramène `ScoredNiche` et `LowContentScored` à une forme commune.
 
@@ -155,9 +161,9 @@ def _page_marche(pdf: FPDF, d: dict) -> None:
         lignes.append(f"Part indie (publies via KDP) : {_pct(d['part_indie'])}  ·  "
                       f"variantes quasi identiques : {_nb(d['variantes'])} "
                       f"(eleve = mauvais)")
-        lignes.append(f"Prix median : {_nb(d['prix_median'])} EUR  ·  pagination : "
-                      f"{_nb(d['pages'])}  ·  redevance estimee : "
-                      f"{_nb(d['redevance'])} EUR par vente")
+        lignes.append(f"Prix median : {_eur(d['prix_median'])}  ·  pagination : "
+                      f"{_nb(d['pages'])}  ·  redevance estimee au prix median du rayon : "
+                      f"{_eur(d['redevance'], ' par vente')}")
     for l in lignes:
         pdf.multi_cell(0, 5, _safe(l), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
@@ -214,6 +220,11 @@ def _page_angle(pdf: FPDF, d: dict) -> None:
                    new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     for i, a in enumerate(v.angles[:MAX_ANGLES]):
+        # La redevance de l'angle est une PHRASE du modele : aucun prix, aucune pagination ni
+        # aucun bareme d'impression n'y entre cote code. Imprimee nue, elle se lisait comme le
+        # montant calcule de la page 1. Le qualificatif va dans la valeur, pas dans le libelle :
+        # la cellule du libelle fait 34 mm, un libelle long chevaucherait le texte.
+        redevance = (a.redevance_estimee or "").strip()
         pdf.ln(2)
         pdf.set_font("Helvetica", "B", 10.5)
         pdf.multi_cell(0, 5.5, _safe(("" if i else "→ ") + (a.titre or "")),
@@ -229,7 +240,8 @@ def _page_angle(pdf: FPDF, d: dict) -> None:
                               # angle sans spec ne se fabrique pas. Vides ailleurs, et
                               # alors omis -- une ligne vide se lirait comme une lacune.
                               ("Interieur", a.spec_interieur),
-                              ("Redevance", a.redevance_estimee),
+                              ("Redevance", f"estimation de l'IA, non calculee : {redevance}"
+                                            if redevance else ""),
                               ("Source reglementaire", a.source_reglementaire)):
             if not (valeur or "").strip():
                 continue

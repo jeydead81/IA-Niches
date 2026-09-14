@@ -30,6 +30,14 @@ tests/fixtures/*_raw.json
 # une mise en vente / passage en public — elles révèlent ta stratégie)
 # ─────────────────────────────────────────────────────────────
 # 99-logs/credits-log.csv
+
+# Captures BRUTES des runs de calibration (payloads DataForSEO, réponses du classement,
+# entrées du scoring). Données de run volumineuses et stratégiques : jamais versionnées.
+99-logs/captures/
+# Rapports de calibration low-content : un par run ET un par refus avant dépense (la CLI
+# n'écrase jamais, elle horodate). Ignorés par défaut ; le rapport d'un run DÉCIDABLE se
+# versionne volontairement (`git add -f`), comme l'étalon du classifieur fiction.
+99-logs/rapport-calibration-lc*.json
 # 02-veille-hebdo/raw-data/
 # 02-veille-hebdo/rapports/
 

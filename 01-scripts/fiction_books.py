@@ -17,10 +17,14 @@ _BSR_KEY = ("meilleures ventes", "best sellers rank")
 # sous-catégorie : "RANG en CATÉGORIE", une par ligne, APRÈS la parenthèse fermante du rang
 # principal. Le "(Livres)" qui qualifie parfois la catégorie (ex. "Jeux (Livres)") fait
 # partie du libellé Amazon -> on ne s'arrête pas au premier "(".
-# amazon.fr ecrit le format en CLE et la pagination en VALEUR : {"Broche": "120 pages"}.
-# Les deux se lisent donc du meme champ. \d avec separateurs de milliers francais (espace
-# fine incluse) : "1 248 pages" est une ecriture reelle.
+# Pagination : amazon.fr l'ecrit sous « Nombre de pages de l'edition imprimee » :
+# "335 pages" (8 captures sur 8, v2 du 2026-07-20, ebook Kindle compris). Le fragment
+# "nombre de pages" n'a ni accent ni apostrophe, et « Page Flip » (Kindle) ne le capte pas.
+# Une cle de FORMAT {"Broche": "120 pages"} n'a JAMAIS ete observee : elle venait d'une
+# fixture fabriquee, et le parseur ecrit pour elle a rendu pages=None sur 185 fiches payees.
+# Elle reste un simple repli. Separateurs de milliers francais (espace fine incluse).
 _PAGES = re.compile(r"([\d][\d\s  .]*)\s*pages?", re.I)
+_CLE_PAGES = "nombre de pages"
 _FORMATS_PAPIER = ("broch", "reli", "poche", "album", "cartonn")
 
 
@@ -111,17 +115,24 @@ def parse_enriched_book(result: dict, serp_position: int = 0) -> EnrichedBook | 
             tome, total = int(m.group(1)), int(m.group(2))
             break
 
-    # Format + pagination : la CLE porte le format ("Broche"), la VALEUR la pagination
-    # ("120 pages"). On rend le libelle Amazon tel quel plutot qu'une cle normalisee --
-    # c'est ce que l'auteur lit sur la fiche, et la grille de cout KDP s'y raccroche.
-    format_papier = pages = None
+    def _nb_pages(v) -> int | None:
+        m = _PAGES.search(str(v or ""))
+        return _bsr_to_int(m.group(1)) if m else None    # separateurs de milliers FR
+
+    # Sur un ebook, c'est la pagination de l'edition IMPRIMEE : exactement la donnee dont
+    # la redevance papier a besoin. Jamais estimee depuis l'epaisseur (ecart x2,1 mesure).
+    pages = _nb_pages(pick(_CLE_PAGES))
+    # `format_papier` : jamais observe dans les puces de detail amazon.fr (captures v2 du
+    # 2026-07-20, fiche B0CF4P1N9S), consomme par aucun module ; la redevance ne depend que
+    # du prix, des pages et de l'encre. Laisse a None faute de source reelle.
+    format_papier = None
     for kl, (k, v) in low.items():
         if any(f in kl for f in _FORMATS_PAPIER):
             format_papier = k
-            m = _PAGES.search(str(v or ""))
-            if m:
-                pages = _bsr_to_int(m.group(1))     # gere les separateurs de milliers FR
-            break
+            if pages is None:
+                pages = _nb_pages(v)
+            if pages is not None:
+                break           # une cle de format SANS pagination ne clot pas la recherche
 
     rating = item.get("rating") if isinstance(item.get("rating"), dict) else {}
     # caster AVANT _series_hint_from_title : la regex lève un TypeError sur un non-str,

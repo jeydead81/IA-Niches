@@ -1,6 +1,7 @@
 """fiction_ideator.py — propose des TRIOS fiction (sous-genre × tropes × décor) contraints
 à la taxonomie versionnée. Tool-use forcé, client injectable (aucun réseau en unit-test).
 La contrainte taxonomie est vérifiée CÔTÉ CODE : on demande au LLM, puis on contrôle."""
+import json
 import os
 
 from dotenv import load_dotenv
@@ -74,11 +75,24 @@ TRIOS_INPUT_SCHEMA = {
                     "rationale": {"type": "string"},
                 },
                 "required": ["tropes", "decor", "query", "rationale"],
+                "additionalProperties": False,      # exigé par le mode STRICT
             },
         }
     },
     "required": ["trios"],
+    "additionalProperties": False,
 }
+
+
+def _json_si_texte(v):
+    """Une chaîne JSON valide est DÉCODÉE (contenu du modèle, seulement sérialisé) ; le reste
+    est rendu tel quel et écarté par l'appelant, jamais deviné."""
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v
+    return v
 
 
 def build_user_prompt(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
@@ -152,9 +166,12 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
         model=model,
         max_tokens=4000,
         system=SYSTEM_PROMPT,
+        # STRICT : sans lui, l'API ne garantit pas la forme de `tool_use.input` (des objets
+        # rendus en TEXTE ont fait lever lowcontent_ideator APRÈS l'appel payé, 2026-09-13).
         tools=[{
             "name": "proposer_trios",
             "description": "Renvoie les trios fiction proposés.",
+            "strict": True,
             "input_schema": TRIOS_INPUT_SCHEMA,
         }],
         tool_choice={"type": "tool", "name": "proposer_trios"},
@@ -171,9 +188,23 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
     for block in resp.content:
         if getattr(block, "type", None) != "tool_use":
             continue
-        for t in ((block.input or {}).get("trios") or []):
-            tr = list(dict.fromkeys(t.get("tropes") or []))   # dédup, ordre préservé
+        entree = _json_si_texte(block.input)
+        trios = _json_si_texte(entree.get("trios")) if isinstance(entree, dict) else None
+        if not isinstance(trios, list):
+            continue                           # réponse illisible -> rien d'inventé
+        for t in trios:
+            if not isinstance(t, dict):
+                continue                       # trio hors schéma (texte…) -> écarté
+            tropes_brut = t.get("tropes") or []
+            if isinstance(tropes_brut, str):
+                tropes_brut = [tropes_brut]    # une chaîne EST un trope, pas des lettres
+            if not isinstance(tropes_brut, list):
+                continue
+            tr = list(dict.fromkeys(x for x in tropes_brut if isinstance(x, str)))
             dec = t.get("decor") or None
+            query = t.get("query") or ""
+            if (dec is not None and not isinstance(dec, str)) or not isinstance(query, str):
+                continue                       # champ mal typé -> écarté, jamais deviné
             if not tr or not set(tr) <= set(tropes_ok):
                 continue                       # trope hors taxonomie -> écarté
             if dec and dec not in decors_ok:
@@ -184,5 +215,5 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
                 continue                       # décor imposé non respecté -> écarté
             out.append(FictionNiche(sous_genre=sous_genre_cle, tropes=tr[:3], decor=dec,
                                     marketplace="fr", rayon=rayon,
-                                    query=t.get("query") or ""))
+                                    query=query))
     return out[:n] if n else out          # `n` est un plafond, pas seulement une suggestion

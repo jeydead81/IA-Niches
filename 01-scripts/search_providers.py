@@ -32,6 +32,25 @@ COST_PER_CALL_USD = {1: 0.0015, 2: 0.003}  # standard (~45 min) / priority (~1 m
 LOT_ASIN_MAX = 100
 
 
+class TaskPostRefuse(RuntimeError):
+    """`task_post` REFUSÉ explicitement : aucune tâche créée, donc rien de facturé.
+
+    C'est la SEULE panne d'une SERP que l'appelant n'impute pas. Tout le reste — poll
+    épuisé, relecture illisible, Ctrl-C — survient APRÈS la création de la tâche, que
+    DataForSEO facture qu'on la relise ou non. Au rejeu du 2026-09-14, cinq SERP créées puis
+    non lues étaient imputées 0 $ : le coût du run mentait vers le bas (règle 2).
+    Hérite de RuntimeError : les appelants qui attrapaient le RuntimeError générique ne
+    changent pas."""
+
+
+class RefusCompte(TaskPostRefuse):
+    """Refus posé à la RACINE, sans aucune tâche : c'est le COMPTE qui est refusé (non
+    vérifié 40104, identifiants, solde), pas la requête. Toutes les requêtes suivantes
+    seront refusées de même : les orchestrateurs cessent alors d'appeler le fournisseur au
+    lieu d'enchaîner un `task_post` par niche (31 au premier run réel). Aucune liste de
+    codes : un code qu'on n'a jamais vu ne doit pas relancer la rafale."""
+
+
 def _motif_refus(reponse: dict | None, tache: dict | None = None) -> str:
     """Le motif d'un refus DataForSEO, LA ou il se trouve.
 
@@ -62,6 +81,12 @@ class _Payloads(dict):
         super().__init__(*a, **k)
         self.taches_creees = 0
         self.lots_en_echec: list[tuple[int, str]] = []
+        # Relectures qui ont levé pendant le poll, par type ; la tâche a été relue au cycle
+        # suivant, pas abandonnée.
+        self.lectures_en_echec: dict[str, int] = {}
+        # ASIN dont le payload a été RELU. Hors de cet ensemble, `None` est une panne, pas
+        # une mesure : rien ne doit s'en mémoriser.
+        self.lus: set[str] = set()
 
 
 def _resolve_priority(priority: int | None) -> int:
@@ -133,13 +158,23 @@ class DataForSEOProvider:
 
     def __init__(self, login: str | None = None, password: str | None = None,
                  priority: int | None = None, location_code: int = DEFAULT_LOCATION,
-                 language_code: str = DEFAULT_LANGUAGE):
+                 language_code: str = DEFAULT_LANGUAGE, journal_brut: list | None = None):
         load_dotenv()
         self.auth = (login or os.getenv("DATAFORSEO_LOGIN", ""),
                      password or os.getenv("DATAFORSEO_PASSWORD", ""))
         self.priority = _resolve_priority(priority)
         self.location_code = location_code
         self.language_code = language_code
+        # Journal BRUT, éteint par défaut : les réponses telles que DataForSEO les rend, AVANT
+        # tout parsing. Le run 4 a payé 185 fiches lues par un parseur fautif, et rien n'en
+        # gardait le brut : corriger le parseur obligeait à tout racheter. C'est l'appelant
+        # (la CLI de calibration) qui décide où l'écrire — jamais le cache partagé. Ni les
+        # identifiants ni le corps posté n'y entrent : seulement ce que DataForSEO répond.
+        self.journal_brut = journal_brut
+
+    def _journaliser(self, entree: dict) -> None:
+        if self.journal_brut is not None:
+            self.journal_brut.append(entree)
 
     def _post(self, url: str, body):
         return requests.post(url, auth=self.auth, json=body, timeout=30).json()
@@ -173,14 +208,23 @@ class DataForSEOProvider:
             item["search_param"] = "i=stripbooks"
         body = [item]
         d = post_json(_BASE + "/task_post", body)
-        task = (d.get("tasks") or [{}])[0]
+        # Un refus aussi : son motif exact est ce qui manque le plus après coup.
+        self._journaliser({"type": "serp_post", "keyword": keyword, "reponse": d})
+        taches = d.get("tasks") or []
+        task = taches[0] if taches else {}
         if task.get("status_code") not in (20000, 20100):
-            raise RuntimeError(f"task_post refusé : {_motif_refus(d, task)}")
+            motif = f"task_post refusé : {_motif_refus(d, task)}"
+            if not taches and d.get("status_code") not in (None, 20000, 20100):
+                raise RefusCompte(motif)
+            raise TaskPostRefuse(motif)
         tid = task.get("id")
         for _ in range(max_polls):
             time.sleep(poll_interval)
-            t = (get_json(f"{_BASE}/task_get/advanced/{tid}").get("tasks") or [{}])[0]
+            reponse = get_json(f"{_BASE}/task_get/advanced/{tid}")
+            t = (reponse.get("tasks") or [{}])[0]
             if t.get("status_code") == 20000 and t.get("result"):
+                self._journaliser({"type": "serp_get", "keyword": keyword, "tache": tid,
+                                   "reponse": reponse})
                 return map_dataforseo_result(t["result"][0])
         # Budget aligné sur celui du chemin ASIN (40 polls) : à 16 polls (128 s), un simple
         # ralentissement de la file DataForSEO effaçait un run entier — mesuré en live, 3
@@ -190,13 +234,19 @@ class DataForSEOProvider:
                            f"(id={tid}) — file DataForSEO probablement saturée")
 
     def product_raw_batch(self, asins, post_json=None, get_json=None,
-                          poll_interval: float = 8, max_polls: int = 40) -> dict:
+                          poll_interval: float = 8, max_polls: int = 40,
+                          journal_brut: list | None = None) -> dict:
         """Payloads ASIN bruts de plusieurs ASIN, par task_post de LOT_ASIN_MAX au plus, collecte
         par poll. Retour : {asin: payload dict|None}. HTTP injectable. Seule boucle de poll —
-        product_info_batch et le futur enrichissement fiction (M2) s'y branchent."""
+        product_info_batch et le futur enrichissement fiction (M2) s'y branchent.
+
+        `journal_brut` (à défaut, celui du fournisseur) reçoit chaque payload AU MOMENT où
+        il est lu : un Ctrl-C en plein poll laisse dans la liste de l'appelant tout ce qui a
+        déjà été relu, alors que le dict de retour, lui, ne serait jamais rendu."""
         asins = [a for a in asins if a]
         if not asins:
             return {}
+        journal = journal_brut if journal_brut is not None else self.journal_brut
         post_json = post_json or self._post
         get_json = get_json or self._get
         pending: dict[str, str] = {}          # task_id -> asin
@@ -225,7 +275,19 @@ class DataForSEOProvider:
                 # rendait des payloads vides SANS dire pourquoi, ce qu'un solde epuise en
                 # cours de run aurait produit a l'identique. Le motif part a l'ecran par
                 # `lots_en_echec`, que `enrich_asins` annonce deja.
-                lots_en_echec.append((len(lot), _motif_refus(d)))
+                motif = _motif_refus(d)
+                lots_en_echec.append((len(lot), motif))
+                if not tasks and d.get("status_code") not in (None, 20000, 20100):
+                    # Refus de COMPTE (meme critere que `RefusCompte` cote SERP) : les lots
+                    # suivants seraient refuses de meme. Les envoyer quand meme faisait un
+                    # task_post refuse de plus par lot -- la rafale qu'un compte refuse ne doit
+                    # plus recevoir (suspension 40201 au run 3 ; releve au rejeu du 2026-09-14,
+                    # 100 + 85). Ils sont COMPTES, pas envoyes. Une exception a l'envoi, elle,
+                    # n'arrete rien : rien ne dit que le lot suivant echouera.
+                    reste = len(asins) - (debut + len(lot))
+                    if reste:
+                        lots_en_echec.append((reste, f"{motif} — non envoyé(s) : compte refusé"))
+                    break
                 continue
             du_lot = set(lot)
             refusees: dict[str, int] = {}
@@ -251,22 +313,56 @@ class DataForSEOProvider:
         out = _Payloads({a: None for a in asins})
         out.taches_creees = len(pending)      # AVANT le poll, qui vide `pending`
         out.lots_en_echec = lots_en_echec
+        lectures_en_echec: dict[str, int] = {}
         for _ in range(max_polls):
             if not pending:
                 break
             time.sleep(poll_interval)
             for tid in list(pending):
-                r = (get_json(f"{_ASIN_BASE}/task_get/advanced/{tid}").get("tasks") or [{}])[0]
-                if r.get("status_code") == 20000 and r.get("result"):
-                    out[pending.pop(tid)] = r["result"][0]
+                try:
+                    r = (get_json(f"{_ASIN_BASE}/task_get/advanced/{tid}")
+                         .get("tasks") or [{}])[0]
+                    pret = r.get("status_code") == 20000 and r.get("result")
+                except Exception as exc:          # noqa: BLE001
+                    # UNE relecture illisible (502 HTML, coupure) levait hors de la boucle
+                    # et abandonnait le lot ENTIER — 185 fiches déjà facturées au run 4. La
+                    # tâche reste en attente et sera relue au cycle suivant ; l'échec est
+                    # compté par type. Ctrl-C (BaseException) n'est PAS attrapé ici :
+                    # `enrich_asins` l'impute puis le laisse remonter.
+                    nom = type(exc).__name__
+                    lectures_en_echec[nom] = lectures_en_echec.get(nom, 0) + 1
+                    continue
+                if pret:
+                    asin, payload = pending.pop(tid), r["result"][0]
+                    if journal is not None:
+                        journal.append({"type": "asin", "asin": asin, "tache": tid,
+                                        "payload": payload})
+                    out[asin] = payload
+        out.lectures_en_echec = lectures_en_echec
+        out.lus = {a for a, p in out.items() if p is not None}
         return out
 
     def product_info_batch(self, asins, post_json=None, get_json=None,
                            poll_interval: float = 8, max_polls: int = 40) -> dict:
-        """BSR de plusieurs ASIN (batché). Retour : {asin: BsrInfo|None}."""
+        """BSR de plusieurs ASIN (batché). Retour : {asin: BsrInfo|None}, qui porte aussi
+        `lus` — les ASIN dont la fiche a été RELUE. `None` pour un ASIN lu = pas de rang
+        Livres (une mesure) ; `None` hors de `lus` = rien n'a été lu (une panne).
+        `resolve_bsrs` ne mémorise l'absence que pour les premiers.
+
+        LIMITE CONNUE, faute de capture : une tâche qui se TERMINE sur un code d'erreur (ASIN
+        retiré de la vente, par exemple) n'est jamais « prête » — seul `20000` avec un
+        résultat l'est. Elle attend donc les `max_polls`, sort de `lus`, et reste une panne :
+        jamais mémorisée comme absence, donc réattendue (~320 s) et repayée (0,003 $, si
+        DataForSEO facture une tâche en erreur — non vérifié) à chaque run. Aucune réponse de
+        ce type n'est capturée dans le dépôt : en inventer le code pour la classer « lue sans
+        résultat » risquerait de figer une panne passagère dans le cache mutualisé. À relever
+        dans une capture brute (R5) avant d'y toucher."""
         raw = self.product_raw_batch(asins, post_json=post_json, get_json=get_json,
                                      poll_interval=poll_interval, max_polls=max_polls)
-        return {a: (parse_asin_bsr(r) if r else None) for a, r in raw.items()}
+        out = _Payloads({a: (parse_asin_bsr(r) if r else None) for a, r in raw.items()})
+        for attr in ("taches_creees", "lots_en_echec", "lectures_en_echec", "lus"):
+            setattr(out, attr, getattr(raw, attr, getattr(out, attr)))
+        return out
 
 
 _BSR_KEY_HINTS = ("meilleures ventes", "best sellers rank")

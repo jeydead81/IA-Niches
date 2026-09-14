@@ -31,7 +31,9 @@ def _verdict(**kw) -> NicheVerdict:
                     sous_titre="120 jours de suivi", prix_suggere="11,99 €",
                     requete_principale="carnet glycémie",
                     spec_interieur="A5, 120 pages, une double page par semaine",
-                    redevance_estimee="3,15 € par vente",
+                    # Texte de l'IA, volontairement DIFFÉRENT de tout float calculé : le
+                    # dossier ne doit jamais laisser croire que les deux sont la même chose.
+                    redevance_estimee="environ 3,20 € par vente",
                     source_reglementaire="")])
     base.update(kw)
     return NicheVerdict(**base)
@@ -65,7 +67,7 @@ def _lc(**kw) -> LowContentScored:
                     angle="registre conforme", pourquoi="conformité", risque="texte",
                     titre="Registre unique du personnel", sous_titre="conforme 2026",
                     spec_interieur="A4, 100 pages, une ligne par salarié",
-                    redevance_estimee="4,24 € par vente",
+                    redevance_estimee="environ 4,50 € par vente",   # ≠ 4.24 calculé
                     source_reglementaire="Code du travail, art. L1221-13")]))
     base.update(kw)
     return LowContentScored(**base)
@@ -218,3 +220,42 @@ def test_le_dossier_low_content_porte_ses_signaux_propres(tmp_path):
     t = _texte(build_dossier_pdf(_lc(), tmp_path / "d.pdf"))
     assert "indie" in t.lower()
     assert "14,99" in t or "14.99" in t
+
+
+# ── R31 : la redevance de l'IA n'est pas un calcul ─────────────────────────────
+
+def _pages(chemin: Path) -> list[str]:
+    pypdf = pytest.importorskip("pypdf")
+    return [p.extract_text() or "" for p in pypdf.PdfReader(str(chemin)).pages]
+
+
+def test_la_redevance_de_l_angle_est_dite_estimee_par_l_ia(tmp_path):
+    """La « Redevance » de la page 2 est une phrase du modèle : aucun prix, aucune pagination
+    ni aucun barème d'impression n'y entre côté code. Imprimée sans qualificatif, elle se
+    lisait comme le montant calculé — sur un document qu'on relit sans écran pour demander."""
+    import re
+    angle = AngleAttaque(angle="a", pourquoi="p", risque="r", titre="Registre",
+                         sous_titre="s", spec_interieur="A4, 100 pages",
+                         redevance_estimee="environ 3,20 € par vente")
+    p = _pages(build_dossier_pdf(
+        _lc(pages_median=None, redevance_estimee=None, prix_median=None,
+            verdict=_verdict(angles=[angle])), tmp_path / "d.pdf"))
+    assert "estimation de l" in p[1] and "non calcul" in p[1]
+    assert "3,20" in p[1]
+    # Page 1 : « non mesuré EUR par vente » mettait une unité sur une absence de mesure.
+    assert not re.search(r"non mesur\S*\s*EUR", p[0])
+
+
+def test_une_redevance_calculee_garde_son_montant_en_page_1(tmp_path):
+    p = _pages(build_dossier_pdf(_lc(), tmp_path / "d.pdf"))
+    assert "4,24 EUR par vente" in p[0] and "14,99 EUR" in p[0]
+
+
+def test_le_prompt_demande_le_cout_d_impression_suppose():
+    """Le texte reste celui de l'IA ; on lui demande au moins de dire sur quel coût
+    d'impression il repose, ou qu'il ne peut pas le chiffrer. Vérifié sur le prompt ENVOYÉ."""
+    from lowcontent_verdict import generate_lowcontent_verdict
+    from tests.test_lowcontent_verdict import _Client, _payload, _scored
+    c = _Client(_payload())
+    generate_lowcontent_verdict(_scored(), client=c)
+    assert "ne peux pas le chiffrer" in c.appels[0]["system"]

@@ -123,6 +123,22 @@ def test_independently_published_est_le_marqueur_indie():
     assert est_indie("Hachette") is False
 
 
+def test_createspace_est_reconnu_comme_indie():
+    """Chaîne RÉELLE du cache (fiche 154651578X, run du 2026-09-13). L'ancien marqueur
+    « independant publishing » (faute d'orthographe) ne correspondait à rien : cette
+    fiche comptait comme éditeur inconnu. Effet mesuré nul sur le run 4, mais un marqueur
+    qui ne matche jamais est un défaut invisible par construction."""
+    assert est_indie("CreateSpace Independent Publishing Platform") is True
+    assert est_indie("Larousse") is False
+    assert est_indie("Amelia Green") is None
+
+
+def test_independent_seul_ne_fait_pas_un_indie():
+    """« Independent Publishers Group » est un DISTRIBUTEUR d'éditeurs installés : un
+    marqueur « independent » nu le classerait indie et gonflerait `part_indie`."""
+    assert est_indie("Independent Publishers Group") is not True
+
+
 def test_un_editeur_inconnu_rend_None_et_jamais_False():
     """LE point du module. `False` voudrait dire « ce n'est pas de l'indie », donc
     « c'est un éditeur installé » — une conclusion. `None` dit qu'on ne sait pas, et le

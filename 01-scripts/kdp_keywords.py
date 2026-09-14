@@ -8,6 +8,7 @@ Amazon.fr — donc on ne devine pas : on demande au LLM ~22 candidats, on les SO
 Les contraintes de KDP sont vérifiées CÔTÉ CODE, jamais seulement demandées au prompt : un
 modèle les oublie sous pression, exactement comme il oubliait la taxonomie dans
 fiction_ideator."""
+import json
 import os
 import re
 import unicodedata
@@ -120,7 +121,24 @@ CANDIDATS_INPUT_SCHEMA = {
         }
     },
     "required": ["candidats"],
+    "additionalProperties": False,          # exigé par le mode STRICT
 }
+
+# Motif du rejet porté par `rejetes` quand la réponse ne se lit pas : le seul canal que le
+# dossier et l'écran affichent déjà, sans changer le modèle `MotsClesKDP`.
+MOTIF_ILLISIBLE = ("réponse du modèle illisible : les candidats ne sont pas une liste — "
+                   "ignorés, jamais découpés ni devinés")
+
+
+def _json_si_texte(v):
+    """Une chaîne JSON valide est DÉCODÉE (contenu du modèle, seulement sérialisé) ; le reste
+    est rendu tel quel et déclaré illisible par l'appelant."""
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v
+    return v
 
 
 def build_user_prompt(scored: ScoredNiche, titre: str = "") -> str:
@@ -180,9 +198,11 @@ def generer_mots_cles(scored: ScoredNiche, titre: str = "", client=None, sonde=N
         model=model,
         max_tokens=1500,
         system=SYSTEM_PROMPT,
+        # STRICT : sans lui, l'API ne garantit pas la forme de `tool_use.input` (2026-09-13).
         tools=[{
             "name": "proposer_mots_cles",
             "description": "Renvoie les expressions candidates pour les 7 emplacements KDP.",
+            "strict": True,
             "input_schema": CANDIDATS_INPUT_SCHEMA,
         }],
         tool_choice={"type": "tool", "name": "proposer_mots_cles"},
@@ -193,11 +213,23 @@ def generer_mots_cles(scored: ScoredNiche, titre: str = "", client=None, sonde=N
                  getattr(resp.usage, "output_tokens", 0), model)
 
     bruts: list[str] = []
+    illisible = False
     for block in resp.content:
-        if getattr(block, "type", None) == "tool_use":
-            bruts.extend((block.input or {}).get("candidats") or [])
+        if getattr(block, "type", None) != "tool_use":
+            continue
+        entree = _json_si_texte(block.input)
+        candidats = (_json_si_texte(entree.get("candidats"))
+                     if isinstance(entree, dict) else None)
+        # JAMAIS `extend` d'une chaîne : le rejeu a produit emplacements=['c','a','r','n',
+        # 'e','t','d'] sans la moindre erreur, et une sonde les « confirmait ».
+        if isinstance(candidats, list):
+            bruts.extend(candidats)
+        else:
+            illisible = True
 
     gardes, rejets = nettoyer_candidats(bruts, titre)
+    if illisible:
+        rejets.insert(0, ("(réponse du modèle)", MOTIF_ILLISIBLE))
 
     # Sonde gratuite : un échec réseau ne doit pas ressembler à « aucun mot ne marche ».
     confirmes: list[str] = []

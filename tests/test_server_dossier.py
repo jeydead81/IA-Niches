@@ -105,3 +105,55 @@ def test_l_ancienne_route_pdf_sert_le_meme_document(tmp_path, monkeypatch):
     client, _ = _client_with_isolated_dbs(monkeypatch, tmp_path)
     r = client.post("/api/pdf", json=_NICHE)
     assert r.status_code == 200 and r.content[:4] == b"%PDF"
+
+
+def test_les_mots_cles_d_un_dossier_low_content_sont_reellement_generes(tmp_path, monkeypatch):
+    """R32. `generer_mots_cles` recevait le `LowContentScored` entier, qui ne porte ni
+    `requete_amazon` ni `categorie` : AttributeError AVANT l'appel, avalée par le garde
+    §5.29, dossier sans mots-clés et créneau de débit consommé — sans rien dire.
+
+    Rien du chemin testé n'est remplacé : seuls le client Anthropic (réponse figée,
+    INVENTÉE) et la sonde autocomplete (vide, jamais le réseau) le sont."""
+    import kdp_keywords
+    from usage import UsageMeter
+    client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
+    prompts = []
+
+    class _Bloc:
+        type = "tool_use"
+        input = {"candidats": ["registre personnel entreprise"]}
+
+    class _Usage:
+        input_tokens, output_tokens = 900, 300
+
+    class _Reponse:
+        content, usage, stop_reason = [_Bloc()], _Usage(), "tool_use"
+
+    class _Faux:
+        def __init__(self):
+            self.messages = self
+
+        def create(self, **kw):
+            prompts.append(kw["messages"][0]["content"])
+            return _Reponse()
+
+    monkeypatch.setattr(kdp_keywords, "_default_client", _Faux)
+    monkeypatch.setattr(kdp_keywords, "_default_sonde", lambda p: [])
+    corps = {"type": "lowcontent", "inclure_mots_cles": True, "niche": {
+        "niche": {"niche": "registre du personnel",
+                  "requete_amazon": "registre du personnel obligatoire",
+                  "rationale": "r", "categorie": "pro",
+                  "format_cle": "registres_reglementaires", "theme": "personnel",
+                  "public": "professionnel"},
+        "global_score": 7.1, "concurrence_mesuree": True}}
+    r = client.post("/api/dossier", json=corps)
+    assert r.status_code == 200 and r.content[:4] == b"%PDF"
+    assert len(prompts) == 1
+    assert "registre du personnel obligatoire" in prompts[0]
+    uid = client.get("/api/auth/moi").json()["user_id"]
+    assert UsageMeter(server._USAGE_DB).resume(uid).cout_usd > 0
+
+    import io
+    pypdf = __import__("pytest").importorskip("pypdf")
+    texte = "\n".join(p.extract_text() or "" for p in pypdf.PdfReader(io.BytesIO(r.content)).pages)
+    assert "registre personnel entreprise" in texte
