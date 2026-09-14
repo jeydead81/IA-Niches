@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-13** (1 056 tests, 49 modules, 34 variables d'env, 18
+> Comptages revérifiés le **2026-09-13** (1 069 tests, 49 modules, 34 variables d'env, 18
 > endpoints, `server.py` 1 157 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -456,6 +456,9 @@ ASIN réel vers `EnrichedBook`, gère les formes atypiques observées sans jamai
 
 **LLM** — `niche_ideator.py` · `niche_verdict.py` · `kdp_keywords.py` · `fiction_ideator.py` ·
 `fiction_classifier.py`. Tous en **tool-use forcé**, jamais de parsing de texte libre.
+**Seul `lowcontent_ideator` est en mode STRICT** (`strict: true`, depuis le 2026-09-13,
+§2.14) : les autres lisent `block.input` sans garantie de forme, et un run peut lever
+APRÈS l'appel payé.
 
 **Place de marché** — `marketplace.py` (§2.15) : source unique de `location_code`,
 `language_code`, identifiant d'autocomplete et domaine des fiches. `MARKETPLACE=fr` par
@@ -544,7 +547,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1056 tests** collectés sur **88 fichiers** `tests/test_*.py`, **1056 passés, 0 ignoré**,
+**1069 tests** collectés sur **89 fichiers** `tests/test_*.py`, **1069 passés, 0 ignoré**,
 aucune erreur de collecte (`python -m pytest`, relancé le 2026-09-13 ; la suite avait connu
 des échecs INTERMITTENTS, cf. §5.33).
 
@@ -721,6 +724,27 @@ mesure ; seule la seconde renvoie aux critères. Choix assumé : un Spearman cal
 reste indécidable si une « morte » manque. Le code de sortie ne change pas (2 dans les deux
 cas). **Écarté par Baptiste** : un contrôle préalable gratuit par `appendix/errors`, avant
 l'appel Anthropic, qui aurait économisé les 0,0905 $.
+
+**Deuxième run réel, le même jour : planté APRÈS l'appel payé**
+(`tests/test_calibration_run_plantage.py`). Compte vérifié, 31 requêtes sondées, puis
+`AttributeError: 'str' object has no attribute 'get'` dans `lowcontent_ideator` : le modèle a
+rendu des niches sous forme de TEXTE là où le schéma attend des objets. Les MÊMES 31 requêtes
+étaient passées au run précédent — même entrée, autre forme de sortie. Coût : ~0,09 $
+d'Anthropic de plus, 0 $ chez DataForSEO, **aucun rapport**. Deux défauts :
+(1) **l'outil n'était pas en mode STRICT.** Sans `strict: true`, l'API ne garantit pas que
+`tool_use.input` respecte le schéma. Le mode strict — sans beta, pris en charge sur
+claude-sonnet-5 — exige `additionalProperties: false` sur CHAQUE objet, et ne protège pas
+d'une troncature : d'où `_niches_lisibles`, qui décode une chaîne JSON valide (le contenu du
+modèle, seulement sérialisé) et ignore en les COMPTANT chaîne illisible, type inattendu et
+éléments qui ne sont pas des objets — jamais une exception. Les requêtes concernées restent
+nommées « non classées ». (2) **La CLI ne laissait aucune trace d'un run qui lève** : le
+rapport s'écrivait avant l'affichage, mais après `construire_rapport`. Une exception — ou un
+Ctrl-C, qui pendant le batch ASIN brûle 0,558 $ sans rien mettre en cache — produit désormais
+un rapport INDÉCIDABLE portant la cause et le coût déjà engagé, code de sortie **4**
+(exception) ou **130** (Ctrl-C). **Le même défaut latent reste dans `fiction_classifier`,
+`fiction_ideator`, `kdp_keywords` et `lowcontent_verdict`**, qui lisent `block.input` sans mode
+strict — tâche séparée ; `niche_ideator` et `niche_verdict` passent par pydantic et lèvent une
+`ValidationError` typée.
 
 Quatre décisions de mesure :
 
@@ -1219,7 +1243,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1056 tests sans réseau.
+   paramètre — c'est ce qui tient les 1069 tests sans réseau.
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
    un échec partiel ni arrondir un coût vers le bas. Distinguer toujours un chiffre mesuré d'un

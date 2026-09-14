@@ -18,6 +18,7 @@ une intention, pas une règle :
   des tokens pour classer « coloriage pat patrouille » et on le verrait revenir.
 """
 import os
+import json
 import unicodedata
 
 from dotenv import load_dotenv
@@ -94,10 +95,13 @@ _SCHEMA = {
                 },
                 "required": ["requete_amazon", "niche", "format_cle", "theme", "public",
                              "rationale", "categorie"],
+                "additionalProperties": False,
             },
         }
     },
     "required": ["niches"],
+    # Exigence du mode STRICT de l'outil, sur CHAQUE objet du schema (cf. l'appel).
+    "additionalProperties": False,
 }
 
 
@@ -177,6 +181,41 @@ def _budget_reponse(n: int, n_suggestions: int) -> int:
                min(_MAX_TOKENS_PLAFOND, attendues * _JETONS_PAR_NICHE + _JETONS_MARGE))
 
 
+def _niches_lisibles(entree, progress) -> list[dict]:
+    """Les niches rendues par l'outil, LUES défensivement — jamais une exception.
+
+    Le 2026-09-13, le modèle a rendu des niches sous forme de TEXTE là où le schéma attend
+    des objets, et `d.get(...)` a levé APRÈS l'appel payé : aucun rapport, alors que les
+    mêmes 31 requêtes étaient passées au run précédent. `strict: true` sur l'outil est le
+    vrai correctif ; cette lecture reste, parce que le mode strict ne protège pas d'une
+    troncature (`max_tokens`).
+
+    Une chaîne JSON valide est DÉCODÉE : ce n'est pas deviner, c'est le contenu structuré du
+    modèle, seulement sérialisé. Tout le reste — chaîne illisible, type inattendu, élément
+    qui n'est pas un objet — est ignoré et COMPTÉ, jamais deviné : une requête dont on ne lit
+    ni le format ni le thème ne se classe pas sans inventer. L'appelant nomme ensuite ces
+    requêtes « non classées », ce qu'elles sont."""
+    brut = entree.get("niches") if isinstance(entree, dict) else None
+    if isinstance(brut, str):
+        try:
+            brut = json.loads(brut)
+        except ValueError:
+            progress("  ⚠ réponse du modèle illisible (niches : texte JSON invalide) — "
+                     "ignorée, jamais devinée.")
+            return []
+    if brut is None:
+        return []
+    if not isinstance(brut, list):
+        progress(f"  ⚠ réponse du modèle illisible (niches : {type(brut).__name__} au lieu "
+                 f"d'une liste) — ignorée, jamais devinée.")
+        return []
+    objets = [d for d in brut if isinstance(d, dict)]
+    if len(objets) < len(brut):
+        progress(f"  ⚠ {len(brut) - len(objets)} entrée(s) du modèle illisible(s) (forme "
+                 f"hors schéma) — ignorée(s), jamais devinée(s).")
+    return objets
+
+
 def build_user_prompt(suggestions, seed, format_cle, n, version,
                       classer_toutes: bool = False) -> str:
     """Deux modes, UN seul prompt paramétré — comme le compositeur de trio fiction.
@@ -252,8 +291,13 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
         model=model,
         max_tokens=_budget_reponse(n, len(suggestions or [])),
         system=_system_prompt(classer_toutes),
+        # STRICT : sans lui, l'API ne garantit pas que la reponse respecte le schema. Le
+        # 2026-09-13, des niches sont revenues en TEXTE et le run a leve APRES l'appel paye.
+        # Pris en charge sur claude-sonnet-5, sans beta ; exige additionalProperties false
+        # sur chaque objet. Ne protege PAS d'une troncature : voir `_niches_lisibles`.
         tools=[{"name": "proposer_niches",
                 "description": "Renvoie les niches low-content classées ou proposées.",
+                "strict": True,
                 "input_schema": _SCHEMA}],
         tool_choice={"type": "tool", "name": "proposer_niches"},
         messages=[{"role": "user",
@@ -283,7 +327,7 @@ def generate_lowcontent_niches(seed: str | None = None, format_cle: str | None =
     for block in resp.content:
         if getattr(block, "type", None) != "tool_use":
             continue
-        for d in ((block.input or {}).get("niches") or []):
+        for d in _niches_lisibles(block.input, progress):
             requete = (d.get("requete_amazon") or "").strip()
             k = _norm(requete)
             if not requete or k in vues:

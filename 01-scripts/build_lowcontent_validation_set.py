@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import traceback
 from pathlib import Path
 
 from autocomplete_expand import Suggestion, expand as _expand
@@ -262,8 +263,27 @@ def main(argv: list[str] | None = None) -> int:
 
     cost = CostTracker(plafond_usd=a.plafond)
     print(f"{len(etiquetees)} requête(s) étiquetée(s). Plafond du run : {a.plafond:.2f} $")
-    r = construire_rapport(etiquetees, cost=cost, progress=lambda m: print(f"  {m}"),
-                           version=a.version, inclure_saisonnier=a.inclure_saisonnier)
+    code_echec = None
+    try:
+        r = construire_rapport(etiquetees, cost=cost, progress=lambda m: print(f"  {m}"),
+                               version=a.version, inclure_saisonnier=a.inclure_saisonnier)
+    except (Exception, KeyboardInterrupt) as exc:          # noqa: BLE001 — voir ci-dessous
+        # Le run a pu PAYER avant de lever : le 2026-09-13, le classement Anthropic était
+        # revenu, puis `AttributeError` sur sa réponse — trace Python brute, ni rapport ni
+        # coût. Ctrl-C compris : couper la console pendant le batch ASIN brûle 0,558 $ sans
+        # rien mettre en cache, c'est le cas où la trace compte le plus.
+        interrompu = isinstance(exc, KeyboardInterrupt)
+        code_echec = 130 if interrompu else 4
+        if not interrompu:
+            traceback.print_exc()
+        r = RapportCalibration(
+            n_requetes=len(etiquetees), porte_franchie=False, porte_indecidable=True,
+            avertissements=[
+                f"run interrompu ({type(exc).__name__}: {exc}) APRÈS "
+                f"{cost.total_usd():.4f} $ déjà engagés — aucune mesure exploitable. Ne "
+                f"touchez pas à data/lowcontent_criteres.json : relancer une fois la cause "
+                f"réglée. Les SERP et fiches déjà rendues sont en cache ; l'appel Anthropic, "
+                f"lui, sera repayé."])
 
     # ECRIT AVANT tout affichage. Le run vient de couter de l'argent reel : le JSON est la
     # seule trace qui compte, et il ne doit dependre d'aucune ligne decorative. L'ordre
@@ -277,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     # client (§5.27).
     print(f"\n  coût réel du run : {cost.total_usd():.4f} $")
     print(f"  rapport écrit : {dest}")
+    if code_echec is not None:
+        return code_echec
     return 0 if r.porte_franchie else 2
 
 
