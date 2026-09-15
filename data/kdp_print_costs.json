@@ -1,11 +1,18 @@
 {
-  "_source": "RELEVE, jamais calcule ni estime. Couts d'impression : page d'aide KDP « Coût d'impression des livres brochés » (topic G201834340). Taux de redevance : page « Redevances des livres brochés » (topic G201834330). Marketplace amazon.fr, EUR, format de coupe STANDARD. Premier relevé le 2026-08-18, CORRIGÉ le 2026-08-18 après audit : la grille a DEUX bandes par encre et chacune a SON forfait — le premier relevé n'en avait retenu qu'un.",
+  "_source": "RELEVE, jamais calcule ni estime. Couts d'impression : page d'aide KDP « Coût d'impression des livres brochés » (topic G201834340). Taux de redevance : page « Redevances des livres brochés » (topic G201834330). TVA : page GPQL5W3J6WNRCZTV. Tailles de coupe : page G201834180. Marketplace amazon.fr, EUR. Premier relevé le 2026-08-18, CORRIGÉ le 2026-08-18 après audit : la grille a DEUX bandes par encre et chacune a SON forfait — le premier relevé n'en avait retenu qu'un. Grand format et TVA ajoutés le 2026-09-15 : HTML brut de G201834340 relu, et barème CONFRONTÉ au tableau de bord KDP de Baptiste sur deux livres réels (5 x 8 po encre noire, impression 2,42 € ; A4 encre noire, impression 2,48 €), redevances retrouvées au centime.",
   "source_url_couts": "https://kdp.amazon.com/fr_FR/help/topic/G201834340",
   "source_url_redevance": "https://kdp.amazon.com/fr_FR/help/topic/G201834330",
-  "date_releve": "2026-08-18",
-  "_avertissement": "DEUX BANDES PAR ENCRE, chacune avec son propre forfait. Un forfait unique produit une discontinuité de 1,33 EUR au point de bascule et surestime la redevance de toute pagination courte — c'est-à-dire du cas NORMAL du rayon (35 des 36 formats de la taxonomie ont une borne basse ≤ 110 pages). Ces barèmes sont ceux d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé. Un relevé vieux de plus d'un an doit être re-vérifié avant de présenter une redevance à un utilisateur. Le format LARGE (grand format) a ses propres coûts, non relevés : redevance_estimee ne couvre que le format standard.",
+  "source_url_tva": "https://kdp.amazon.com/fr_FR/help/topic/GPQL5W3J6WNRCZTV",
+  "source_url_tailles": "https://kdp.amazon.com/fr_FR/help/topic/G201834180",
+  "date_releve": "2026-09-15",
+  "_avertissement": "DEUX BANDES PAR ENCRE, chacune avec son propre forfait. Un forfait unique produit une discontinuité de 1,33 EUR au point de bascule et surestime la redevance de toute pagination courte — c'est-à-dire du cas NORMAL du rayon (35 des 36 formats de la taxonomie ont une borne basse ≤ 110 pages). Ces barèmes sont ceux d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé. Un relevé vieux de plus d'un an doit être re-vérifié avant de présenter une redevance à un utilisateur. Couleur premium et papier avec bois : non relevés, aucune fiche ne dit l'encre ni le papier.",
   "marketplace": "fr",
   "devise": "EUR",
+  "grand_format": {
+    "_regle": "Grand format dès que la largeur DÉPASSE 15,55 cm OU que la hauteur DÉPASSE 22,86 cm (155,5 mm / 228,6 mm). « OU » sur G201834180 (fr_FR et en_US) et sur G201834340 (en_US) ; la version fr_FR de G201834340 écrit « et » : écartée, trois pages contre une. Le tableau officiel des tailles le confirme : 18,2 x 20,6 cm y figure en « Tailles de coupe grand format » (kdp.amazon.co.jp) avec une hauteur SOUS 22,86 cm. Bornes strictes : 15,24 x 22,86 cm (6 x 9 po) est un format standard. Mesuré sur les 184 fiches lisibles du run 4 : 120 grands formats avec « ou », 102 avec « et ».",
+    "largeur_min_cm": 15.55,
+    "hauteur_min_cm": 22.86
+  },
   "encres": {
     "bw": {
       "label": "Encre noire, papier blanc ou crème",
@@ -14,7 +21,12 @@
       "seuil_cout_fixe_seul": 110,
       "cout_fixe_bande_courte": 2.05,
       "cout_fixe_bande_longue": 0.75,
-      "cout_par_page": 0.012
+      "cout_par_page": 0.012,
+      "grand_format": {
+        "cout_fixe_bande_courte": 2.48,
+        "cout_fixe_bande_longue": 0.75,
+        "cout_par_page": 0.016
+      }
     },
     "couleur_standard": {
       "label": "Couleur standard",
@@ -23,14 +35,23 @@
       "seuil_cout_fixe_seul": 0,
       "cout_fixe_bande_courte": null,
       "cout_fixe_bande_longue": 0.75,
-      "cout_par_page": 0.024
+      "cout_par_page": 0.024,
+      "grand_format": {
+        "cout_fixe_bande_courte": null,
+        "cout_fixe_bande_longue": 0.75,
+        "cout_par_page": 0.035
+      }
     }
   },
+  "tva": {
+    "_note": "Le prix catalogue saisi dans KDP est HORS TVA ; le prix lu sur amazon.fr (SERP, fiche) est TTC. GPQL5W3J6WNRCZTV : « Nous utiliserons le prix catalogue hors TVA que vous fournissez pour calculer les redevances » ; taux standard de 20 % pour les « Carnets, planificateurs, agendas, livres de coloriage, cahiers d'activités », taux réduit de 5,5 % pour les autres livres. Le taux réel d'un ASIN n'est observable nulle part : 20 % est SUPPOSÉ pour tout le low-content, et l'écran le dit.",
+    "taux_lowcontent": 0.2
+  },
   "redevance": {
-    "_note": "Barème PAR PALIER de prix catalogue, propre aux marketplaces EUR. Ce n'est PAS la règle 35/70 % du Kindle : elle ne s'applique qu'aux ebooks et ne doit jamais être confondue avec celle-ci.",
+    "_note": "Barème PAR PALIER de prix catalogue, propre aux marketplaces EUR. Ce n'est PAS la règle 35/70 % du Kindle : elle ne s'applique qu'aux ebooks et ne doit jamais être confondue avec celle-ci. Le seuil et le taux s'appliquent au prix catalogue HORS TVA : VÉRIFIÉ le 2026-09-15 dans le tableau de bord KDP de Baptiste — 9,47 € HT (9,99 € TTC) donnent 50 %, 10,49 € HT donnent 60 %.",
     "seuil_taux_haut": 9.99,
     "taux_bas": 0.5,
     "taux_haut": 0.6,
-    "formule": "(taux x prix catalogue) - cout d'impression = redevance"
+    "formule": "(taux x prix catalogue HORS TVA) - cout d'impression = redevance"
   }
 }

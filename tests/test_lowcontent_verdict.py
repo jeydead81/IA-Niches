@@ -57,7 +57,9 @@ def _scored(format_cle="journal_suivi", **kw) -> LowContentScored:
     base = dict(niche=n, global_score=7.4, demande=7.5, penetration=7.0,
                 rentabilite=7.0, faisabilite=9.0, part_indie=0.8,
                 n_variantes_quasi_identiques=3, prix_median=11.99, pages_median=120,
-                redevance_estimee=3.15)
+                redevance_estimee=3.15,
+                # Calcul hors TVA (2026-09-15) : 11,99 € TTC = 9,99 € HT à 20 %.
+                prix_catalogue_ht=9.99, taux_tva_suppose=0.2)
     base.update(kw)
     return LowContentScored(**base)
 
@@ -200,3 +202,40 @@ def test_un_prix_non_mesure_n_est_pas_presente_comme_au_dessus_du_seuil():
     p = c.prompt
     assert "Prix médian : non mesuré" in p
     assert "au-dessus du seuil" not in p
+
+
+def test_le_brief_distingue_prix_affiche_et_prix_catalogue_hors_tva():
+    """Le modèle propose un prix à SAISIR dans KDP : c'est un prix hors TVA. Sans le
+    savoir, il lirait « 10,49 € » comme « au-dessus de 9,99 € », alors que le prix
+    catalogue vaut 8,74 € et que KDP verse 50 % (écrans KDP du 2026-09-15)."""
+    c = _Client(_payload())
+    generate_lowcontent_verdict(_scored(prix_median=10.49, prix_catalogue_ht=8.74,
+                                        taux_tva_suppose=0.2, prix_sous_seuil_60pct=True,
+                                        format_coupe="grand", n_format_lus=6,
+                                        n_grand_format=6), client=c)
+    p = c.prompt
+    assert "8.74" in p or "8,74" in p
+    assert "hors TVA" in p and "grand format" in p
+    assert "HORS TVA" in c.appels[0]["system"]
+
+
+def test_un_resultat_anterieur_ne_donne_pas_au_modele_sa_redevance_ttc():
+    """Résultat produit avant le calcul hors TVA (aucun prix HT) : sa redevance vient d'un
+    taux appliqué au prix AFFICHÉ. Le modèle ne doit pas la recevoir comme une estimation,
+    à côté d'un « taux de redevance non établi »."""
+    c = _Client(_payload())
+    generate_lowcontent_verdict(_scored(prix_median=10.49, prix_catalogue_ht=None,
+                                        taux_tva_suppose=None, redevance_estimee=4.244),
+                                client=c)
+    p = c.prompt
+    assert "4.244" not in p and "4,244" not in p
+    assert "non établie" in p
+
+
+def test_un_resultat_anterieur_affiche_sous_9_99_reste_a_50_pct_dans_le_brief():
+    """Prix hors TVA < prix affiché : un ancien « sous 9,99 € » reste vrai à tout taux."""
+    c = _Client(_payload())
+    generate_lowcontent_verdict(_scored(prix_median=7.99, prix_catalogue_ht=None,
+                                        taux_tva_suppose=None, prix_sous_seuil_60pct=True),
+                                client=c)
+    assert "50 %" in c.prompt

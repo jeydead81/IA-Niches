@@ -45,12 +45,18 @@ n'en tire aucune conclusion.
 variantes : la onzième ne gagne rien. La sortie n'est pas « une couverture de plus », c'est un \
 INTÉRIEUR différent — une structure de page que les autres n'ont pas.
 
-3. LE SEUIL DE 9,99 €. En dessous, KDP verse 50 % au lieu de 60 %, et le coût d'impression se \
-déduit ENSUITE. Propose un prix ≥ 9,99 € dès que le rayon le supporte, et dis ce qui le \
-justifie côté intérieur. Un rayon très demandé à 6,99 € peut ne rien rapporter.
+3. LE SEUIL DE 9,99 € HORS TVA. Le prix catalogue que l'auteur saisit dans KDP est HORS TVA : \
+c'est sur lui que KDP applique le seuil et calcule la redevance. Les prix du rayon sont ceux \
+que voit le client, TVA comprise (20 % pour un carnet, un agenda, un coloriage ou un cahier \
+d'activités) : 9,99 € hors TVA font environ 11,99 € affichés. Sous le seuil, KDP verse 50 % \
+au lieu de 60 %, et le coût d'impression se déduit ENSUITE. Propose un prix catalogue hors TVA \
+≥ 9,99 € dès que le rayon le supporte, donne aussi le prix affiché qui en résulte, et dis ce \
+qui le justifie côté intérieur. Un rayon très demandé à 6,99 € affichés peut ne rien rapporter.
 
-4. LA PAGINATION. Elle décide du coût d'impression. Plus de pages n'est pas mieux : c'est une \
-marge en moins si l'acheteur ne les utilise pas.
+4. LA PAGINATION ET LE FORMAT DE COUPE. Ils décident du coût d'impression. Plus de pages \
+n'est pas mieux : c'est une marge en moins si l'acheteur ne les utilise pas. Le grand format \
+(plus de 15,55 cm de large ou de 22,86 cm de haut) coûte plus cher à imprimer que le format \
+standard.
 
 TU PRODUIS (via l'outil rendre_verdict_lc, OBLIGATOIRE) :
 - verdict "Go" / "Go prudent" / "No-Go", confiance /10, LE facteur décisif ;
@@ -83,7 +89,9 @@ _ANGLE = {
         "titre": {"type": "string"},
         "sous_titre": {"type": "string"},
         "direction_couverture": {"type": "string"},
-        "prix_suggere": {"type": "string"},
+        "prix_suggere": {"type": "string",
+                         "description": "prix catalogue KDP HORS TVA à saisir, et le prix "
+                                        "affiché TTC qui en résulte"},
         "requete_principale": {"type": "string"},
         "requetes_secondaires": {"type": "array", "items": {"type": "string"}},
         "spec_interieur": {"type": "string",
@@ -151,17 +159,9 @@ def build_user_prompt(s: LowContentScored) -> str:
         f"part éditeurs traditionnels : {_pct(s.part_editeurs_traditionnels, s.n_editeur_inconnu)}",
         f"Variantes quasi identiques dans le top : {s.n_variantes_quasi_identiques}",
         f"Publiés depuis moins de 12 mois : {_pct(s.part_moins_12_mois)}",
-        # Un prix ABSENT ne se décrit pas comme « au-dessus du seuil » : `prix_sous_seuil`
-        # vaut False faute de mesure, pas parce que le rayon est cher. Le dire ferait
-        # raisonner le modèle sur une redevance de 60 % qui n'a jamais été constatée.
-        ("Prix médian : non mesuré — aucun prix lisible dans le top, donc le taux de "
-         "redevance applicable est inconnu"
-         if s.prix_median is None else
-         f"Prix médian : {s.prix_median} € "
-         f"({'SOUS le seuil de 9,99 € → redevance 50 %' if s.prix_sous_seuil_60pct else 'au-dessus du seuil de 9,99 € → redevance 60 %'})"),
+        _ligne_prix(s),
         f"Pagination médiane : {s.pages_median if s.pages_median is not None else 'non mesurée'} · "
-        f"redevance estimée au prix médian : "
-        f"{s.redevance_estimee if s.redevance_estimee is not None else 'non calculable'} €",
+        f"format de coupe du top : {_format_coupe(s)} · {_ligne_redevance(s)}",
         f"BSR organique : meilleur {s.bsr_best} · moyenne {s.bsr_top_avg} · "
         f"plus haut {s.bsr_worst} · critères remplis : "
         f"{'OUI' if s.criteres_bsr_ok else 'non'}",
@@ -184,6 +184,54 @@ def build_user_prompt(s: LowContentScored) -> str:
                       "les mentions obligatoires qu'il impose.")
     lignes.append("\nRends ton verdict via l'outil rendre_verdict_lc.")
     return "\n".join(lignes)
+
+
+def _ligne_prix(s: LowContentScored) -> str:
+    """Le prix médian du rayon est celui que voit le CLIENT, TVA comprise ; le seuil et la
+    redevance de KDP portent sur le prix catalogue HORS TVA (tableau de bord KDP,
+    2026-09-15). Un prix ABSENT ne se décrit pas comme « au-dessus du seuil » :
+    `prix_sous_seuil` vaut False faute de mesure, pas parce que le rayon est cher."""
+    if s.prix_median is None:
+        return ("Prix médian : non mesuré — aucun prix lisible dans le top, donc le taux de "
+                "redevance applicable est inconnu")
+    if s.prix_catalogue_ht is None:
+        # Résultat ANTÉRIEUR au calcul hors TVA : son drapeau comparait le prix AFFICHÉ au
+        # seuil. Un ancien « sous 9,99 € » reste vrai (le prix hors TVA est toujours plus
+        # bas) ; un ancien « au-dessus » ne dit rien, et le répéter tromperait le modèle.
+        if s.prix_sous_seuil_60pct:
+            return (f"Prix médian affiché au client (TTC) : {s.prix_median} € · sous 9,99 € "
+                    f"même hors TVA, quel que soit le taux → redevance 50 %")
+        return (f"Prix médian affiché au client (TTC) : {s.prix_median} € · prix catalogue "
+                f"hors TVA non calculé, donc taux de redevance non établi")
+    tva = ("" if s.taux_tva_suppose is None
+           else f", TVA {round(s.taux_tva_suppose * 100, 1):g} % supposée")
+    seuil = ("SOUS le seuil de 9,99 € hors TVA → redevance 50 %" if s.prix_sous_seuil_60pct
+             else "au-dessus du seuil de 9,99 € hors TVA → redevance 60 %")
+    return (f"Prix médian affiché au client (TTC) : {s.prix_median} € · prix catalogue KDP "
+            f"hors TVA correspondant : {s.prix_catalogue_ht} €{tva} ({seuil})")
+
+
+def _ligne_redevance(s: LowContentScored) -> str:
+    """Un résultat ANTÉRIEUR au calcul hors TVA a une redevance calculée sur le prix
+    AFFICHÉ : elle ne part pas au modèle comme une estimation, à côté d'un taux « non
+    établi ». Sa rentabilité et son score global reposent sur la même comparaison."""
+    if s.prix_median is not None and s.prix_catalogue_ht is None:
+        return ("redevance non établie : résultat antérieur au calcul hors TVA, calculé sur "
+                "le prix affiché — la rentabilité et le score global reposent sur la même "
+                "comparaison")
+    return ("redevance estimée au prix médian (encre noire supposée) : "
+            f"{s.redevance_estimee if s.redevance_estimee is not None else 'non calculable'} €")
+
+
+def _format_coupe(s: LowContentScored) -> str:
+    """Le format sur lequel la redevance a été calculée. « non déterminé » n'est pas
+    « standard » : le barème standard y est SUPPOSÉ, et le modèle doit le savoir."""
+    lus = f" sur {s.n_format_lus} fiche(s) mesurée(s)" if s.n_format_lus else ""
+    if s.format_coupe == "grand":
+        return f"grand format ({s.n_grand_format}{lus}), plus cher à imprimer"
+    if s.format_coupe == "standard":
+        return f"format standard ({s.n_format_lus - s.n_grand_format}{lus})"
+    return f"non déterminé{lus}, barème d'impression standard SUPPOSÉ"
 
 
 def _json_si_texte(v):

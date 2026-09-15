@@ -200,7 +200,7 @@ class LowContentScored(BaseModel):
     """Une niche low-content entierement evaluee, sur QUATRE axes.
 
     Deux axes de plus qu'en non-fiction, parce que deux questions n'y existent pas :
-    - RENTABILITE : sous 9,99 EUR de prix catalogue, KDP verse 50 % au lieu de 60 %, et le
+    - RENTABILITE : sous 9,99 EUR de prix catalogue HORS TVA, KDP verse 50 % au lieu de 60 %, et le
       cout d'impression se deduit ensuite. Un rayon a 6,99 EUR peut etre demande et ne
       rien rapporter.
     - FAISABILITE : un carnet quadrille et un cahier d'activites illustre ne se produisent
@@ -235,10 +235,20 @@ class LowContentScored(BaseModel):
     part_moins_12_mois: float | None = None
 
     # rentabilite
-    prix_median: float | None = None
+    prix_median: float | None = None                   # prix AFFICHE au client, TTC
+    # KDP applique le seuil de 9,99 EUR et calcule la redevance sur le prix catalogue HORS
+    # TVA (tableau de bord KDP, 2026-09-15). Deduit au taux SUPPOSE du low-content.
+    prix_catalogue_ht: float | None = None
+    taux_tva_suppose: float | None = None
     prix_sous_seuil_60pct: bool = False                # drapeau de bareme, pas un jugement
     redevance_estimee: float | None = None
     pages_median: int | None = None
+    # Format de coupe DOMINANT du top, lu sur les dimensions : "standard" / "grand" / None.
+    # None = non determine (aucune dimension lisible, ou egalite) : la redevance suppose le
+    # bareme standard, et l'ecran le dit.
+    format_coupe: str | None = None
+    n_format_lus: int = 0
+    n_grand_format: int = 0
 
     # BSR (memes criteres 4.1 qu'en non-fiction)
     bsr_best: int | None = None

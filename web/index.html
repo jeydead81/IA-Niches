@@ -777,7 +777,7 @@ const esc = t => String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 const GLOSSAIRE = {
   'Part indie': `Part des livres du top publiés via KDP (« Independently published »). <strong>Élevée = rayon accessible</strong> à un auteur seul. Faible : le rayon est tenu par des éditeurs installés, qui ont des moyens que vous n'avez pas. Quand aucun éditeur n'a pu être lu, la carte affiche « non mesuré » — ce n'est pas zéro.`,
   'Variantes': `Nombre de livres du top qui sont <strong>le même livre</strong> sous une autre couverture. Ce chiffre se lit à l'envers : <strong>élevé = mauvais</strong>. Au-delà de 6, le rayon est usiné par une ferme de variantes, et en publier une de plus n'y change rien. La sortie, c'est un intérieur différent.`,
-  'Seuil 9,99 €': `Sous 9,99 € de prix catalogue, Amazon vous verse <strong>50 %</strong> ; à partir de 9,99 €, <strong>60 %</strong>. Et le coût d'impression se déduit ensuite. Un rayon très demandé à 6,99 € peut ne rien rapporter.`,
+  'Seuil 9,99 €': `Sous 9,99 € de prix catalogue <strong>hors TVA</strong> — le prix que vous saisissez dans KDP —, Amazon vous verse <strong>50 %</strong> ; à partir de 9,99 € hors TVA, <strong>60 %</strong>. Les prix du rayon sont affichés TVA comprise : pour un carnet, un agenda ou un coloriage (TVA 20 %), le seuil tombe vers <strong>11,99 € affichés</strong>. Et le coût d'impression se déduit ensuite, plus cher en grand format. Un rayon très demandé à 6,99 € peut ne rien rapporter.`,
   'Redevance estimée': `Ce que vous touchez par vente au prix médian du rayon, coût d'impression déduit. <strong>Négative = vous perdez de l'argent</strong> à chaque exemplaire.`,
   'Éditeurs installés': `Hachette, Larousse, Exacompta, Quo Vadis, Clairefontaine… Invisibles dans un simple comptage de résultats, et pourtant décisifs : ils tiennent des rayons entiers de papeterie.`,
   'Format normé': `Le contenu est imposé par une règle extérieure (Code du travail, HACCP, sécurité ERP). Facile à produire — mais la <strong>conformité</strong> est la différenciation : un registre incomplet prend des avis à une étoile. Le verdict doit citer sa source réglementaire.`,
@@ -1239,8 +1239,9 @@ function addStepTo(ul, msg){
 // TROIS lectures a l'envers ou a expliquer, chacune marquee `v-bad` :
 //  - VARIANTES : eleve = MAUVAIS (ferme de variantes). C'est le piege n1 du depot,
 //    transpose ici -- une jauge coloree uniformement ferait recommander les pires rayons.
-//  - PRIX sous 9,99 EUR : redevance 50 % au lieu de 60 %. Un auteur qui ignore le bareme
-//    verrait "7,99 EUR" comme un bon prix.
+//  - PRIX sous 9,99 EUR HORS TVA : redevance 50 % au lieu de 60 %. Le prix du rayon est
+//    TTC ; le seuil porte sur le prix catalogue KDP hors TVA (~11,99 EUR affiches a 20 %).
+//    Un auteur qui ignore le bareme lirait "10,49 EUR" comme un prix au-dessus du seuil.
 //  - REDEVANCE negative : le seul cas ou la reponse est "ne publie pas ca".
 function mesure(cle, valeur, opts){
   const o = opts || {};
@@ -1280,19 +1281,45 @@ function carteLowContent(r){
   const variantes = mesure('Variantes', nv == null ? null : nv,
     {bad: nv >= 6, note: 'élevé = mauvais : même intérieur, plusieurs couvertures'});
 
+  // Le prix médian est celui que voit le CLIENT, TVA comprise. KDP applique le seuil de
+  // 9,99 € et calcule la redevance sur le prix catalogue HORS TVA (tableau de bord KDP,
+  // 2026-09-15) : sans le dire, « 10,49 € » se lirait « au-dessus du seuil ».
+  // Un résultat ANTÉRIEUR à ce calcul n'a pas de prix hors TVA : son drapeau et sa
+  // redevance ont été calculés sur le prix affiché. Sa redevance ne s'affiche plus ; seul un
+  // ancien « sous 9,99 € » reste vrai, le prix hors TVA étant toujours plus bas.
+  const ht = r.prix_catalogue_ht;
+  const ancien = r.prix_median != null && ht == null;
+  const tva = r.taux_tva_suppose == null ? ''
+    : ', TVA ' + (Math.round(r.taux_tva_suppose * 1000) / 10).toLocaleString('fr-FR') + ' % supposée';
   const prix = mesure('Prix médian',
     r.prix_median == null ? null : fmtEur(r.prix_median),
     {bad: r.prix_median != null && r.prix_sous_seuil_60pct,
      note: r.prix_median == null
        ? 'aucun prix lisible : taux de redevance inconnu'
-       : (r.prix_sous_seuil_60pct
-          ? 'sous 9,99 € : redevance 50 % au lieu de 60 %'
-          : 'au-dessus de 9,99 € : redevance 60 %')});
+       : ancien
+         ? (r.prix_sous_seuil_60pct
+            ? 'affiché sous 9,99 € : sous le seuil hors TVA quel que soit le taux, redevance 50 %'
+            : 'affiché au client ; prix hors TVA non calculé : taux de redevance à recalculer')
+         : 'affiché au client · prix catalogue KDP ' + fmtEur(ht) + ' HT' + tva + ' · '
+           + (r.prix_sous_seuil_60pct
+              ? 'sous le seuil de 9,99 € HT : redevance 50 % au lieu de 60 %'
+              : 'au moins 9,99 € HT : redevance 60 %')});
 
-  const red = mesure('Redevance estimée',
-    r.redevance_estimee == null ? null : fmtEur(r.redevance_estimee),
-    {bad: r.redevance_estimee != null && r.redevance_estimee < 2,
-     note: 'par vente, coût d\'impression déduit'});
+  // Le format de coupe DÉCIDE du coût d'impression (2,48 € au lieu de 2,05 € sous 110
+  // pages en grand format) : une redevance sans son format se lit comme un fait.
+  const fc = r.format_coupe;
+  const formatTxt = fc === 'grand' ? 'grand format'
+    : fc === 'standard' ? 'format standard'
+    : 'format de coupe non déterminé : barème standard supposé';
+  const red = ancien
+    ? mesure('Redevance estimée', 'à recalculer',
+        {note: 'calculée sur le prix affiché TVA comprise, avant le calcul hors TVA : relancez l\'analyse'})
+    : mesure('Redevance estimée',
+        r.redevance_estimee == null ? null : fmtEur(r.redevance_estimee),
+        {bad: r.redevance_estimee != null && r.redevance_estimee < 2,
+         note: 'par vente, coût d\'impression déduit · ' + formatTxt
+           + (r.n_format_lus ? ' (' + r.n_format_lus + ' fiche(s) mesurée(s))' : '')
+           + ' · encre noire supposée'});
 
   const trad = mesure('Éditeurs installés',
     r.part_editeurs_traditionnels == null ? null : fmtPct(r.part_editeurs_traditionnels),
@@ -2056,10 +2083,12 @@ const AIDE = {
       va avec. Amazon, lui, ne complète que ce que des gens cherchent — et c'est gratuit.</p>
 
       <h3>Les deux axes que les autres onglets n'ont pas</h3>
-      <p><strong>Rentabilité.</strong> Sous 9,99 € de prix catalogue, KDP verse 50 % au lieu
-      de 60 %, et le coût d'impression se déduit ensuite. Un rayon très demandé à 6,99 €
-      peut ne rien rapporter — c'est le piège le plus coûteux du low-content, et il ne se
-      voit sur aucun compteur de concurrence.</p>
+      <p><strong>Rentabilité.</strong> Sous 9,99 € de prix catalogue hors TVA (le prix saisi
+      dans KDP), KDP verse 50 % au lieu de 60 %, et le coût d'impression se déduit ensuite.
+      Les prix du rayon sont affichés TVA comprise : pour un carnet ou un coloriage (TVA
+      20 %), le seuil tombe vers 11,99 € affichés. Un rayon très demandé à 6,99 € peut ne
+      rien rapporter — c'est le piège le plus coûteux du low-content, et il ne se voit sur
+      aucun compteur de concurrence.</p>
       <p><strong>Faisabilité.</strong> Un carnet quadrillé et un cahier d'activités illustré
       ne se produisent pas dans le même monde. L'effort est annoncé, pas deviné.</p>
 

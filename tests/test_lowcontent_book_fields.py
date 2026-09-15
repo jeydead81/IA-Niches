@@ -19,7 +19,8 @@ from pathlib import Path
 import pytest
 
 from fiction_books import parse_enriched_book
-from lowcontent_scoring import redevance_estimee, score_lowcontent
+from lowcontent_scoring import (format_coupe_dominant, prix_catalogue_ht, redevance_estimee,
+                                score_lowcontent)
 from models import LowContentNiche, NicheValidation
 
 _FIX = Path(__file__).parent / "fixtures"
@@ -136,13 +137,19 @@ def _niche() -> LowContentNiche:
 def test_la_redevance_existe_de_bout_en_bout_sur_les_fiches_reelles(asin):
     """Capture réelle -> parseur -> scoring, sans rien remplacer entre les deux. Prix
     fixé à 12,99 € (la SERP est absente : le prix vient des fiches). C'est ce chemin qui
-    rendait `redevance_estimee=None` sur les 31 niches du run 4."""
+    rendait `redevance_estimee=None` sur les 31 niches du run 4.
+
+    Attendu MODIFIÉ le 2026-09-15, déclaré : le prix d'une fiche est TTC, la redevance se
+    calcule sur le prix catalogue HORS TVA, au format de coupe lu sur les dimensions
+    (`test_redevance_hors_tva_grand_format.py`)."""
     b = parse_enriched_book(_REEL[asin]).model_copy(update={"price": 12.99})
     v = NicheValidation(niche="carnet", requete_amazon="carnet", categorie="c",
                         demand_score=5, validated=True)
     s = score_lowcontent(_niche(), v, None, [b], [])
     assert s.redevance_estimee is not None
-    assert s.redevance_estimee == pytest.approx(redevance_estimee(12.99, PAGES_REELLES[asin]))
+    fmt = format_coupe_dominant([b])[0] or "standard"
+    assert s.redevance_estimee == pytest.approx(
+        redevance_estimee(prix_catalogue_ht(12.99), PAGES_REELLES[asin], format_coupe=fmt))
 
 
 def test_la_redevance_de_l_ebook_de_140_pages_vaut_le_bareme_courant():

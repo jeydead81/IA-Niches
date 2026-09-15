@@ -88,9 +88,9 @@ Ce même arbre apporte un signal qu'aucun comptage ne donne : **une requête que
 
 ### La redevance KDP est calculée, pas supposée
 
-Sous 9,99 € de prix catalogue, KDP verse 50 % au lieu de 60 %. Le coût d'impression se déduit ensuite, et il dépend de la pagination. **Un rayon très demandé à 6,99 € peut ne rien rapporter** — voire coûter de l'argent sur une forte pagination.
+Sous 9,99 € de prix catalogue hors TVA — le prix que vous saisissez dans KDP —, KDP verse 50 % au lieu de 60 %. Les prix du rayon, eux, sont affichés TVA comprise : pour un carnet ou un coloriage, le seuil tombe vers 11,99 € affichés. Le coût d'impression se déduit ensuite, et il dépend de la pagination et du format de coupe. **Un rayon très demandé à 6,99 € peut ne rien rapporter** — voire coûter de l'argent sur une forte pagination.
 
-L'outil applique les barèmes relevés sur les pages d'aide KDP (coût d'impression et taux de redevance, marketplace amazon.fr, format de coupe standard). Une redevance négative est affichée **telle quelle** : c'est le seul cas où la réponse est « ne publie pas ça ». Et si le prix ou la pagination manque, la redevance est « inconnue », jamais zéro.
+L'outil applique les barèmes relevés sur les pages d'aide KDP (coût d'impression et taux de redevance, marketplace amazon.fr, format standard et grand format lu sur les dimensions des livres du top), vérifiés au centime sur deux livres réels dans un tableau de bord KDP. Une redevance négative est affichée **telle quelle** : c'est le seul cas où la réponse est « ne publie pas ça ». Et si le prix ou la pagination manque, la redevance est « inconnue », jamais zéro.
 
 ### Un devis est fait avant chaque analyse
 
@@ -131,7 +131,7 @@ Autant le dire ici plutôt que de vous le laisser découvrir.
 - **Ça n'écrit pas le livre.** Ni sommaire, ni chapitres, ni quatrième de couverture, ni brief de couverture.
 - **Ça ne couvre qu'amazon.fr.** Pas les autres marketplaces, pas les autres plateformes.
 - **Ça ne mesure pas le nombre total de résultats d'une recherche Amazon.** La donnée n'est pas collectée, donc aucun critère du type « moins de 10 000 résultats » n'est appliqué.
-- **La redevance ne couvre que le format de coupe standard**, encre noire. Le grand format n'a pas été relevé.
+- **La redevance suppose l'encre noire et une TVA de 20 %** : aucune fiche Amazon ne dit l'encre ni le taux de TVA appliqué. Le format de coupe (standard ou grand format) est lu sur les dimensions des livres du top ; s'il ne peut pas être déterminé, le barème standard est appliqué et l'écran le dit — la redevance d'un rayon en réalité en grand format est alors surestimée. La couleur premium et le papier avec bois ne sont pas relevés.
 - **Il n'y a ni réinitialisation de mot de passe, ni vérification d'adresse e-mail, ni suppression de compte.** Ces chemins n'existent pas dans le produit à ce jour. Un mot de passe perdu est un compte perdu.
 - **Aucun paiement n'est intégré.** Voir la section tarif.
 - **Ce n'est pas un service hébergé clé en main aujourd'hui.** [[A COMPLETER : mode de distribution retenu — installation locale par le client, hébergement fourni, ou les deux]]
@@ -175,7 +175,7 @@ Parce qu'un livre sponsorisé occupe sa place parce qu'il l'a payée, pas parce 
 Par l'ordre des opérations. En non-fiction, l'IA propose et Amazon valide. En low-content, Amazon fournit d'abord les requêtes réelles — l'outil descend l'arbre des complétions — et l'IA se contente ensuite de les classer. La demande est acquise avant que le modèle ne parle. S'ajoutent deux mesures propres à ce rayon : la part de livres auto-édités dans le top, et la redevance KDP réelle compte tenu du prix et de la pagination.
 
 **Pourquoi calculer la redevance ? Je connais mes prix.**
-Parce que le seuil des 9,99 € est brutal : en dessous, KDP verse 50 % au lieu de 60 %, et le coût d'impression se déduit ensuite. Un carnet très demandé à 6,99 € avec une forte pagination peut rapporter quelques centimes, ou rien. L'outil applique les barèmes relevés chez Amazon et affiche le résultat même quand il est négatif. Ces barèmes changent sans préavis : ils portent leur date de relevé, et un relevé ancien doit être revérifié.
+Parce que le seuil des 9,99 € est brutal : en dessous, KDP verse 50 % au lieu de 60 %, et le coût d'impression se déduit ensuite. Et ce seuil porte sur le prix catalogue hors TVA que vous saisissez dans KDP, pas sur le prix affiché au client, qui inclut la TVA. Un carnet très demandé à 6,99 € avec une forte pagination peut rapporter quelques centimes, ou rien. L'outil applique les barèmes relevés chez Amazon et affiche le résultat même quand il est négatif. Ces barèmes changent sans préavis : ils portent leur date de relevé, et un relevé ancien doit être revérifié.
 
 **Est-ce que je risque de dépenser sans le vouloir ?**
 Non. Avant chaque analyse, un devis estime le coût maximal du run en supposant le cache vide. S'il dépasse le plafond configuré, l'analyse est refusée immédiatement, en vous indiquant quel volume tiendrait — rien n'est lancé, rien n'est dépensé. Les analyses complémentaires (analyse éditoriale, mots-clés, dossier PDF) ne partent que si vous cliquez.
@@ -225,7 +225,7 @@ GATE GRATUIT AVANT DEPENSE
 SPONSORISES
 - 01-scripts/scoring.py:...  titres/prix/notes/count_targeted calcules sur `organic` uniquement
 - 01-scripts/scoring.py:121-122  SEUL usage du nombre de sponsorises : +0.5 penetration si >= 3
-- 01-scripts/lowcontent_scoring.py:279-284  "les SPONSORISES sont ecartes de tout calcul de qualite"
+- 01-scripts/lowcontent_scoring.py:355-356  "les SPONSORISES sont ecartes de tout calcul de qualite"
 - web/index.html:794  glossaire "Sponso ecartes"
 
 LOW-CONTENT : NICHES LUES, PAS INVENTEES
@@ -237,13 +237,20 @@ LOW-CONTENT : NICHES LUES, PAS INVENTEES
 - data/lowcontent_taxonomy_fr_v1.json     36 formats (cle "formats")
 
 REDEVANCE KDP
-- data/kdp_print_costs.json  _source : RELEVE, pages d'aide KDP G201834340 (couts) et G201834330 (redevance),
-                             date_releve 2026-08-18, marketplace fr, format de coupe STANDARD ;
-                             seuil_taux_haut 9.99, taux_bas 0.5, taux_haut 0.6 ; DEUX bandes par encre
-- data/kdp_print_costs.json  _avertissement : format LARGE non releve ; barmes Amazon, a revarifier apres un an
-- 01-scripts/lowcontent_scoring.py:210-253  redevance_estimee() : None si prix ou pages manquent ;
+- data/kdp_print_costs.json  _source : RELEVE, pages d'aide KDP G201834340 (couts), G201834330 (redevance),
+                             GPQL5W3J6WNRCZTV (TVA) et G201834180 (tailles de coupe) ; date_releve 2026-09-15,
+                             marketplace fr ; seuil_taux_haut 9.99, taux_bas 0.5, taux_haut 0.6 ; DEUX bandes par
+                             encre ; grand_format (regle OU, 15,55 / 22,86 cm) ; tva.taux_lowcontent 0.2 (SUPPOSE)
+- data/kdp_print_costs.json  redevance._note : seuil et taux sur le prix HORS TVA, verifie dans un tableau de bord KDP
+                             le 2026-09-15 sur deux livres reels
+- data/kdp_print_costs.json  _avertissement : couleur premium et papier avec bois non releves ; baremes Amazon,
+                             a reverifier apres un an
+- 01-scripts/lowcontent_scoring.py:212       prix_catalogue_ht() : prix affiche TTC -> prix catalogue HORS TVA
+- 01-scripts/lowcontent_scoring.py:233, 256  format_coupe_livre() / format_coupe_dominant() : format lu sur les
+                                             dimensions ; non determine -> bareme standard, dit a l'ecran
+- 01-scripts/lowcontent_scoring.py:275-331  redevance_estimee() : None si prix ou pages manquent ;
                                             redevance NEGATIVE rendue telle quelle
-- 01-scripts/lowcontent_scoring.py:3-7      docstring : "un rayon tres demande a 6,99 EUR peut ne rien rapporter"
+- 01-scripts/lowcontent_scoring.py:3-9      docstring : "un rayon tres demande a 6,99 EUR peut ne rien rapporter"
 
 PART INDIE
 - 01-scripts/lowcontent_scoring.py:11-14, 103-113  part_indie / part_editeurs_traditionnels

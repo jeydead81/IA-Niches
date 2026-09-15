@@ -92,6 +92,9 @@ def _lire(s) -> dict:
         # rendue vide — une section vide se lit comme une mesure a zero.
         "part_indie": getattr(s, "part_indie", None) if est_lc else None,
         "prix_median": getattr(s, "prix_median", None) if est_lc else None,
+        "prix_ht": getattr(s, "prix_catalogue_ht", None) if est_lc else None,
+        "tva": getattr(s, "taux_tva_suppose", None) if est_lc else None,
+        "format_coupe": getattr(s, "format_coupe", None) if est_lc else None,
         "redevance": getattr(s, "redevance_estimee", None) if est_lc else None,
         "pages": getattr(s, "pages_median", None) if est_lc else None,
         "variantes": getattr(s, "n_variantes_quasi_identiques", None) if est_lc else None,
@@ -161,9 +164,26 @@ def _page_marche(pdf: FPDF, d: dict) -> None:
         lignes.append(f"Part indie (publies via KDP) : {_pct(d['part_indie'])}  ·  "
                       f"variantes quasi identiques : {_nb(d['variantes'])} "
                       f"(eleve = mauvais)")
-        lignes.append(f"Prix median : {_eur(d['prix_median'])}  ·  pagination : "
-                      f"{_nb(d['pages'])}  ·  redevance estimee au prix median du rayon : "
-                      f"{_eur(d['redevance'], ' par vente')}")
+        # Le prix median est celui du CLIENT (TTC) ; la redevance se calcule sur le prix
+        # catalogue HORS TVA, au format de coupe du rayon. Imprimer le montant sans ses
+        # hypotheses le ferait lire comme un fait.
+        if d["prix_ht"] is None:
+            ht = "non calcule"
+        else:
+            ht = f"{_eur(d['prix_ht'])} HT" + (
+                "" if d["tva"] is None else f" (TVA {round(d['tva'] * 100, 1):g} % supposee)")
+        fc = {"grand": "grand format", "standard": "format standard"}.get(
+            d["format_coupe"], "format de coupe non determine, bareme standard suppose")
+        lignes.append(f"Prix median affiche au client : {_eur(d['prix_median'])}  ·  "
+                      f"prix catalogue KDP : {ht}  ·  pagination : {_nb(d['pages'])}")
+        if d["prix_median"] is not None and d["prix_ht"] is None:
+            # Resultat ANTERIEUR au calcul hors TVA : sa redevance a ete calculee sur le prix
+            # AFFICHE. L'imprimer ici la ferait lire comme un montant etabli.
+            lignes.append("Redevance : a recalculer (analyse anterieure au calcul hors TVA, "
+                          "faite sur le prix affiche TVA comprise)")
+        else:
+            lignes.append(f"Redevance estimee au prix median du rayon : "
+                          f"{_eur(d['redevance'], ' par vente')}  ·  {fc}, encre noire supposee")
     for l in lignes:
         pdf.multi_cell(0, 5, _safe(l), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 

@@ -19,5 +19,5 @@
   "seuil_prix_60pct": 9.99,
   "redevance_min_bonne": 2.0,
   "prix_median_faible": 6.0,
-  "_prix": "seuil_prix_60pct est un FAIT de barème relevé chez Amazon (voir kdp_print_costs.json), pas un seuil calibrable : ne pas le bouger en calibration."
+  "_prix": "seuil_prix_60pct est un FAIT de barème relevé chez Amazon (voir kdp_print_costs.json), pas un seuil calibrable : ne pas le bouger en calibration. Il se compare au prix catalogue HORS TVA (prix médian affiché ÷ (1 + TVA supposée)), comme KDP : vérifié dans le tableau de bord KDP le 2026-09-15. prix_median_faible, lui, est une HYPOTHÈSE sur le prix AFFICHÉ au client, TTC."
 }

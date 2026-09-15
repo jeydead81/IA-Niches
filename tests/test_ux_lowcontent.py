@@ -35,6 +35,9 @@ def _lc(**kw) -> dict:
         "part_indie": 0.8, "part_editeurs_traditionnels": 0.2, "n_editeur_inconnu": 0,
         "n_variantes_quasi_identiques": 3, "prix_median": 11.99,
         "prix_sous_seuil_60pct": False, "redevance_estimee": 3.15, "pages_median": 120,
+        # Champs du calcul hors TVA (2026-09-15) : 11,99 € TTC = 9,99 € HT à 20 %.
+        "prix_catalogue_ht": 9.99, "taux_tva_suppose": 0.2,
+        "format_coupe": "standard", "n_format_lus": 6, "n_grand_format": 0,
         "bsr_best": 8214, "bsr_top_avg": 41000, "concurrence_mesuree": True,
         "n_organic": 12, "n_sponsored": 3, "n_concurrents_cibles": 6,
         "risques": [], "top_books": [], "verdict": None,
@@ -178,3 +181,62 @@ def test_le_bouton_distingue_les_deux_formes_de_niche(src):
     """`type` est obligatoire : sans lui, une niche low-content serait validée comme une
     ScoredNiche non-fiction et rendrait une 400."""
     assert "typeof niche.niche === 'object'" in src
+
+
+# ── Hors TVA et format de coupe (2026-09-15) ───────────────────────────────────
+
+def test_le_seuil_est_dit_hors_tva_a_l_ecran():
+    """Le prix du rayon est celui que voit le client (TTC) ; le seuil de 9,99 € porte sur
+    le prix catalogue saisi dans KDP, HORS TVA. Sans le dire, « 10,49 € » se lit
+    « au-dessus du seuil » alors que KDP verse 50 %."""
+    html = _carte(prix_median=10.49, prix_catalogue_ht=8.74, taux_tva_suppose=0.2,
+                  prix_sous_seuil_60pct=True)
+    assert "HT" in html and "8,74" in html and "9,99" in html
+
+
+def test_le_format_de_coupe_retenu_est_dit_avec_la_redevance():
+    """Grand format : 0,43 € d'impression de plus par vente sous 110 pages. La redevance
+    n'a de sens qu'avec le format sur lequel elle a été calculée."""
+    html = _carte(format_coupe="grand", n_format_lus=6, n_grand_format=5)
+    assert "grand format" in html.lower()
+
+
+def test_un_format_de_coupe_non_determine_le_dit():
+    html = _carte(format_coupe=None, n_format_lus=0)
+    assert "non déterminé" in html.lower()
+
+
+def test_le_glossaire_dit_que_le_seuil_est_hors_tva(src):
+    entree = next(l for l in src.splitlines() if "'Seuil 9,99 €':" in l)
+    assert "hors TVA" in entree
+
+
+# ── Résultat antérieur au calcul hors TVA (revue du correctif, 2026-09-15) ─────
+
+def _ancien(**kw) -> dict:
+    """Un résultat low-content produit AVANT le calcul hors TVA : les cinq champs n'existent
+    pas, et le drapeau de seuil comme la redevance ont été calculés sur le prix AFFICHÉ."""
+    r = _lc(**kw)
+    for cle in ("prix_catalogue_ht", "taux_tva_suppose", "format_coupe",
+                "n_format_lus", "n_grand_format"):
+        r.pop(cle, None)
+    return r
+
+
+def test_un_resultat_anterieur_ne_presente_pas_sa_redevance_ttc_comme_etablie():
+    """10,49 € affichés : l'ancien calcul donnait 0,60 x 10,49 − 2,05 = 4,24 €. Hors TVA,
+    KDP verse 0,50 x 8,74 − 2,05 = 2,32 €. Afficher 4,24 € sous « barème standard supposé »
+    ferait croire que seul le format est une hypothèse."""
+    html = appeler("carteLowContent", _ancien(prix_median=10.49, prix_sous_seuil_60pct=False,
+                                               redevance_estimee=4.244), dependances=_DEPS)
+    assert "4,24" not in html
+    assert "recalcul" in html.lower()
+
+
+def test_un_resultat_anterieur_affiche_sous_9_99_reste_signale_a_50_pct():
+    """Le prix hors TVA est toujours plus bas que le prix affiché : un ancien drapeau
+    « sous 9,99 € » reste vrai quel que soit le taux de TVA. Seul un ancien « au-dessus »
+    est douteux."""
+    html = appeler("carteLowContent", _ancien(prix_median=7.99, prix_sous_seuil_60pct=True,
+                                               redevance_estimee=1.95), dependances=_DEPS)
+    assert "v-bad" in html and "50 %" in html

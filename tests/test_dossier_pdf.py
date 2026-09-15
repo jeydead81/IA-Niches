@@ -63,6 +63,8 @@ def _lc(**kw) -> LowContentScored:
                 rentabilite=8.0, faisabilite=9.0, part_indie=0.7,
                 n_variantes_quasi_identiques=2, prix_median=14.99, pages_median=120,
                 redevance_estimee=4.24, concurrence_mesuree=True,
+                # Calcul hors TVA (2026-09-15) : 14,99 € TTC = 12,49 € HT à 20 %.
+                prix_catalogue_ht=12.49, taux_tva_suppose=0.2,
                 verdict=_verdict(angles=[AngleAttaque(
                     angle="registre conforme", pourquoi="conformité", risque="texte",
                     titre="Registre unique du personnel", sous_titre="conforme 2026",
@@ -259,3 +261,25 @@ def test_le_prompt_demande_le_cout_d_impression_suppose():
     c = _Client(_payload())
     generate_lowcontent_verdict(_scored(), client=c)
     assert "ne peux pas le chiffrer" in c.appels[0]["system"]
+
+
+def test_la_page_1_dit_le_prix_hors_tva_et_le_format_de_coupe(tmp_path):
+    """Le prix médian est celui que voit le client ; la redevance se calcule sur le prix
+    catalogue HORS TVA, au format de coupe du rayon. Imprimer l'un sans l'autre fait lire
+    un montant calculé sur des hypothèses qu'on ne voit pas."""
+    p = _pages(build_dossier_pdf(_lc(prix_median=14.99, prix_catalogue_ht=12.49,
+                                     taux_tva_suppose=0.2, format_coupe="grand"),
+                                 tmp_path / "d.pdf"))
+    assert "12,49 EUR HT" in p[0]
+    assert "grand format" in p[0]
+
+
+def test_un_resultat_anterieur_n_imprime_pas_sa_redevance_ttc(tmp_path):
+    """Résultat produit avant le calcul hors TVA : sa redevance a été calculée à 60 % sur le
+    prix AFFICHÉ (0,60 x 10,49 − 2,05 = 4,24 €), là où KDP verserait 2,32 €. L'imprimer
+    sous « prix catalogue KDP : non calcule » la ferait lire comme un montant établi."""
+    p = _pages(build_dossier_pdf(_lc(prix_median=10.49, prix_catalogue_ht=None,
+                                     taux_tva_suppose=None, redevance_estimee=4.24),
+                                 tmp_path / "d.pdf"))
+    assert "4,24" not in p[0]
+    assert "recalcul" in p[0]

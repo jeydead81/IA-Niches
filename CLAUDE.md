@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-14** (1 231 tests sur 100 fichiers, 49 modules, 34
+> Comptages revérifiés le **2026-09-15** (1 272 tests sur 101 fichiers, 49 modules, 34
 > variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -291,9 +291,13 @@ Amazon, lui, ne complète que ce que des gens tapent réellement, et il le donne
 | 5 — Scoring | `lowcontent_scoring`, pur, **QUATRE axes** : demande 0,35 · pénétration 0,35 · rentabilité 0,20 · faisabilité 0,10 | 0 |
 
 **Deux axes qui n'existent pas ailleurs, et ce n'est pas un raffinement.** RENTABILITÉ :
-sous 9,99 € de prix catalogue, KDP verse 50 % au lieu de 60 %, et le coût d'impression se
-déduit ENSUITE — un rayon très demandé à 6,99 € peut ne rien rapporter. FAISABILITÉ : un
-carnet quadrillé et un cahier d'activités illustré ne se produisent pas dans le même monde.
+sous 9,99 € de prix catalogue **HORS TVA**, KDP verse 50 % au lieu de 60 %, et le coût
+d'impression se déduit ENSUITE — un rayon très demandé à 6,99 € peut ne rien rapporter. Le
+prix lu sur amazon.fr est TTC : seuil et redevance se calculent sur `prix_catalogue_ht`
+(TVA de 20 % SUPPOSÉE), au format de coupe DOMINANT du top, lu sur les dimensions (grand
+format AU-DELÀ de 15,55 cm de large OU de 22,86 cm de haut — bornes strictes, un 6 x 9 po
+exact reste standard). §5.39. FAISABILITÉ : un carnet quadrillé
+et un cahier d'activités illustré ne se produisent pas dans le même monde.
 
 **Deux signaux de pénétration propres au rayon.** `part_indie` : douze références peuvent
 toutes venir de papetiers (Exacompta, Quo Vadis) — invisible dans un comptage de résultats,
@@ -560,8 +564,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1231 tests** sur **100 fichiers** `tests/test_*.py`, **1231 passés, 0 ignoré, 0 échec,
-0 erreur**, code de sortie 0 (`python -m pytest -q -p no:warnings`, relancé le 2026-09-14,
+**1272 tests** sur **101 fichiers** `tests/test_*.py`, **1272 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -q -p no:warnings`, relancé le 2026-09-15,
 marqueurs de progression comptés ; la suite avait connu des échecs INTERMITTENTS, cf. §5.33).
 
 **Données RÉELLES d'abord, et tout écart DÉCLARÉ dans le docstring** — règle née du run 4
@@ -813,6 +817,9 @@ de « jamais le code » plus bas. Aucun n'est codé :
   diagnostic ci-dessus sont codés.
 - **R22**, `redevance_min_bonne=2,0` saturerait sur **21 à 27/31** une fois les pages lues
   (**CALCULÉ**, pages supposées). Le bonus revient à « prix ≥ 8,10 € » sous 110 pages.
+  **Chiffres établis AVANT le calcul hors TVA et le grand format (§5.39)**, à refaire au
+  rejeu : sous 110 pages, 2,0 € de redevance demandent désormais ~9,72 € affichés en format
+  standard et ~10,75 € en grand format (**calculé**, TVA 20 %).
 - **R24**, poids des axes et constantes codés en dur. Le prix est le signal le plus corrélé
   (+0,53 ; intervalle de Fisher ~[0,22 ; 0,75] **calculé**) : rien ne se règle sur une porte
   indécidable.
@@ -1340,6 +1347,33 @@ Section critique. Chacun a coûté un bug réel.
     **Corollaire de lecture** : après un correctif de parseur, la ligne « N/M fiche(s)
     servie(s) par le cache » est l'alerte, pas une bonne nouvelle.
 
+39. **Le prix d'Amazon est TTC, le prix catalogue KDP est HORS TVA — et le grand format a sa
+    propre grille.** La formule comparait le prix affiché au seuil de 9,99 € et calculait la
+    redevance dessus : un carnet à 10,49 € affichés (8,74 € HT à 20 %) passait pour « 60 % »
+    et prenait +2 en rentabilité. **Ampleur au run 4 NON MESURÉE** : 5 niches sur 31 (toutes
+    « mauvaise ») basculent quand on RECONSTRUIT les médianes sur la fixture, tronquée à 12
+    organiques, et 2 autres (disjointes) sur 6 organiques ; le produit prend la médiane sur
+    toute la SERP (`depth=100`), non versionnée, et trois des cinq basculent au centime.
+    **Vérifié dans le tableau de bord KDP de Baptiste le 2026-09-15** : le prix saisi est HT,
+    9,47 € HT (9,99 € TTC) donnent 50 %, et le barème retrouve au centime les redevances de
+    deux livres réels (5 x 8 po et A4, encre noire). Le grand format coûte 2,48 € sous 110
+    pages contre 2,05 € : 120 fiches sur 184 lisibles au run 4. **La page fr_FR du barème
+    (G201834340) écrit « largeur ET hauteur »** ; les trois autres pages et le tableau
+    officiel des tailles disent « OU » — c'est « OU » qui est codé (`kdp_print_costs.json`).
+    Hypothèses dites à l'écran, jamais tues : TVA de 20 % supposée (non observable par ASIN),
+    encre noire supposée, format « non déterminé » → barème standard. Le prix médian affiché
+    reste TTC : c'est la donnée de marché. Tests : `test_redevance_hors_tva_grand_format.py`.
+    **Deux corollaires, relevés par la revue du correctif.** (1) Un résultat ANTÉRIEUR (sans
+    `prix_catalogue_ht`, relu depuis `jobs.db` ou renvoyé à `/api/verdict` et `/api/dossier`)
+    garde un drapeau et une redevance calculés sur le prix affiché : la carte, le brief du
+    verdict et le dossier n'en montrent plus la redevance (« à recalculer »), et seul un ancien
+    « sous 9,99 € » reste signalé, le prix hors TVA étant toujours plus bas. (2) `history.db`
+    stocke `rentabilite` et `global_score` sans version de formule : un passage d'avant et un
+    passage d'après feraient lire un faux « recul » (−2 en rentabilité sans aucun mouvement du
+    marché). Aucun écran ne montre l'historique low-content aujourd'hui ; **à traiter AVANT d'y
+    brancher un `histslot`**. Même famille que §5.38 : un correctif de calcul change ce que
+    mesure un chiffre déjà stocké.
+
 
 **Invariant transversal**
 
@@ -1366,7 +1400,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1231 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1272 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

@@ -2,8 +2,9 @@
 
 Deux axes n'existent pas en non-fiction, et ce n'est pas un raffinement :
 
-- RENTABILITÉ. Sous 9,99 € de prix catalogue, KDP verse 50 % au lieu de 60 %, et le coût
-  d'impression se déduit ENSUITE. Un rayon très demandé à 6,99 € peut ne rien rapporter,
+- RENTABILITÉ. Sous 9,99 € de prix catalogue HORS TVA, KDP verse 50 % au lieu de 60 %, et
+  le coût d'impression se déduit ENSUITE. Le prix lu sur amazon.fr est TTC : à 20 % de TVA,
+  le seuil tombe vers 11,99 € affichés. Un rayon très demandé à 6,99 € peut ne rien rapporter,
   voire coûter de l'argent sur un fort pagination. En non-fiction, un livre de texte à
   14,99 € ne pose jamais cette question.
 - FAISABILITÉ. Un carnet quadrillé et un cahier d'activités illustré ne se produisent pas
@@ -206,11 +207,81 @@ def variantes_quasi_identiques(titres, seuil: float = 0.6) -> int:
     return plus_gros
 
 
+# ── Prix catalogue et format de coupe ─────────────────────────────────────────
+
+def prix_catalogue_ht(prix_ttc: float | None, taux_tva: float | None = None) -> float | None:
+    """Prix catalogue KDP (HORS TVA) déduit du prix affiché sur amazon.fr (TTC).
+
+    C'est sur CE prix que KDP applique le seuil de 9,99 € et calcule la redevance. Vérifié
+    le 2026-09-15 dans le tableau de bord KDP : 9,47 € HT s'affichent 9,99 € TTC, et KDP
+    verse 50 %. Comparer le prix affiché au seuil faisait passer un carnet à 10,49 €
+    (8,74 € HT) pour un rayon « à 60 % ».
+
+    `taux_tva` par défaut : celui du low-content dans `kdp_print_costs.json` (20 %, SUPPOSÉ —
+    le taux réel d'un ASIN n'est observable nulle part). Arrondi au centime, la précision
+    du prix saisi dans KDP. `None` sur un prix absent : un prix inconnu n'est pas nul."""
+    if prix_ttc is None:
+        return None
+    if taux_tva is None:
+        taux_tva = charger_couts()["tva"]["taux_lowcontent"]
+    return round(prix_ttc / (1 + taux_tva), 2)
+
+
+_DIMENSIONS = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*cm\s*$")
+
+
+def format_coupe_livre(dimensions: str | None) -> str | None:
+    """« standard » ou « grand » d'après les dimensions d'une fiche ; `None` si illisible.
+
+    Forme lue : « largeur x épaisseur x hauteur cm », la SEULE observée (184 fiches
+    lisibles sur 185 au run 4). Toute autre forme rend `None` — deux axes, une autre unité,
+    ou une épaisseur qui n'est pas la plus petite valeur au milieu : l'ordre des axes n'y
+    est plus garanti, et un format deviné ferait calculer la redevance sur une grille
+    choisie au hasard. Le parseur des fiches garde le texte brut ; c'est ici qu'on le lit.
+
+    Règle KDP : grand format dès que la largeur DÉPASSE 15,55 cm OU la hauteur 22,86 cm
+    (bornes et sources dans `kdp_print_costs.json`). Un 6 x 9 po exact reste standard, un
+    carré de 21,59 cm ou un paysage de 20,96 x 15,24 cm sont des grands formats."""
+    m = _DIMENSIONS.match(dimensions or "")
+    if not m:
+        return None
+    largeur, epaisseur, hauteur = (float(g) for g in m.groups())
+    if epaisseur > min(largeur, hauteur):
+        return None
+    g = charger_couts()["grand_format"]
+    grand = largeur > g["largeur_min_cm"] or hauteur > g["hauteur_min_cm"]
+    return "grand" if grand else "standard"
+
+
+def format_coupe_dominant(livres) -> tuple[str | None, int, int]:
+    """Format de coupe du rayon : `(format, n_grand, n_lus)`.
+
+    Majorité STRICTE des fiches lisibles. À égalité, ou sans aucune dimension lisible, le
+    format n'est pas déterminé (`None`) : l'appelant suppose alors le barème standard et
+    le DIT. Ce n'est pas un seuil de marché à calibrer — c'est le choix de la grille
+    d'impression, qui suit la règle de KDP."""
+    formats = [f for f in (format_coupe_livre(getattr(b, "dimensions", None))
+                           for b in (livres or [])) if f]
+    n_lus, n_grand = len(formats), formats.count("grand")
+    if n_grand * 2 > n_lus:
+        return "grand", n_grand, n_lus
+    if (n_lus - n_grand) * 2 > n_lus:
+        return "standard", n_grand, n_lus
+    return None, n_grand, n_lus
+
+
 # ── Redevance ──────────────────────────────────────────────────────────────────
 
 def redevance_estimee(prix: float | None, pages: int | None, encre: str = "bw",
-                      marketplace: str = "fr") -> float | None:
-    """(taux × prix) − coût d'impression, en euros. Barèmes RELEVÉS, jamais estimés.
+                      marketplace: str = "fr", format_coupe: str = "standard") -> float | None:
+    """(taux × prix catalogue HORS TVA) − coût d'impression, en euros. Barèmes RELEVÉS.
+
+    `prix` est le PRIX CATALOGUE KDP, HORS TVA — celui que l'auteur saisit, et sur lequel
+    KDP applique le seuil de 9,99 €. Le prix affiché sur amazon.fr est TTC : le convertir
+    d'abord (`prix_catalogue_ht`). `format_coupe` : « standard » ou « grand »
+    (`format_coupe_livre`) ; le grand format a sa propre grille, 2,48 € sous 110 pages en
+    encre noire contre 2,05 €. Retrouvé au centime sur deux livres réels dans le tableau
+    de bord KDP le 2026-09-15 (`tests/test_redevance_hors_tva_grand_format.py`).
 
     Sources et date de relevé dans `data/kdp_print_costs.json`. Ces barèmes sont ceux
     d'Amazon, pas les nôtres : ils changent sans que le dépôt en soit informé.
@@ -240,7 +311,14 @@ def redevance_estimee(prix: float | None, pages: int | None, encre: str = "bw",
     if grille is None:
         raise ValueError(f"encre inconnue : « {encre} » "
                          f"(dispo : {sorted(couts['encres'])})")
-    if pages > grille["seuil_cout_fixe_seul"]:
+    seuil = grille["seuil_cout_fixe_seul"]
+    if format_coupe == "grand":
+        grille = grille.get("grand_format")
+        if grille is None:
+            raise ValueError(f"grand format non relevé pour l'encre « {encre} »")
+    elif format_coupe != "standard":
+        raise ValueError(f"format de coupe inconnu : « {format_coupe} » (standard, grand)")
+    if pages > seuil:
         impression = grille["cout_fixe_bande_longue"] + pages * grille["cout_par_page"]
     else:
         impression = grille["cout_fixe_bande_courte"]
@@ -285,8 +363,13 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
     p_trad, _ = part_editeurs_traditionnels(livres)
     p_recents, _ = part_recents(livres, aujourdhui=aujourdhui)
     prix_median = _median(prix) or _median([b.price for b in (livres or [])])
+    # Le prix du rayon est celui que voit le client (TTC) ; KDP applique le seuil et calcule
+    # la redevance sur le prix catalogue HORS TVA, au taux supposé du low-content.
+    prix_ht = prix_catalogue_ht(prix_median)
+    taux_tva = charger_couts()["tva"]["taux_lowcontent"] if prix_ht is not None else None
     pages_median = _median([b.pages for b in (livres or [])])
     pages_median = int(pages_median) if pages_median is not None else None
+    format_coupe, n_grand_format, n_format_lus = format_coupe_dominant(livres)
 
     vals = sorted(b for b in (bsrs or []) if isinstance(b, int) and b > 0)
     bsr_best = vals[0] if vals else None
@@ -343,10 +426,14 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
     penetration = _clamp(penetration)
 
     # ── AXE 3 — Rentabilité (0,20) ──
-    redevance = redevance_estimee(prix_median, pages_median)
+    # Seuil et redevance sur le prix HORS TVA. Format de coupe non déterminé : barème
+    # standard, et `format_coupe=None` le dit à l'écran. `prix_median_faible` reste une
+    # hypothèse sur le prix AFFICHÉ.
+    redevance = redevance_estimee(prix_ht, pages_median,
+                                  format_coupe=format_coupe or "standard")
     rentabilite = 5.0
     if prix_median is not None:
-        if prix_median >= c["seuil_prix_60pct"]:
+        if prix_ht >= c["seuil_prix_60pct"]:
             rentabilite += 2
         elif prix_median < c["prix_median_faible"]:
             rentabilite -= 2
@@ -404,10 +491,10 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
         n_variantes_quasi_identiques=variantes,
         part_indie=p_indie, part_editeurs_traditionnels=p_trad,
         n_editeur_inconnu=n_inconnu, part_moins_12_mois=p_recents,
-        prix_median=prix_median,
-        prix_sous_seuil_60pct=(prix_median is not None
-                               and prix_median < c["seuil_prix_60pct"]),
+        prix_median=prix_median, prix_catalogue_ht=prix_ht, taux_tva_suppose=taux_tva,
+        prix_sous_seuil_60pct=(prix_ht is not None and prix_ht < c["seuil_prix_60pct"]),
         redevance_estimee=redevance, pages_median=pages_median,
+        format_coupe=format_coupe, n_format_lus=n_format_lus, n_grand_format=n_grand_format,
         bsr_best=bsr_best, bsr_top_avg=bsr_avg, bsr_worst=bsr_worst,
         criteres_bsr_ok=(crit1 and crit2 and crit3),
         total_reviews=sum(o.reviews_count for o in organic if o.reviews_count) or None,
