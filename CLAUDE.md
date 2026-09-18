@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-15** (1 272 tests sur 101 fichiers, 49 modules, 34
+> Comptages revérifiés le **2026-09-18** (1 285 tests sur 102 fichiers, 49 modules, 34
 > variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -564,8 +564,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1272 tests** sur **101 fichiers** `tests/test_*.py`, **1272 passés, 0 ignoré, 0 échec,
-0 erreur**, code de sortie 0 (`python -m pytest -q -p no:warnings`, relancé le 2026-09-15,
+**1285 tests** sur **102 fichiers** `tests/test_*.py`, **1285 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -q -p no:warnings`, relancé le 2026-09-18,
 marqueurs de progression comptés ; la suite avait connu des échecs INTERMITTENTS, cf. §5.33).
 
 **Données RÉELLES d'abord, et tout écart DÉCLARÉ dans le docstring** — règle née du run 4
@@ -812,7 +812,8 @@ de « jamais le code » plus bas. Aucun n'est codé :
   (fenêtres 12 / 24 / 48) : aucune fenêtre ne le rend discriminant.
 - **R19**, crit3 « place à prendre » (+1,5) : il touche **8/9 mortes, 12/15 mauvaises, 6/7
   bonnes**, et toujours 8/9 mortes sur le top 3. Il grandit avec le pire BSR, plus élevé dans
-  un rayon mort, et aucune valeur du seuil n'inverse ce sens.
+  un rayon mort, et aucune valeur du seuil n'inverse ce sens. **DÉCIDÉ le 2026-09-18** (run 5 :
+  14/14 mortes) : **le bonus ne pèse plus sur le score** ; crit3 reste dans `criteres_bsr_ok`.
 - **Saturation de `part_indie`** : 1,0 sur **24/31** niches au run 4. Seuls les compteurs de
   diagnostic ci-dessus sont codés.
 - **R22**, `redevance_min_bonne=2,0` saturerait sur **21 à 27/31** une fois les pages lues
@@ -825,7 +826,18 @@ de « jamais le code » plus bas. Aucun n'est codé :
   indécidable.
 - **R27**, malus pris sur les `risques` rendus par le LLM sans vérification (saisonnier −1,
   TOS −2), appliqués même sous `--inclure-saisonnier`. Une seule des 31 requêtes est
-  saisonnière selon `est_saisonnier`, qui ne voit pas « autumn ».
+  saisonnière selon `est_saisonnier`, qui ne voit pas « autumn ». **Saisonnier DÉCIDÉ le
+  2026-09-18 : drapeau affiché, sans malus** (il frappait 2 bonnes sur 12 au run 5). Le −2 de
+  `ip_marque` / `tos` reste.
+- **Seuils des pastilles** 🟢 / 🟡 (7,5 / 6,0) : déplacés du code vers `lowcontent_criteres.json`
+  (`seuil_verdict_vert`, `seuil_verdict_jaune`) le 2026-09-18 et fixés à **6,0 / 5,0** par
+  Baptiste : à 7,5 / 6,0 le run 5 rejoué sortait 50 rouges sur 51. HYPOTHÈSE lue sur le run 5
+  (rouge = probablement mort, jaune = vivant, à examiner), à vérifier sur un lot neuf. Deux
+  copies du seuil supprimées (§5.32) : `SEUIL_VERT` dans `lowcontent_validation`, et `grade`
+  (7,5 / 6,0) qui colorait la pastille de la carte low-content — elle suit désormais le
+  verdict du serveur.
+- **Demande comptée une fois** (2026-09-18) : en mode classement `demand_score =
+  max(1, n_enfants)`, et un bonus « au moins 3 affinages » recomptait le même nombre. Retiré.
 - **R30**, la progression cliente recopie encore le motif brut du fournisseur (compromis
   ci-dessus) : à filtrer à la frontière client avant l'ouverture des inscriptions.
 - **R31** : seul le relibellé est fait. Page 2 du dossier : « estimation de l'IA, non
@@ -835,6 +847,25 @@ Corriger les pages ne peut pas faire passer une morte en vert : +0,4 point globa
 maximal 6,01 contre un seuil vert à 7,5 (**calculé** sur le rejeu). Hors code, le prochain run
 suppose la purge des 185 fiches par Baptiste, avec sauvegarde, et un solde DataForSEO vérifié
 dans le tableau de bord.
+
+**Cinquième run réel (2026-09-18, 1,061 $) : COMPLET et DÉCIDABLE, porte NON franchie.** 51
+requêtes — les 31 du run 4 et 20 NEUVES tirées au hasard dans l'autocomplete puis étiquetées à
+l'aveugle (colonne « lot » du classeur) —, 51/51 calibrées, redevance et pages 51/51.
+Spearman **+0,358** (anciennes +0,433, neuves +0,399), 0 morte en vert, mais UNE seule niche
+verte sur 51 (une « mauvaise ») et aucune bonne au-dessus de 6,31. Le score sépare une morte
+d'une vivante (AUC 0,73), presque pas une bonne d'une mauvaise (0,57) ; le prix médian est le
+signal le plus solide. Aucune variante du SEUL fichier de critères n'atteint 0,5 sur les
+neuves (0,491 au mieux sur 144 combinaisons, même choisies sur les neuves) : c'est la
+DÉFINITION du score qui bloque. Décisions de Baptiste qui en découlent : R19 et R27 ci-dessus,
+seuils des pastilles dans le fichier (6,0 / 5,0), demande comptée une fois, et deux compteurs
+au rapport, HORS porte (`n_verts`, `meilleur_score_bonne`). Rejoué sur le run 5 : Spearman
+**+0,462** (anciennes +0,543, neuves +0,442) ; pastilles : 14 mortes rouges sur 14, bonnes 5
+jaunes / 7 rouges, mauvaises 1 verte / 6 jaunes / 18 rouges. À VALIDER sur un lot neuf, un
+rejeu ne franchissant jamais la porte. Le score écarte un rayon mort ; il ne départage pas
+encore une bonne d'une mauvaise, et le produit ne doit pas se vendre comme un sélecteur.
+Les tests qui photographient le run 4 lisent désormais les 31 lignes du lot « run 4 »
+(`outils_calibration.etiquetees_run4` / `xlsx_run4`). Captures :
+`99-logs/captures/calibration-20260918-155619/` (`entrees.json` pour `--rejouer`).
 
 Quatre décisions de mesure :
 
@@ -1400,7 +1431,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1272 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1285 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
@@ -1465,8 +1496,8 @@ Section critique. Chacun a coûté un bug réel.
   endpoint ne les sert et chacun porte des `[[A COMPLETER : … ]]` (identité légale,
   hébergeur, prix, délai de rétractation). `tests/test_pages_publiques.py` verrouille le
   lien : dès qu'une route sert un de ces fichiers, il ne doit plus rester un marqueur.
-- **Calibration du scoring low-content** : l'outillage existe (§2.14), **la mesure non** —
-  quatre runs payants (2026-09-13/14), aucune porte décidable.
+- **Calibration du scoring low-content** : l'outillage existe (§2.14), et une mesure décidable
+  aussi (run 5, 2026-09-18) — **porte NON franchie** (+0,358).
   Les seuils de `data/lowcontent_criteres.json` restent des hypothèses tant que Baptiste n'a
   pas rempli le gabarit et fait tourner `build_lowcontent_validation_set.py --xlsx`. Ne
   jamais citer ces seuils comme des critères établis.

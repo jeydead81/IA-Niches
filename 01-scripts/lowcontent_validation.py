@@ -46,7 +46,6 @@ _ORDINAL: dict[str, int] = {e: i for i, e in enumerate(ETIQUETTES)}
 
 SEUIL_SPEARMAN = 0.5           # porte du plan G1
 MIN_PAR_FAMILLE = 3            # en deçà, la famille n'est pas calibrée, elle est frôlée
-SEUIL_VERT = 7.5               # miroir de lowcontent_scoring : « 🟢 À analyser en priorité »
 
 _ENTETES = ["requete", "famille", "etiquette", "note"]
 
@@ -302,6 +301,11 @@ class RapportCalibration(BaseModel):
     spearman: float | None = None
     seuil_spearman: float = SEUIL_SPEARMAN
     morts_en_vert: list[str] = Field(default_factory=list)
+    # Deux COMPTEURS, sans effet sur la porte (décision de Baptiste, 2026-09-18) : au run 5,
+    # « 0 morte en vert » se lisait comme une preuve de sûreté alors qu'une seule niche sur 51
+    # était verte et qu'aucune bonne ne dépassait 6,31. `None` sans bonne calibrée, jamais 0.
+    n_verts: int = 0
+    meilleur_score_bonne: float | None = None
     porte_franchie: bool = False
     # INDÉCIDABLE n'est pas ÉCHOUÉE. Vrai quand la porte est fermée faute de mesure COMPLÈTE
     # (SERP tombées, « morte » non vérifiable, rayon jamais lu) : relancer, et surtout ne PAS
@@ -344,13 +348,16 @@ class RapportCalibration(BaseModel):
     dossier_captures: str = ""
 
 
-def _est_vert(s: LowContentScored) -> bool:
+def _est_vert(s: LowContentScored, c: dict) -> bool:
     """La priorité fait foi quand elle est renseignée ; à défaut on retombe sur le seuil.
     Se fier au seul score raterait le cas « ⚪ non mesurée » qui peut porter un score
-    élevé sans jamais s'afficher en vert."""
+    élevé sans jamais s'afficher en vert.
+
+    Le seuil est celui du fichier de critères, comme dans `score_lowcontent` : une copie
+    locale (l'ancienne constante SEUIL_VERT) divergeait dès qu'on touchait le fichier."""
     if s.priorite:
         return s.priorite.startswith("🟢")
-    return s.global_score >= SEUIL_VERT
+    return s.global_score >= c["seuil_verdict_vert"]
 
 
 def _mediane(valeurs: list[float | None]) -> float | None:
@@ -409,7 +416,7 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                                      "libelle_observe": s.niche.other_libelle})
 
     r.morts_en_vert = [s.niche.requete_amazon for e, s in paires
-                       if e == "morte" and _est_vert(s)]
+                       if e == "morte" and _est_vert(s, c)]
 
     for requete, e in (ecartees or []):
         if e not in ETIQUETTES:
@@ -459,6 +466,9 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
     r.n_redevance_mesuree = sum(1 for _, s in calibrables
                                 if s.redevance_estimee is not None)
     r.n_pages_mesurees = sum(1 for _, s in calibrables if s.pages_median is not None)
+    r.n_verts = sum(1 for _, s in calibrables if _est_vert(s, c))
+    scores_bonnes = [s.global_score for e, s in calibrables if e == "bonne"]
+    r.meilleur_score_bonne = max(scores_bonnes) if scores_bonnes else None
     if r.n_demande_non_mesuree:
         r.avertissements.append(
             f"{r.n_demande_non_mesuree} requête(s) écartée(s) du calcul : demande non "

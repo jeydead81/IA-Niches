@@ -12,7 +12,8 @@ gratuits, tous deux en code de sortie 5 (« refus avant toute dépense ») :
   sondes restent muettes ou si une « morte » le reste — la porte serait certainement
   indécidable (décision de Baptiste).
 
-Données : classeur RÉEL `99-logs/validation-lc.xlsx` (31 requêtes, lecture seule), captures
+Données : classeur RÉEL `99-logs/validation-lc.xlsx`, restreint aux 31 requêtes du lot
+« run 4 » (lecture seule ; 20 neuves y ont été ajoutées le 2026-09-15), captures
 RÉELLES v2, état RÉEL du cache après le run 4 (`fixtures/cache_calibration_run4_reel.json`). Inventés et déclarés : la forme des SERP
 (`outils_calibration`), l'altération « sans pages », les runs espions. Aucun réseau : le
 master réel est remplacé par un espion qui LÈVE s'il est appelé.
@@ -28,8 +29,8 @@ from cost_tracker import CostTracker
 from devis import cout_max_estime
 from lowcontent_validation import SondeIndisponible
 from models import LowContentNiche, LowContentScored
-from tests.outils_calibration import (XLSX_REEL, cache_run4_reel, cache_seme,
-                                      etiquetees_reelles)
+from tests.outils_calibration import (cache_run4_reel, cache_seme, etiquetees_run4,
+                                      xlsx_run4)
 
 
 @pytest.fixture(autouse=True)
@@ -68,14 +69,14 @@ def _sonde_interdite(monkeypatch):
 
 def test_R11_le_devis_REFUSE_quand_les_fiches_en_cache_n_ont_pas_de_pages(
         tmp_path, monkeypatch, capsys):
-    requetes = [e.requete for e in etiquetees_reelles()]
+    requetes = [e.requete for e in etiquetees_run4()]
     chemin = tmp_path / "cache.db"
     cache_seme(chemin, requetes, sans_pages=True)
     appels = _espion_construire(monkeypatch)
     _sonde_interdite(monkeypatch)
     sortie = tmp_path / "r.json"
 
-    code = cli.main(["--xlsx", str(XLSX_REEL), "--cache", str(chemin), "--out", str(sortie)])
+    code = cli.main(["--xlsx", str(xlsx_run4(tmp_path)), "--cache", str(chemin), "--out", str(sortie)])
 
     out = capsys.readouterr().out
     assert code == 5
@@ -93,7 +94,7 @@ def test_R11_photo_du_run_4_sur_l_etat_REEL_du_cache(tmp_path):
     cache, 185 fiches toutes sans pagination, rien à payer — le devis doit refuser en nommant
     la purge. Inconditionnel : aucune branche ne recalcule la règle qu'il vérifie."""
     copie = cache_run4_reel(tmp_path)
-    requetes = [e.requete for e in etiquetees_reelles()]
+    requetes = [e.requete for e in etiquetees_run4()]
     d = cli.devis_calibration(requetes, cli.ouvrir_cache_lecture(copie), plafond_usd=0.72)
     assert (d.n_serp_cache, d.n_serp_a_payer) == (31, 0)
     assert (d.n_asin_cache_sans_pages, d.n_asin_cache_utiles, d.n_asin_a_payer) == (185, 0, 0)
@@ -103,13 +104,13 @@ def test_R11_photo_du_run_4_sur_l_etat_REEL_du_cache(tmp_path):
 def test_R11_un_plafond_trop_bas_refuse_avant_la_sonde_et_le_run(tmp_path, monkeypatch):
     appels = _espion_construire(monkeypatch)
     _sonde_interdite(monkeypatch)
-    code = cli.main(["--xlsx", str(XLSX_REEL), "--cache", str(tmp_path / "vide.db"),
+    code = cli.main(["--xlsx", str(xlsx_run4(tmp_path)), "--cache", str(tmp_path / "vide.db"),
                      "--out", str(tmp_path / "r.json"), "--plafond", "0.01"])
     assert code == 5 and appels == []
 
 
 def test_R11_cache_vide_le_devis_vaut_celui_du_produit_et_n_ecrit_rien(tmp_path):
-    requetes = [e.requete for e in etiquetees_reelles()]
+    requetes = [e.requete for e in etiquetees_run4()]
     absent = tmp_path / "absent.db"
     d = cli.devis_calibration(requetes, cli.ouvrir_cache_lecture(absent), plafond_usd=2.0)
     assert d.total_usd == pytest.approx(cout_max_estime("lowcontent", {"n_search": 31}))
@@ -125,7 +126,7 @@ def test_R11_cache_vide_le_devis_vaut_celui_du_produit_et_n_ecrit_rien(tmp_path)
 
 def test_R11_le_devis_ne_modifie_pas_le_cache_qu_il_lit(tmp_path):
     from tests.outils_calibration import cles
-    requetes = [e.requete for e in etiquetees_reelles()]
+    requetes = [e.requete for e in etiquetees_run4()]
     chemin = tmp_path / "cache.db"
     cache_seme(chemin, requetes[:5], sans_pages=False)
     avant = cles(chemin)
@@ -140,11 +141,11 @@ def test_R11_le_devis_ne_modifie_pas_le_cache_qu_il_lit(tmp_path):
 
 def test_R11_des_fiches_utiles_en_cache_laissent_partir_le_run(tmp_path, monkeypatch):
     """Cache chaud et exploitable : SERP et ASIN à 0 $, seul le poste LLM reste au devis."""
-    requetes = [e.requete for e in etiquetees_reelles()]
+    requetes = [e.requete for e in etiquetees_run4()]
     chemin = tmp_path / "cache.db"
     cache_seme(chemin, requetes, sans_pages=False)
     appels = _espion_construire(monkeypatch)
-    code = cli.main(["--xlsx", str(XLSX_REEL), "--cache", str(chemin),
+    code = cli.main(["--xlsx", str(xlsx_run4(tmp_path)), "--cache", str(chemin),
                      "--out", str(tmp_path / "r.json"), "--plafond", "0.72"])
     assert len(appels) == 1 and code != 5
     assert appels[0]["cache_path"] == str(chemin)
@@ -188,7 +189,7 @@ def _expand_selon(pannes: dict):
 
 
 def test_R10_une_sonde_qui_leve_PARTOUT_arrete_avant_tout_appel_paye():
-    etq = etiquetees_reelles()
+    etq = etiquetees_run4()
     run, cost = _espion_run(), CostTracker(plafond_usd=2.0)
     expand = _expand_selon({e.requete: float("inf") for e in etq})
     with pytest.raises(SondeIndisponible):
@@ -200,7 +201,7 @@ def test_R10_une_sonde_qui_leve_PARTOUT_arrete_avant_tout_appel_paye():
 
 
 def test_R10_une_seule_MORTE_muette_deux_fois_arrete_et_est_nommee():
-    etq = etiquetees_reelles()
+    etq = etiquetees_run4()
     morte = next(e.requete for e in etq if e.etiquette == "morte")
     run = _espion_run()
     expand = _expand_selon({morte: 2})
@@ -212,7 +213,7 @@ def test_R10_une_seule_MORTE_muette_deux_fois_arrete_et_est_nommee():
 
 
 def test_R10_une_morte_muette_puis_qui_repond_laisse_partir_le_run():
-    etq = etiquetees_reelles()
+    etq = etiquetees_run4()
     morte = next(e.requete for e in etq if e.etiquette == "morte")
     run = _espion_run()
     expand = _expand_selon({morte: 1})
@@ -223,7 +224,7 @@ def test_R10_une_morte_muette_puis_qui_repond_laisse_partir_le_run():
 
 
 def test_R10_une_BONNE_muette_apres_re_sonde_ne_bloque_pas_et_se_compte():
-    etq = etiquetees_reelles()
+    etq = etiquetees_run4()
     bonne = next(e.requete for e in etq if e.etiquette == "bonne")
     run = _espion_run()
     expand = _expand_selon({bonne: float("inf")})
@@ -240,7 +241,7 @@ def test_R10_la_CLI_ecrit_un_rapport_RIEN_DEPENSE_et_sort_en_5(tmp_path, monkeyp
 
     monkeypatch.setattr(cli, "sonder", muette)
     sortie = tmp_path / "r.json"
-    code = cli.main(["--xlsx", str(XLSX_REEL), "--cache", str(tmp_path / "vide.db"),
+    code = cli.main(["--xlsx", str(xlsx_run4(tmp_path)), "--cache", str(tmp_path / "vide.db"),
                      "--out", str(sortie)])
     assert code == 5
     r = json.loads(sortie.read_text(encoding="utf-8"))
@@ -255,7 +256,7 @@ def test_R10_un_rapport_existant_n_est_JAMAIS_ecrase(tmp_path, monkeypatch):
         Suggestion(requete=q, parent="", profondeur=0, n_enfants=None) for q in rs])
     sortie = tmp_path / "rapport.json"
     sortie.write_text('{"run": 4}', encoding="utf-8")
-    cli.main(["--xlsx", str(XLSX_REEL), "--cache", str(tmp_path / "vide.db"),
+    cli.main(["--xlsx", str(xlsx_run4(tmp_path)), "--cache", str(tmp_path / "vide.db"),
               "--out", str(sortie)])
     assert sortie.read_text(encoding="utf-8") == '{"run": 4}'
     nouveaux = [p for p in tmp_path.glob("rapport*.json") if p != sortie]

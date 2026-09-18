@@ -387,11 +387,10 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
     # elle, discrimine encore.
     if (niche.profondeur_autocomplete or 0) >= 2:
         demande += 1
-    # `None` = requete JAMAIS sondee (fond de l'arbre, ou budget epuise). Ni bonus ni
-    # malus : une absence de mesure ne se convertit pas davantage en mesure defavorable
-    # qu'en mesure favorable.
-    if (niche.n_enfants_autocomplete or 0) >= 3:
-        demande += 1
+    # PAS de bonus « au moins 3 affinages » : décision de Baptiste après le run 5
+    # (2026-09-18). En mode classement, `demand_score = max(1, n_enfants)`
+    # (lowcontent_master) : ce bonus comptait une SECONDE fois le même nombre
+    # d'affinages. Il ne compte plus qu'une fois, via `demand_score`.
     if bsr_best is not None:
         demande += 2 if bsr_best < 5_000 else 1 if crit1 else 0
     # PAS de bonus sur `total_reviews`, contrairement au non-fiction : en low-content les
@@ -421,8 +420,10 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
         penetration += 1
     if p_recents is not None and p_recents >= c["part_recents_afflux"]:
         penetration -= 1          # tendance déjà repérée et inondée
-    if crit3:
-        penetration += 1.5        # repose sur le BSR, pas sur la SERP
+    # PAS de bonus « place à prendre » (crit3) : décision de Baptiste après le run 5
+    # (2026-09-18). Il se déclenche quand le PIRE BSR du top dépasse le seuil — ce qui
+    # arrive surtout dans un rayon MORT : 14 mortes sur 14, 20 mauvaises sur 25, 10 bonnes
+    # sur 12. crit3 reste calculé pour le drapeau `criteres_bsr_ok`, sans poids dans le score.
     penetration = _clamp(penetration)
 
     # ── AXE 3 — Rentabilité (0,20) ──
@@ -472,13 +473,16 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
     glob = demande * 0.35 + penetration * 0.35 + rentabilite * 0.20 + faisabilite * 0.10
     if "ip_marque" in risques or "tos" in risques:
         glob -= 2
-    if "saisonnier" in risques:
-        glob -= 1
+    # « saisonnier » reste un DRAPEAU affiché, sans malus : décision de Baptiste après le run
+    # 5. Le risque est posé par le LLM sans vérification, et le −1 s'appliquait même quand
+    # l'utilisateur inclut les saisonnières — il frappait 2 bonnes sur 12.
     glob = round(_clamp(glob, 0.0, 10.0), 2)
 
+    # Seuils lus dans le fichier de critères (décision de Baptiste, run 5) : ils étaient
+    # écrits ici, donc impossibles à régler sans toucher au code.
     verdict = ("⚪ Concurrence non mesurée — à relancer" if not mesuree
-               else "🟢 À analyser en priorité" if glob >= 7.5
-               else "🟡 Intéressant" if glob >= 6.0 else "🔴 Faible")
+               else "🟢 À analyser en priorité" if glob >= c["seuil_verdict_vert"]
+               else "🟡 Intéressant" if glob >= c["seuil_verdict_jaune"] else "🔴 Faible")
 
     return LowContentScored(
         niche=niche,

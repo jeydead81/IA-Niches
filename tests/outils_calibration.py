@@ -39,6 +39,48 @@ def etiquetees_reelles():
     return charger_etiquettes(XLSX_REEL)
 
 
+# Le classeur a grandi le 2026-09-15 : 20 requêtes NEUVES (colonne E « lot » = « neuf
+# 2026-09-15 ») à côté des 31 du run 4 (« run 4 »). Les tests qui photographient l'état du
+# cache APRÈS le run 4 (fixture `cache_calibration_run4_reel.json`, 31 SERP, 185 fiches) ne
+# portent que sur ces 31-là : le classeur réel continue de vivre, la photo du run 4 non.
+LOT_RUN4 = "run 4"
+
+
+def _requetes_du_lot(lot: str) -> set[str]:
+    import openpyxl
+    ws = openpyxl.load_workbook(XLSX_REEL, read_only=True).active
+    return {str(r[0]).strip() for r in ws.iter_rows(values_only=True)
+            if r and len(r) > 4 and r[0] and str(r[4] or "").strip() == lot}
+
+
+def etiquetees_run4():
+    """Les 31 requêtes étiquetées du run 4, lues dans le classeur RÉEL (colonne « lot »)."""
+    run4 = _requetes_du_lot(LOT_RUN4)
+    return [e for e in etiquetees_reelles() if e.requete in run4]
+
+
+def xlsx_run4(dossier: Path) -> Path:
+    """Copie du classeur réel où seules restent les lignes du lot « run 4 » (les autres
+    lignes de données sont VIDÉES, ce que `charger_etiquettes` ignore) — pour les tests qui
+    passent un classeur à la CLI. Le classeur réel n'est jamais écrit."""
+    import openpyxl
+    from lowcontent_validation import _ENTETES
+    wb = openpyxl.load_workbook(XLSX_REEL)
+    ws = wb.active
+    apres_entete = False
+    for ligne in ws.iter_rows():
+        valeurs = [str(c.value or "").strip().lower() for c in ligne[:4]]
+        if valeurs == list(_ENTETES):
+            apres_entete = True
+            continue
+        if apres_entete and str(ligne[4].value if len(ligne) > 4 else "").strip() != LOT_RUN4:
+            for c in ligne[:5]:
+                c.value = None
+    dest = Path(dossier) / "validation-lc-run4.xlsx"
+    wb.save(dest)
+    return dest
+
+
 def livre_v2(asin: str, sans_pages: bool = False):
     b = parse_enriched_book(PAYLOADS[asin])
     return b.model_copy(update={"pages": None}) if sans_pages else b

@@ -240,3 +240,19 @@ def test_un_resultat_anterieur_affiche_sous_9_99_reste_signale_a_50_pct():
     html = appeler("carteLowContent", _ancien(prix_median=7.99, prix_sous_seuil_60pct=True,
                                                redevance_estimee=1.95), dependances=_DEPS)
     assert "v-bad" in html and "50 %" in html
+
+
+# ── La pastille suit le verdict du serveur (2026-09-18) ────────────────────────
+
+def test_la_pastille_suit_le_verdict_du_serveur_et_non_des_seuils_recopies():
+    """Les seuils des pastilles vivent dans `lowcontent_criteres.json` (6,0 / 5,0 depuis le
+    2026-09-18). La carte les recopiait en dur (7,5 / 6,0, via `grade`) : une niche à 5,5
+    que le serveur classe 🟡 s'affichait ROUGE — deux sources pour le même seuil (§5.32)."""
+    assert 'class="pill a"' in _carte(global_score=5.5, priorite="🟡 Intéressant")
+    assert 'class="pill r"' in _carte(global_score=5.5, priorite="🔴 Faible")
+    assert 'class="pill g"' in _carte(global_score=6.2, priorite="🟢 À analyser en priorité")
+
+
+def test_sans_verdict_serveur_la_pastille_retombe_sur_le_score():
+    """Un résultat sans `priorite` (ancien job) garde l'ancienne couleur : jamais vide."""
+    assert 'class="pill g"' in _carte(global_score=8.0, priorite="")

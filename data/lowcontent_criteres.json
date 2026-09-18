@@ -19,5 +19,10 @@
   "seuil_prix_60pct": 9.99,
   "redevance_min_bonne": 2.0,
   "prix_median_faible": 6.0,
+  "seuil_verdict_vert": 6.0,
+  "seuil_verdict_jaune": 5.0,
+  "_verdict": "Seuils des pastilles 🟢 « À analyser en priorité » et 🟡 « Intéressant » du low-content (en dessous : 🔴 « Faible »). Écrits dans le code (7,5 / 6,0) jusqu'au 2026-09-18, déplacés ici et fixés à 6,0 / 5,0 par décision de Baptiste : à 7,5 / 6,0, le run 5 rejoué sortait 50 niches rouges sur 51. HYPOTHÈSE lue sur le run 5, pas une mesure : le score sait écarter un rayon mort, pas encore départager une bonne d'une mauvaise — rouge = probablement mort, jaune = vivant, à examiner. À VÉRIFIER sur le prochain lot neuf étiqueté à l'aveugle, jamais réglée sur le run 5.",
+  "_crit3": "bsr_crit3_place_a_prendre_min ne pèse plus sur le score (décision de Baptiste, run 5 : 14 mortes sur 14 le déclenchaient). Il ne sert plus qu'au drapeau criteres_bsr_ok et aux compteurs de diagnostic de la calibration.",
+
   "_prix": "seuil_prix_60pct est un FAIT de barème relevé chez Amazon (voir kdp_print_costs.json), pas un seuil calibrable : ne pas le bouger en calibration. Il se compare au prix catalogue HORS TVA (prix médian affiché ÷ (1 + TVA supposée)), comme KDP : vérifié dans le tableau de bord KDP le 2026-09-15. prix_median_faible, lui, est une HYPOTHÈSE sur le prix AFFICHÉ au client, TTC."
 }

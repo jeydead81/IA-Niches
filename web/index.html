@@ -1337,7 +1337,12 @@ function carteLowContent(r){
 
   return '<article class="lc-carte">'
     + '<div class="lc-tete">'
-    + '<span class="pill ' + (nm ? 'n' : grade(r.global_score)) + '">'
+    // Couleur = verdict du SERVEUR, dont les seuils vivent dans lowcontent_criteres.json
+    // (6,0 / 5,0 depuis le 2026-09-18). `grade` recopiait 7,5 / 6,0 : une niche à 5,5 que
+    // le serveur classait jaune s'affichait rouge. Sans verdict (ancien job) : le score.
+    + '<span class="pill ' + (nm ? 'n'
+        : ({'🟢': 'g', '🟡': 'a', '🔴': 'r'}[Array.from(r.priorite || '')[0]]
+           || grade(r.global_score))) + '">'
     + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
     + '<h3>' + esc(n.niche || n.requete_amazon || '—') + '</h3></div>'
     + '<div class="lc-req">« ' + esc(n.requete_amazon || '') + ' »</div>'

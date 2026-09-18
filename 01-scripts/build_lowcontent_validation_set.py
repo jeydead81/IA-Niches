@@ -599,6 +599,11 @@ def _imprimer(r: RapportCalibration) -> None:
     sp = "indéfini" if r.spearman is None else f"{r.spearman:+.3f}"
     print(f"  Spearman ................ {sp}  (porte : ≥ {r.seuil_spearman})")
     print(f"  mortes en 🟢 ............ {len(r.morts_en_vert)}  (porte : 0)")
+    # Compteurs sans effet sur la porte : « 0 morte en vert » ne dit rien si presque rien
+    # n'est vert (run 5 : une seule niche verte sur 51).
+    mb = "—" if r.meilleur_score_bonne is None else f"{r.meilleur_score_bonne:.2f}"
+    print(f"  niches en 🟢 ............ {r.n_verts}  (compteur, hors porte)")
+    print(f"  meilleure « bonne » ..... {mb}  (score, hors porte)")
     print()
     if r.signaux:
         cles = ["n", "score", "part_indie", "n_variantes", "prix_median", "redevance"]

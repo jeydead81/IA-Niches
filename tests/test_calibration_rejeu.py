@@ -27,7 +27,8 @@ import lowcontent_scoring
 from autocomplete_expand import Suggestion
 from lowcontent_validation import RapportCalibration, rapport_calibration
 from models import LowContentNiche, LowContentScored
-from tests.outils_calibration import PAYLOADS, asins_de, etiquetees_reelles, serp_v2
+from tests.outils_calibration import (PAYLOADS, asins_de, etiquetees_reelles, etiquetees_run4,
+                                      serp_v2)
 
 
 # ══ R26 — journal des entrées et rejeu ═══════════════════════════════════════════
@@ -218,7 +219,7 @@ def _scored(requete, score, **kw):
 
 
 def _paires_run4(**kw):
-    etq = etiquetees_reelles()
+    etq = etiquetees_run4()
     ordinal = {"morte": 0, "mauvaise": 1, "bonne": 2}
     return [(e.etiquette, _scored(e.requete, 3.0 + ordinal[e.etiquette] + i * 0.01, **kw))
             for i, e in enumerate(etq)]
@@ -283,7 +284,7 @@ def _distribution_reelle():
     parts = {"morte": [1.0] * 8 + [0.2],
              "mauvaise": [1.0] * 11 + [0.8333, 0.8, 0.333, 0.2],
              "bonne": [1.0] * 5 + [0.8333, 0.8333]}
-    etq = etiquetees_reelles()
+    etq = etiquetees_run4()
     assert {e: sum(1 for x in etq if x.etiquette == e) for e in parts} == {
         e: len(v) for e, v in parts.items()}
     ordinal = {"morte": 0, "mauvaise": 1, "bonne": 2}
