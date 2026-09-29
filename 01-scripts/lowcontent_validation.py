@@ -306,6 +306,10 @@ class RapportCalibration(BaseModel):
     # était verte et qu'aucune bonne ne dépassait 6,31. `None` sans bonne calibrée, jamais 0.
     n_verts: int = 0
     meilleur_score_bonne: float | None = None
+    # Combien de « morte » ont VRAIMENT été scorées. « Aucune morte en vert » se vérifiait
+    # jusqu'au 2026-09-29 sur l'ensemble vide : neuf mortes toutes écartées ou non rendues
+    # satisfaisaient le critère le plus important du plan sans qu'aucune n'ait vu un rayon.
+    n_mortes_scorees: int = 0
     porte_franchie: bool = False
     # INDÉCIDABLE n'est pas ÉCHOUÉE. Vrai quand la porte est fermée faute de mesure COMPLÈTE
     # (SERP tombées, « morte » non vérifiable, rayon jamais lu) : relancer, et surtout ne PAS
@@ -566,10 +570,43 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
                 f"`redevance_min_bonne` ne peut être réglé sur ce run : critère INDÉCIDABLE, "
                 f"porte fermée. " + _RELANCE_TELLE_QUELLE)
 
+    # ── Deux conditions de mesure COMPLÈTE (décision de Baptiste, 2026-09-29) ──────────
+    # Mesuré au pré-mortem du run 6 sur les entrées réelles du run 5 : un jeu amputé à 10
+    # niches sur 46 sortait la porte FRANCHIE avec un Spearman de +0,522, contre +0,462 sur
+    # le run complet. Ce sont les « mortes » qui portent le signal (+0,219 sans elles) :
+    # l'échec partiel est donc le scénario qui FABRIQUE un faux vert, pas celui qui le
+    # dégrade. Et « aucune morte en vert » se vérifiait sur l'ensemble vide dès que les
+    # mortes étaient toutes écartées ou non rendues.
+    # Les ÉCARTÉES (filtre IP, saisonnier) sortent du dénominateur : elles ne sont pas une
+    # mesure ratée mais un gate du PRODUIT, gratuit et voulu, et une décision antérieure dit
+    # qu'elles ne ferment pas la porte (§2.14). Une « morte » écartée, elle, reste couverte
+    # par la seconde condition ci-dessous.
+    n_ecartees = len(r.ecartees_correctement) + len(r.bonnes_perdues_avant_analyse)
+    mesure_incomplete = r.n_calibrees < r.n_requetes - n_ecartees
+    mortes_scorees = [s.niche.requete_amazon for e, s in calibrables if e == "morte"]
+    r.n_mortes_scorees = len(mortes_scorees)
+    if mesure_incomplete:
+        r.avertissements.append(
+            f"mesure INCOMPLÈTE : {r.n_calibrees} niche(s) calibrée(s) sur "
+            f"{r.n_requetes - n_ecartees} requête(s) analysable(s) ({r.n_non_mesurees} "
+            f"SERP tombée(s), {r.n_demande_non_mesuree} demande(s) non mesurée(s), "
+            f"{len(r.non_rendues)} non rendue(s) par le classement ; {n_ecartees} "
+            f"écartée(s) avant analyse, hors décompte). Un jeu amputé n'est pas un petit "
+            f"jeu : les "
+            f"« mortes » portent le signal, donc un run troué rend un Spearman PLUS haut "
+            f"qu'un run complet (mesuré : +0,522 sur 10 niches contre +0,462 sur 46). "
+            f"Porte INDÉCIDABLE : aucun seuil ne se règle là-dessus.")
+    if not mortes_scorees:
+        r.avertissements.append(
+            "aucune « morte » SCORÉE : le critère « aucune morte en vert » porterait sur "
+            "l'ensemble vide. Il est INDÉCIDABLE, pas satisfait (règle 3) — porte fermée.")
+
     r.porte_franchie = (r.spearman is not None
                         and r.spearman >= SEUIL_SPEARMAN
                         and not r.morts_en_vert
                         and not mortes_indecidables
+                        and not mesure_incomplete
+                        and bool(mortes_scorees)
                         and bool(r.n_part_indie_mesuree)
                         and bool(r.n_redevance_mesuree))
     # Le conseil « corriger les critères » ne vaut que sur une mesure COMPLÈTE. Un Spearman
@@ -579,6 +616,7 @@ def rapport_calibration(paires: list[tuple[str, LowContentScored]],
     # un conseil qui, suivi, réglait les seuils sur rien.
     r.porte_indecidable = not r.porte_franchie and (
         r.spearman is None or bool(mortes_indecidables)
+        or mesure_incomplete or not mortes_scorees
         or not (r.n_part_indie_mesuree and r.n_redevance_mesuree))
     return r
 

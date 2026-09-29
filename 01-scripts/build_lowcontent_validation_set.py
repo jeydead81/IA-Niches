@@ -579,6 +579,19 @@ def _conseil_indecidable(r: RapportCalibration) -> str:
                 f"cache ({OPTION_PURGE}) — relancer tel quel rend les mêmes fiches.")
     if r.n_demande_non_mesuree:
         return "sonde autocomplete tombée en cours de route : relancer quand elle répond."
+    n_ecartees = len(r.ecartees_correctement) + len(r.bonnes_perdues_avant_analyse)
+    manquantes = r.n_requetes - n_ecartees - r.n_calibrees
+    if manquantes > 0:
+        # Ni « toutes les SERP sont tombées » (il en reste), ni un défaut de lecture : il
+        # manque des niches au jeu, et c'est l'amputation qui fabrique un faux vert.
+        return (f"mesure incomplète : {manquantes} requête(s) analysable(s) non calibrée(s) "
+                f"sur {r.n_requetes - n_ecartees}. Reprendre CES requêtes (progression et "
+                f"captures disent laquelle est tombée) — le cache ne repaiera que ce qui "
+                f"manque.")
+    if not r.n_mortes_scorees:
+        return ("aucune « morte » scorée : « aucune morte en vert » porterait sur "
+                "l'ensemble vide. Vérifier pourquoi elles ne sont pas arrivées jusqu'au "
+                "score (écartées, non rendues, SERP tombée) avant de relancer.")
     return "relancer une fois la cause réglée (voir les avertissements)."
 
 
@@ -586,6 +599,9 @@ def _imprimer(r: RapportCalibration) -> None:
     print()
     print(f"  requêtes du jeu ......... {r.n_requetes}")
     print(f"  calibrées ............... {r.n_calibrees}")
+    # Le compteur qui rend décidable « aucune morte en vert » : sans une seule morte
+    # scorée, ce critère porte sur l'ensemble vide.
+    print(f"  dont « morte » scorées .. {r.n_mortes_scorees}")
     if r.n_non_mesurees:
         print(f"  SERP tombée ............. {r.n_non_mesurees}")
     if r.ecartees_correctement or r.bonnes_perdues_avant_analyse:

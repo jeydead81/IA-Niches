@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-18** (1 285 tests sur 102 fichiers, 49 modules, 34
+> Comptages revérifiés le **2026-09-29** (1 295 tests sur 103 fichiers, 49 modules, 34
 > variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -564,9 +564,10 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1285 tests** sur **102 fichiers** `tests/test_*.py`, **1285 passés, 0 ignoré, 0 échec,
-0 erreur**, code de sortie 0 (`python -m pytest -q -p no:warnings`, relancé le 2026-09-18,
-marqueurs de progression comptés ; la suite avait connu des échecs INTERMITTENTS, cf. §5.33).
+**1295 tests** sur **103 fichiers** `tests/test_*.py`, **1295 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-09-29,
+compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
+connu des échecs INTERMITTENTS, cf. §5.33).
 
 **Données RÉELLES d'abord, et tout écart DÉCLARÉ dans le docstring** — règle née du run 4
 (§5.37). Fixtures réelles versionnées : `fixtures/fiction/v2_asin_payloads.json` (8 captures
@@ -716,6 +717,21 @@ cassait ou corrigeait à moitié** (`tests/test_calibration_revue.py`) :
 **Porte du plan, conjointe : Spearman ≥ 0,5 ET aucune requête « morte » en 🟢.** Une
 corrélation honnête qui recommande quand même un rayon mort ferait publier dans le vide.
 
+**Deux conditions de MESURE COMPLÈTE s'y ajoutent depuis le 2026-09-29** (décision de
+Baptiste, pré-mortem du run 6) : **toutes** les requêtes analysables doivent être calibrées
+(`n_calibrees == n_requetes - écartées`) et **au moins une « morte » doit avoir été SCORÉE**
+(`n_mortes_scorees`, exposé au rapport et à l'écran). Les deux ferment en INDÉCIDABLE, jamais
+en échec, et le conseil suit la cause. Mesure qui les a fait ajouter, sur les entrées réelles
+du run 5 rescorées : un jeu amputé à 10 niches sur 46 sortait la porte **FRANCHIE** avec un
+Spearman de **+0,522**, contre **+0,462** pour le run complet — ce sont les « mortes » qui
+portent le signal (+0,219 sans elles), donc **l'échec partiel est le scénario qui FABRIQUE un
+faux vert**, pas celui qui le dégrade. Et « aucune morte en vert » se vérifiait sur l'ensemble
+vide dès que les neuf mortes étaient toutes écartées ou non rendues. **Les écartées par les
+filtres gratuits (IP, saisonnier) restent hors décompte** : ce sont des gates du PRODUIT, et
+la décision antérieure qui refusait de leur faire fermer la porte tient toujours. Assertion
+retournée au passage : une « bonne » NON RENDUE ferme désormais la porte
+(`tests/test_porte_mesure_complete.py`, `test_calibration_premortem.py`).
+
 **Et une condition de DÉCIDABILITÉ, qui n'est pas un troisième critère** (2026-09-13, avant
 le premier run payant) : `n_part_indie_mesuree` et `n_redevance_mesuree` doivent être non
 nuls. Le trou trouvé : un run dont le batch ASIN tombe garde des scores parfaitement
@@ -794,7 +810,7 @@ repayant le classement. Le brut de ces fiches est perdu. Ce qui est désormais c
 | **Purge ciblée** `--purger-fiches-sans-pages` (décision de Baptiste, voie A) | APERÇU par défaut. `--confirmer` exige `--ecrites-avant <date du correctif du parseur>` : `pages=None` ne distingue pas une fiche mal lue d'une VRAIE absence (livre audio B0FS7JQNJ6), qui serait sinon rachetée à chaque purge. Sauvegarde horodatée (base, `-wal`, `-shm`), vérification que la sauvegarde porte les clés, puis suppression en `BEGIN IMMEDIATE` avec revérification de chaque ligne. Visées : EXACTEMENT les clés `book:` valides des N premiers organiques des SERP en cache du classeur. Jamais `search:`, `clf:`, ni une autre fiche. Serveur arrêté, hors run. **Jamais exécutée par un agent sur le vrai cache** |
 | **Cache du classement** (`lowcontent_ideator`, mode classement SEULEMENT) | Clé `llmlc:` + SHA1 de modèle, consigne système, prompt utilisateur et outils (`strict` compris) — une empreinte, jamais un compteur. TTL 15 j, **mutualisé** : les requêtes sont des complétions publiques d'Amazon (§1). On garde la réponse BRUTE de l'outil, relue par la logique courante. Écrite seulement si complète : ni `max_tokens`, ni entrée illisible, ni requête hors liste, ni omise en `classer_toutes`. Jamais en idéation, où une relance est voulue. Le premier run paie le classement de toute façon |
 | **Garde prédictif du batch ASIN** | Il comptait l'union ENTIÈRE : un plafond calé au plus juste refusait un batch à 0 $, puis le canal BSR repartait scraper chaque ASIN. Seules les fiches absentes du cache sont vérifiées, et le garde est AUSSI dans `enrich_asins`, juste avant l'envoi : les 185 fiches du run 4 expirent dans la même seconde, une phase 4 à cheval sur cet instant achetait 0,555 $ (calculé) sans vérification. Refus → les fiches du cache sont rendues, rien ne lève |
-| **Tâches facturées non imputées** | `TaskPostRefuse` est la SEULE panne de SERP non imputée : poll épuisé, relecture illisible et Ctrl-C surviennent APRÈS la création de la tâche (5 SERP créées imputées 0 $ au rejeu), sur les trois moteurs. Une relecture illisible pendant le poll du batch ne jette plus le lot (`lectures_en_echec`, tâche relue au cycle suivant). Un Ctrl-C impute le pire cas (`enrich_asins`, `resolve_bsrs`, phase 3 : 185 tâches créées imputées 0 $ au rejeu) ; la CLI écrit « au moins X $ engagés » et ne prétend plus que les fiches d'un batch interrompu sont en cache. Une écriture de cache refusée ne jette plus un batch payé |
+| **Tâches facturées non imputées** | `TaskPostRefuse` est la SEULE panne de SERP non imputée : poll épuisé, relecture illisible et Ctrl-C surviennent APRÈS la création de la tâche (5 SERP créées imputées 0 $ au rejeu), sur les trois moteurs. Une relecture illisible pendant le poll du batch ne jette plus le lot (`lectures_en_echec`, tâche relue au cycle suivant). Un Ctrl-C impute le pire cas (`enrich_asins`, `resolve_bsrs`, phase 3 : 185 tâches créées imputées 0 $ au rejeu) ; la CLI écrit « au moins X $ engagés » et ne prétend plus que les fiches d'un batch interrompu sont en cache. Une écriture de cache refusée ne jette plus un batch payé. **Depuis le 2026-09-29** (pré-mortem du run 6) : un lot ASIN dont le `task_post` LÈVE est imputé au PIRE cas (`taches_incertaines`, `lots_exception`) et annoncé « peut-être facturés », au lieu d'être compté « ni facturé » — un `ReadTimeout` à 30 s veut dire que la requête est partie, pas qu'elle n'a rien créé, et le chemin SERP des trois moteurs codait déjà ce pire cas sur le MÊME `_post`. Seul un refus EXPLICITE (`TaskPostRefuse`, `RefusCompte`) reste non imputé, des deux côtés |
 | **Refus de COMPTE** (`RefusCompte`, sous-classe de `TaskPostRefuse`) | Refus posé à la RACINE sans aucune tâche, sans liste de codes. Au premier : plus aucun appel au fournisseur, le cache CONTINUE de servir, les niches restantes sortent ⚪ et comptées (31 `task_post` en rafale au premier run). Même traitement sur les trois moteurs. Côté batch ASIN (`product_raw_batch`), les lots suivants ne partent plus : ils sont comptés, pas envoyés (relevé au rejeu final, 100 + 85) ; une exception à l'envoi, elle, n'arrête rien. **Statut du job produit et remboursement de l'unité de plafond : inchangés** (décision). Non couvert : un refus de solde posé PAR TÂCHE (forme jamais capturée) |
 | **Avertissements et conseils** (`_conseil_indecidable`, `n_pages_mesurees`) | « aucune fiche exploitable » quand l'éditeur était lu sur 31 niches, et « le cache ne repaiera que ce qui manque » alors qu'il resservait les fiches mal lues : faux tous deux. Le conseil suit désormais la cause (SERP tombées → compte ; redevance jamais calculée avec éditeur lu → LECTURE, rejeu du brut, purge) |
 | **Progression** | « N/M recherche(s) Amazon servie(s) par le cache — non relue(s) » et « N/M fiche(s) servie(s) par le cache » : c'était exactement l'alerte qui manquait. Jamais « à payer » (§5.27) |
@@ -1415,6 +1431,8 @@ Section critique. Chacun a coûté un bug réel.
     (`_consigner_scout`, `web/server.py:381-382` : un point qu'on sait faux produirait au passage
     suivant un delta spectaculaire et mensonger) ; SERP créée puis non lue (poll épuisé,
     relecture illisible, Ctrl-C) → **imputée**, seul un `TaskPostRefuse` explicite ne l'est pas ;
+    lot ASIN dont l'ENVOI lève → **imputé au pire cas** (`taches_incertaines`) et annoncé
+    « peut-être facturé », parce que le code ne peut pas savoir ce que le fournisseur a créé ;
     refus de COMPTE (`RefusCompte`) → plus aucun appel au fournisseur, le cache continue de
     servir, niches restantes non mesurées et comptées ; scrape BSR en échec sur un ASIN → `None`
     pour cet ASIN, jamais mémorisé comme absence ; lecture illisible après un appel LLM payé sur
@@ -1431,7 +1449,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1285 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1295 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

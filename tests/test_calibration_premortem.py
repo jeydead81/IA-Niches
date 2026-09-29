@@ -214,17 +214,26 @@ def test_une_morte_NON_SCOREE_ferme_la_porte():
     assert any("morte" in a.lower() and "non" in a.lower() for a in r.avertissements)
 
 
-def test_une_bonne_non_rendue_ne_ferme_pas_la_porte_mais_se_dit():
-    """Fixture rendue réaliste : un run nominal a lu le rayon (`part_indie`,
+def test_une_bonne_non_rendue_ferme_la_porte_et_se_dit():
+    """Assertion RETOURNÉE le 2026-09-29, sur décision de Baptiste (pré-mortem du run 6) :
+    elle valait `porte_franchie is True`, au motif qu'ajouter un critère de mon propre chef
+    ferait passer une intention pour une règle (§4.2). La décision, elle, peut l'ajouter —
+    et la mesure qui l'a provoquée est nette : sur les entrées réelles du run 5, un jeu
+    amputé à 10 niches sur 46 franchissait la porte avec +0,522 contre +0,462 pour le run
+    complet. Une requête NON RENDUE est une mesure ratée, quelle que soit son étiquette ;
+    elle rend la porte INDÉCIDABLE et non échouée. Les écartées par les filtres gratuits,
+    elles, restent hors décompte.
+
+    Fixture rendue réaliste : un run nominal a lu le rayon (`part_indie`,
     `redevance_estimee`). Sans ces champs, elle décrivait un enrichissement ASIN tombé —
-    cas qui ferme désormais la porte pour une tout autre raison, et l'assertion ne
-    porterait plus sur ce qu'elle prétend tester."""
+    cas qui ferme la porte pour une tout autre raison, et l'assertion ne porterait plus sur
+    ce qu'elle prétend tester."""
     paires = [(e, _scored(s.global_score, f"{e}{i}", part_indie=0.7,
                           redevance_estimee=3.1))
               for i, (e, s) in enumerate(_paires_alignees())]
     r = rapport_calibration(paires,
                             non_rendues=[("livre quizz culture générale", "bonne")])
-    assert r.porte_franchie is True
+    assert r.porte_franchie is False and r.porte_indecidable is True
     assert r.non_rendues
     assert any("classement" in a.lower() for a in r.avertissements)
 
