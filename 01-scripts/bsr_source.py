@@ -76,7 +76,11 @@ def resolve_bsrs(asins, *, source=None, provider=None, fetch_bsr_fn=None, cache=
             lus = getattr(batch, "lus", set())
             en_panne.update(a for a in misses if batch.get(a) is None and a not in lus)
             if cost is not None:
-                cost.add_dataforseo(getattr(batch, "taches_creees", len(misses)), prio)
+                # Créées + peut-être créées (lot dont l'envoi a levé) : même pire cas que
+                # `enrich_asins`, pour la même raison — une exception ne dit pas ce que le
+                # fournisseur a facturé.
+                cost.add_dataforseo(getattr(batch, "taches_creees", len(misses))
+                                    + getattr(batch, "taches_incertaines", 0), prio)
         else:
             raise ValueError(f"BSR_SOURCE inconnu : {source}")
 

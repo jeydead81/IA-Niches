@@ -138,13 +138,21 @@ def enrich_asins(asins: list[str], provider, cache=None, cost=None,
                 cost.add_dataforseo(len(misses), prio)
             raise
         if cost is not None:
-            # Les tâches RÉELLEMENT créées : un lot refusé à l'envoi n'est pas facturé. Un
-            # fournisseur qui ne le dit pas impute tout, par prudence.
-            cost.add_dataforseo(getattr(raw, "taches_creees", len(misses)), prio)
+            # Les tâches créées, PLUS celles dont on ne sait pas si elles l'ont été (lot dont
+            # le task_post a levé) : un refus EXPLICITE ne crée rien, une exception ne dit
+            # rien. Imputer le pire cas est la règle 2 (ne jamais arrondir vers le bas) ; le
+            # contraire faisait relancer un run en croyant le batch gratuit. Un fournisseur
+            # qui ne dit ni l'un ni l'autre impute tout, par prudence.
+            cost.add_dataforseo(getattr(raw, "taches_creees", len(misses))
+                                + getattr(raw, "taches_incertaines", 0), prio)
         for n_lot, cause in getattr(raw, "lots_en_echec", []):
             if progress:
                 progress(f"⚠ {n_lot} ASIN non envoyés : lot refusé à l'envoi ({cause}) — "
                          f"ni facturés, ni enrichis.")
+        for n_lot, cause in getattr(raw, "lots_exception", []):
+            if progress:
+                progress(f"⚠ {n_lot} ASIN non relus : l'envoi du lot a levé ({cause}) — "
+                         f"peut-être facturés côté fournisseur, imputés au pire cas.")
         lectures = getattr(raw, "lectures_en_echec", None) or {}
         if lectures and progress:
             detail = ", ".join(f"{nom}×{n}" for nom, n in lectures.items())

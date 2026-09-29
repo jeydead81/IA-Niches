@@ -217,14 +217,19 @@ def test_un_lot_qui_echoue_n_abandonne_pas_le_lot_deja_facture(monkeypatch):
     assert out.taches_creees == 100
 
 
-def test_l_enrichissement_impute_les_taches_REELLEMENT_creees(monkeypatch):
-    """Ni zéro (le lot 1 est facturé), ni 150 (le lot 2 n'a jamais été créé)."""
+def test_l_enrichissement_impute_les_taches_creees_ET_le_lot_incertain(monkeypatch):
+    """Assertion RETOURNÉE le 2026-09-29 (pré-mortem du run 6) : elle valait 100, sur
+    l'hypothèse « le lot 2 n'a jamais été créé ». Le code ne peut pas le savoir — le lot 2
+    tombe ici sur un `ReadTimeout`, c'est-à-dire une requête PARTIE dont la réponse s'est
+    perdue, et DataForSEO a pu créer donc facturer ses 100 tâches. On impute le pire cas,
+    150, comme le chemin SERP des trois moteurs le fait déjà sur le même `_post` : seul un
+    refus EXPLICITE n'est pas facturé (§5.29). Le lot 1, lui, reste relu et imputé."""
     from cost_tracker import CostTracker
     from fiction_serp_provider import enrich_asins
     prov = _fournisseur_a_lots(monkeypatch)
     cost = CostTracker(plafond_usd=None)
     enrich_asins([f"B{i:04d}" for i in range(150)], provider=prov, cost=cost)
-    assert cost.breakdown()["dataforseo_calls"] == 100
+    assert cost.breakdown()["dataforseo_calls"] == 150
 
 
 # ══ 3. Toute « morte » indécidable ferme la porte, pas seulement l'omise ════════

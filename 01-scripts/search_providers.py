@@ -71,16 +71,26 @@ def _motif_refus(reponse: dict | None, tache: dict | None = None) -> str:
 
 
 class _Payloads(dict):
-    """`{asin: payload | None}`, plus ce que l'appelant doit IMPUTER : `taches_creees`.
+    """`{asin: payload | None}`, plus ce que l'appelant doit IMPUTER : `taches_creees` pour
+    ce qui est CERTAIN, `taches_incertaines` pour ce qui a PU être facturé.
 
     Un dict ordinaire pour tout le reste, les consommateurs existants n'y voient aucune
     différence. Le compte vient d'ici parce que c'est le seul endroit qui sait combien de
-    tâches DataForSEO a réellement créées — donc facturées."""
+    tâches DataForSEO a réellement créées — donc facturées.
+
+    Trois issues, et elles ne s'imputent pas pareil : une tâche ACCEPTÉE est facturée
+    (`taches_creees`) ; un refus EXPLICITE (racine ou par tâche) ne crée rien
+    (`lots_en_echec`) ; un `task_post` qui LÈVE ne dit pas ce qu'il a créé
+    (`lots_exception`, comptées dans `taches_incertaines`) — la requête est partie, seule la
+    réponse manque."""
 
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
         self.taches_creees = 0
+        self.taches_incertaines = 0
         self.lots_en_echec: list[tuple[int, str]] = []
+        # Lots dont l'ENVOI a levé : peut-être créés, donc peut-être facturés.
+        self.lots_exception: list[tuple[int, str]] = []
         # Relectures qui ont levé pendant le poll, par type ; la tâche a été relue au cycle
         # suivant, pas abandonnée.
         self.lectures_en_echec: dict[str, int] = {}
@@ -251,6 +261,7 @@ class DataForSEOProvider:
         get_json = get_json or self._get
         pending: dict[str, str] = {}          # task_id -> asin
         lots_en_echec: list[tuple[int, str]] = []
+        lots_exception: list[tuple[int, str]] = []
         # TOUS les lots partent AVANT la première lecture : la file DataForSEO est par
         # tâche, ~250 s quel que soit le volume. Poster puis poller lot par lot la ferait
         # payer une fois par lot — exactement ce que le batch unique existe pour éviter.
@@ -262,11 +273,15 @@ class DataForSEOProvider:
             try:
                 d = post_json(_ASIN_BASE + "/task_post", body)
             except Exception as exc:              # noqa: BLE001
-                # Un lot qui échoue à l'ENVOI n'a créé aucune tâche : ses ASIN restent None.
-                # Mais les lots déjà ACCEPTÉS sont facturés : lever ici les abandonnait sans
-                # relecture ni imputation, et le low-content les repayait ensuite par le
-                # canal BSR (famille §5.31). On continue, et on relit ce qui a été créé.
-                lots_en_echec.append((len(lot), type(exc).__name__))
+                # Un lot qui échoue à l'ENVOI a PU créer ses tâches : un ReadTimeout à 30 s
+                # veut dire que la requête est partie et que la réponse s'est perdue. On ne
+                # peut pas le savoir d'ici, donc on impute le PIRE cas (§5.29, règle 2), au
+                # lieu de l'annoncer « non facturé » — le chemin SERP des trois moteurs code
+                # déjà ce pire cas sur le même `_post`. Ses ASIN restent None.
+                # Et on CONTINUE : les lots déjà ACCEPTÉS sont facturés, lever ici les
+                # abandonnait sans relecture ni imputation, et le low-content les repayait
+                # ensuite par le canal BSR (famille §5.31).
+                lots_exception.append((len(lot), type(exc).__name__))
                 continue
             tasks = d.get("tasks") or []
             if d.get("status_code") not in (None, 20000, 20100) or not tasks:
@@ -312,7 +327,9 @@ class DataForSEOProvider:
             lots_en_echec.extend((n, motif) for motif, n in refusees.items())
         out = _Payloads({a: None for a in asins})
         out.taches_creees = len(pending)      # AVANT le poll, qui vide `pending`
+        out.taches_incertaines = sum(n for n, _ in lots_exception)
         out.lots_en_echec = lots_en_echec
+        out.lots_exception = lots_exception
         lectures_en_echec: dict[str, int] = {}
         for _ in range(max_polls):
             if not pending:

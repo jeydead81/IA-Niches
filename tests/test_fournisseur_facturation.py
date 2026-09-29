@@ -538,3 +538,72 @@ def test_R14_une_tache_terminee_en_ERREUR_reste_une_panne_faute_de_capture(tmp_p
     assert cache.bsr_absent(en_erreur, 2250) is False
     assert cost.breakdown()["dataforseo_calls"] == 2
 
+
+
+# ══ R10 — une exception à l'ENVOI a PU créer les tâches ═══════════════════════════
+#
+# Sixième chemin, trouvé au pré-mortem du run 6 (2026-09-29). `product_raw_batch` classait
+# un lot dont le `task_post` LÈVE comme « aucune tâche créée, donc rien de facturé ». C'est
+# une hypothèse que le code ne peut pas vérifier : un `ReadTimeout` à 30 s veut dire que la
+# requête est partie et que la réponse s'est perdue — DataForSEO a pu créer, donc facturer,
+# les 100 tâches du lot. Le chemin SERP des trois moteurs code déjà le pire cas sur le même
+# `_post` (« seul un `TaskPostRefuse` explicite n'est pas imputé », §5.29) : le batch ASIN
+# codait l'inverse, et c'est le poste le plus lourd d'un run.
+
+def _post_qui_leve_au_premier_lot(n_lots_qui_levent=1):
+    envois = []
+
+    def post(url, body):
+        envois.append(len(body))
+        if len(envois) <= n_lots_qui_levent:
+            raise ConnectionError("ReadTimeout sur ce lot")
+        return {"status_code": 20000, "tasks": [
+            {"status_code": 20100, "id": f"T{i}", "data": {"asin": it["asin"]}}
+            for i, it in enumerate(body)]}
+    return post, envois
+
+
+def test_R10_un_lot_tombe_a_l_ENVOI_est_compte_a_part_et_non_comme_non_facture():
+    """`taches_creees` ne compte que le certain ; `taches_incertaines` porte le lot dont on
+    ne SAIT PAS s'il a été créé. ASIN INVENTÉS : seul le volume compte."""
+    post, envois = _post_qui_leve_au_premier_lot()
+    asins = [f"B0INV{i:05d}" for i in range(150)]
+    out = _fournisseur().product_raw_batch(
+        asins, post_json=post, poll_interval=0, max_polls=1,
+        get_json=lambda url: {"tasks": [{"status_code": 20100}]})
+    assert envois == [100, 50], "un lot tombé à l'envoi ne doit pas arrêter les suivants"
+    assert out.taches_creees == 50
+    assert out.taches_incertaines == 100
+    assert sum(n for n, _ in out.lots_en_echec) == 0, \
+        "un lot peut-être facturé n'est pas un lot refusé : il ne doit pas être annoncé " \
+        "« ni facturé »"
+    assert [n for n, _ in out.lots_exception] == [100]
+
+
+def test_R10_l_enrichissement_impute_le_PIRE_cas_et_le_dit():
+    from fiction_serp_provider import enrich_asins
+    post, _ = _post_qui_leve_au_premier_lot()
+    prov = _fournisseur()
+    prov._post = post
+    # Tâches PRÊTES et sans résultat : le poll se termine, les payloads restent None.
+    prov._get = lambda url: {"tasks": [{"status_code": 20000, "result": None}]}
+    cost, etapes = CostTracker(plafond_usd=None), []
+    enrich_asins([f"B0INV{i:05d}" for i in range(150)], provider=prov, cost=cost,
+                 progress=etapes.append)
+    assert cost.breakdown()["dataforseo_calls"] == 150
+    dit = " ".join(etapes)
+    assert "peut-être facturé" in dit
+    assert "ni facturés" not in dit
+
+
+def test_R10_un_refus_de_COMPTE_reste_NON_facture():
+    """Témoin : le pire cas ne doit pas contaminer le refus explicite. La racine dit 40104,
+    aucune tâche n'est créée — forme RÉELLE relevée le 2026-09-13."""
+    def post(url, body):
+        return {"status_code": 40104, "status_message": "Please verify your account.",
+                "tasks": []}
+    out = _fournisseur().product_raw_batch([f"B0INV{i:05d}" for i in range(150)],
+                                           post_json=post, get_json=lambda url: {},
+                                           poll_interval=0)
+    assert out.taches_creees == 0
+    assert out.taches_incertaines == 0
