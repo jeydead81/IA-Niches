@@ -360,3 +360,22 @@ def test_la_limite_du_clustering_est_nommee_pas_masquee():
     assert variantes_quasi_identiques(courts) == 1
     longs = [_titre_de_ferme("bleue"), _titre_de_ferme("rose")]
     assert variantes_quasi_identiques(longs) == 2
+
+
+def test_le_plafond_de_demande_vient_du_FICHIER_et_borne_n_enfants():
+    """`demand_score` vaut `max(1, n_enfants)` en mode classement : il décidait donc de
+    l'axe demande (0,35 du score) EN MÊME TEMPS que n_enfants décidait de ce qu'on paie —
+    le rapport se confirmait lui-même. Allégé le 2026-09-30 (décision de Baptiste) : le
+    plafond passe de 10 à 5, mesuré par rejeu des deux lots, rho +0,480 → +0,482 (lot 1) et
+    +0,398 → +0,464 (lot 2), détection des mortes inchangée (0,916 → 0,908). Il vit dans le
+    fichier de critères, comme tous les seuils (§2.14)."""
+    c = charger_criteres()
+    assert c["demande_plafond"] == 5
+    c8 = dict(c); c8["demande_plafond"] = 8
+    args = (_niche(), _validation(demand=9), _serp(), _livres_indie(), [3000])
+    assert score_lowcontent(*args, criteres=c8).demande > score_lowcontent(*args, criteres=c).demande
+    au_plafond = score_lowcontent(_niche(), _validation(demand=5), _serp(),
+                                  _livres_indie(), [3000], criteres=c)
+    au_dela = score_lowcontent(_niche(), _validation(demand=50), _serp(),
+                               _livres_indie(), [3000], criteres=c)
+    assert au_plafond.demande == au_dela.demande, "au-delà du plafond, rien ne s'ajoute"

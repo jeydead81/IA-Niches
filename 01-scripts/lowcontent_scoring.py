@@ -380,7 +380,7 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
     crit3 = bool(vals) and bsr_worst > c["bsr_crit3_place_a_prendre_min"]
 
     # ── AXE 1 — Demande (0,35) ──
-    demande = _clamp(2 + min(validation.demand_score, 10) * 0.6)
+    demande = _clamp(2 + min(validation.demand_score, c["demande_plafond"]) * 0.6)
     # Le signal propre au low-content : une requête que les acheteurs affinent ENCORE
     # porte une intention plus forte qu'une requête terminale. `demand_score` seul sature
     # (16 niches sur 30 au-dessus du plafond en non-fiction) ; la position dans l'arbre,

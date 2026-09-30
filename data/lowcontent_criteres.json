@@ -9,6 +9,8 @@
   "variantes_max": 1000,
   "_variantes": "Au-delà, le rayon est usiné par des fermes de variantes (même intérieur, dix couvertures). Un auteur seul n'y gagne pas en publiant la onzième.",
   "cibles_max": 1000,
+  "demande_plafond": 5,
+  "_demande": "Plafond de demand_score dans l'axe demande. Etait 10, allege a 5 le 2026-09-30 (decision de Baptiste). Motif : en mode classement demand_score vaut max(1, n_enfants), et n_enfants decidait AUSSI de la shortlist payee -- le rapport se confirmait lui-meme, la liste rendue au client ayant un bon axe demande parce qu'elle avait ete choisie dessus. Mesure du rejeu des deux lots : rho +0,480 -> +0,482 (lot 1) et +0,398 -> +0,464 (lot 2), detection des rayons morts 0,916 -> 0,908, soit inchangee. Descendre a 2 gagne encore sur rho (+0,504 / +0,498) mais coute 0,884 sur la detection des mortes : on ne degrade pas la seule propriete validee pour une metrique dont la moitie est du bruit.",
   "part_indie_bonne": 0.5,
   "part_trad_alerte": 0.5,
   "part_recents_afflux": 0.6,
