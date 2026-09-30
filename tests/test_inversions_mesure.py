@@ -137,4 +137,8 @@ def test_le_tri_de_la_shortlist_ne_prefere_pas_un_zero_mesure_a_un_inconnu():
     stérile — on ne sait rien de lui, ce n'est pas la même chose que savoir qu'il est
     mauvais."""
     from lowcontent_master import _rang_shortlist
-    assert _rang_shortlist(None, 2, 5) >= _rang_shortlist(0, 2, 5)
+    # La requête est passée depuis le 2026-09-30 : le nombre de mots est devenu le premier
+    # terme de la clé (cf. tests/test_shortlist_specificite.py). L'invariant testé ici est
+    # inchangé, il se vérifie donc à requête ÉGALE.
+    assert (_rang_shortlist("carnet de suivi bebe", None, 2, 5)
+            >= _rang_shortlist("carnet de suivi bebe", 0, 2, 5))

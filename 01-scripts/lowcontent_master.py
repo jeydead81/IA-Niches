@@ -21,6 +21,7 @@ Invariant §5.29 : un échec n'interrompt jamais le run, il est toujours compté
 lit jamais comme une mesure.
 """
 import os
+import re
 from datetime import date
 
 from dotenv import load_dotenv
@@ -71,16 +72,37 @@ def _fiche_en_cache(cache, asin: str, loc: int) -> bool:
         return False
 
 
-def _rang_shortlist(n_enfants: int | None, profondeur: int, demand: int) -> tuple:
+def _rang_shortlist(requete: str, n_enfants: int | None, profondeur: int,
+                    demand: int) -> tuple:
     """Cle de tri de la shortlist -- c'est-a-dire de CE QU'ON PAIE.
+
+    Premier terme : le NOMBRE DE MOTS de la requete. Le tri se faisait avant sur
+    `n_enfants` seul (les deux autres termes sont morts : `profondeur` vaut 0 sur les 95
+    requetes etiquetees, `demand_score` vaut `max(1, n_enfants)` en mode classement), et
+    `n_enfants` mesure la GENERICITE -- Amazon complete d'autant plus qu'une requete est
+    courte. Mesure du rejeu hors ligne des deux lots : le top 6 paye contenait 0,00 bonne
+    au lot 1 (1,41 attendue par tirage au sort) et 0,86 au lot 2 (2,18 attendue). Le gate
+    ecartait les bonnes PLUS FORT que le hasard, et depensait sur la tete de trainee que
+    §2.11 dit d'eviter. Le nombre de mots est, lui, le signal le mieux mesure a ce jour
+    (AUC 0,711 [0,54 ; 0,88] au lot 2, seul intervalle qui exclue le hasard), gratuit et
+    disponible AVANT toute depense.
+
+    `n_enfants` reste en second rang : il n'est pas disqualifie comme mesure de demande,
+    seulement comme critere de DEPENSE. A specificite egale, une requete qu'Amazon complete
+    encore reste preferable.
 
     `n_enfants is None` = requete jamais sondee. Elle ne doit pas etre classee derriere une
     feuille dont on SAIT qu'elle est sterile : on ne sait rien d'elle, ce n'est pas la meme
-    chose que savoir qu'elle est mauvaise. On la place donc au niveau d'un affinage,
+    chose que savoir qu'elle est mauvaise (§5.34). On la place donc au niveau d'un affinage,
     c'est-a-dire au-dessus d'un zero mesure et en dessous d'un signal reel."""
     connu = n_enfants is not None
     valeur = n_enfants if connu else 1
-    return (valeur, profondeur, demand)
+    # Un mot commence par une lettre ou un chiffre et peut porter tiret et apostrophe :
+    # « mots meles 7-12 ans » compte 4 mots, pas 5 — une fourchette d'age est UN
+    # specificateur, et decouper sur le tiret ferait acheter une place payee avec de la
+    # typographie. La ponctuation isolee et les espaces multiples ne comptent pas.
+    mots = len(re.findall(r"[0-9a-zA-Zà-öø-ÿ][0-9a-zA-Zà-öø-ÿ'’\-]*", requete or ""))
+    return (mots, valeur, profondeur, demand)
 
 
 def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
@@ -212,7 +234,8 @@ def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
     # décider de ce qu'on paie.
     def _rang(v):
         n = par_requete.get(v.requete_amazon)
-        return _rang_shortlist(n.n_enfants_autocomplete if n else None,
+        return _rang_shortlist(v.requete_amazon,
+                               n.n_enfants_autocomplete if n else None,
                                n.profondeur_autocomplete if n else 0,
                                v.demand_score)
 
