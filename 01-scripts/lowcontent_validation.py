@@ -361,7 +361,7 @@ def _est_vert(s: LowContentScored, c: dict) -> bool:
     locale (l'ancienne constante SEUIL_VERT) divergeait dès qu'on touchait le fichier."""
     if s.priorite:
         return s.priorite.startswith("🟢")
-    return s.global_score >= c["seuil_verdict_vert"]
+    return s.global_score >= c["seuil_verdict_vivant"]
 
 
 def _mediane(valeurs: list[float | None]) -> float | None:

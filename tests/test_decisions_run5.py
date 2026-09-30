@@ -86,34 +86,36 @@ def test_un_risque_de_marque_garde_son_malus():
 
 # ── 3. les seuils de verdict vivent dans le fichier de critères ────────────────
 
-def test_les_seuils_de_verdict_sont_dans_le_fichier_de_criteres():
-    """Valeurs choisies par Baptiste le 2026-09-18 : 6,0 / 5,0. À 7,5 / 6,0, le run 5 rejoué
-    sortait 50 niches rouges sur 51. HYPOTHÈSE lue sur le run 5 (rouge = probablement mort,
-    jaune = vivant, à examiner) : à vérifier sur un lot neuf, jamais réglée dessus."""
+def test_le_seuil_de_verdict_est_dans_le_fichier_de_criteres():
+    """Les valeurs 6,0 / 5,0 choisies le 2026-09-18 ont vécu : le 2026-09-30, mesure faite
+    sur 95 requêtes et deux lots, les TROIS pastilles sont devenues DEUX et le seuil unique
+    est 5,0 — la seule frontière mesurée (aucune « morte » ne l'a jamais atteinte, 0/24).
+    Le vert à 6,0 ne sortait que 3 niches sur 95, dont deux « mauvaises »
+    (tests/test_verdict_deux_niveaux.py)."""
     c = charger_criteres()
-    assert c["seuil_verdict_vert"] == 6.0 and c["seuil_verdict_jaune"] == 5.0
+    assert c["seuil_verdict_vivant"] == 5.0
 
 
-def test_le_verdict_suit_les_seuils_du_fichier():
+def test_le_verdict_suit_le_seuil_du_fichier():
     c = charger_criteres()
     base = score_lowcontent(_niche(), _v(), _serp(), _livres(), [3000], criteres=c)
-    vert = dict(c, seuil_verdict_vert=base.global_score)
-    jaune = dict(c, seuil_verdict_vert=10.0, seuil_verdict_jaune=base.global_score)
+    vivant = dict(c, seuil_verdict_vivant=base.global_score)
+    mort = dict(c, seuil_verdict_vivant=10.0)
     assert score_lowcontent(_niche(), _v(), _serp(), _livres(), [3000],
-                            criteres=vert).priorite.startswith("🟢")
+                            criteres=vivant).priorite.startswith("🟢")
     assert score_lowcontent(_niche(), _v(), _serp(), _livres(), [3000],
-                            criteres=jaune).priorite.startswith("🟡")
+                            criteres=mort).priorite.startswith("🔴")
 
 
-def test_la_calibration_lit_le_seuil_vert_du_fichier():
+def test_la_calibration_lit_le_seuil_du_fichier():
     """Une constante recopiée dans lowcontent_validation (SEUIL_VERT) divergeait du scoring
     dès qu'on touchait le fichier (§5.32). Le repli sans priorité lit le même seuil."""
     n = _niche()
     s = LowContentScored(niche=n, global_score=7.0, priorite="", concurrence_mesuree=True)
-    c = dict(charger_criteres(), seuil_verdict_vert=6.5)
+    c = dict(charger_criteres(), seuil_verdict_vivant=6.5)
     r = rapport_calibration([("morte", s)], criteres=c)
     assert r.morts_en_vert
-    r2 = rapport_calibration([("morte", s)], criteres=dict(c, seuil_verdict_vert=7.5))
+    r2 = rapport_calibration([("morte", s)], criteres=dict(c, seuil_verdict_vivant=7.5))
     assert not r2.morts_en_vert
 
 

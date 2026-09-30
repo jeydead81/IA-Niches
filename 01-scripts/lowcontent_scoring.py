@@ -480,9 +480,14 @@ def score_lowcontent(niche: LowContentNiche, validation, search, livres: list,
 
     # Seuils lus dans le fichier de critères (décision de Baptiste, run 5) : ils étaient
     # écrits ici, donc impossibles à régler sans toucher au code.
+    # DEUX pastilles, pas trois : le moteur separe un rayon mort d'un rayon vivant (AUC
+    # 0,816 puis 0,908 sur un lot neuf) et ne sait pas departager une bonne d'une mauvaise
+    # (0,635 puis 0,429, intervalles a cheval sur le hasard). Un troisieme niveau promettait
+    # un classement inexistant. Le rouge ne dit pas « mort » : il enterre 7 bonnes sur 39
+    # puis 12 sur 32 -- « pas rouge => pas mort » est mesure, l'inverse non.
     verdict = ("⚪ Concurrence non mesurée — à relancer" if not mesuree
-               else "🟢 À analyser en priorité" if glob >= c["seuil_verdict_vert"]
-               else "🟡 Intéressant" if glob >= c["seuil_verdict_jaune"] else "🔴 Faible")
+               else "🟢 Rayon vivant — à examiner" if glob >= c["seuil_verdict_vivant"]
+               else "🔴 Signaux de rayon mort — à vérifier")
 
     return LowContentScored(
         niche=niche,
