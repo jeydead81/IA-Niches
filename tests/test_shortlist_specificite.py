@@ -60,3 +60,16 @@ def test_les_mots_se_comptent_sur_la_requete_DEPOUILLEE():
     assert _rang_shortlist("mots meles 7-12 ans", 0, 0, 1)[0] == 4
     assert _rang_shortlist("  cahier   de  vacances  ", 0, 0, 1)[0] == 3
     assert _rang_shortlist("", 0, 0, 1)[0] == 0
+
+
+def test_les_EX_AEQUO_sont_departages_par_la_requete_et_pas_par_l_ordre_du_LLM():
+    """`sorted` est stable : à clé égale, l'ordre appliqué était celui de sortie du modèle —
+    un comportement qui décide de la DÉPENSE et que rien ne surveillait (famille §5.32).
+    Mesuré : avec l'ancienne clé, deux tiers du vivier tombaient dans un seul paquet d'ex
+    aequo. Le départage est désormais une empreinte de la requête : arbitraire mais STABLE
+    et reproductible, donc rejouable — et surtout indépendant de l'ordre d'arrivée."""
+    a = _rang_shortlist("cahier de jeux adultes", 0, 0, 1)
+    b = _rang_shortlist("cahier de jeux enfants", 0, 0, 1)
+    assert a != b, "deux requêtes de même clé doivent être départagées"
+    assert _rang_shortlist("cahier de jeux adultes", 0, 0, 1) == a, "et de façon STABLE"
+    assert a[:4] == b[:4], "le départage vient APRÈS les vrais critères, jamais avant"

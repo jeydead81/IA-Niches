@@ -20,6 +20,7 @@ Phases :
 Invariant §5.29 : un échec n'interrompt jamais le run, il est toujours compté, et il ne se
 lit jamais comme une mesure.
 """
+import hashlib
 import os
 import re
 from datetime import date
@@ -102,7 +103,14 @@ def _rang_shortlist(requete: str, n_enfants: int | None, profondeur: int,
     # specificateur, et decouper sur le tiret ferait acheter une place payee avec de la
     # typographie. La ponctuation isolee et les espaces multiples ne comptent pas.
     mots = len(re.findall(r"[0-9a-zA-Zà-öø-ÿ][0-9a-zA-Zà-öø-ÿ'’\-]*", requete or ""))
-    return (mots, valeur, profondeur, demand)
+    # Departage des EX AEQUO. `sorted` est stable : a cle egale, l'ordre applique etait
+    # celui de sortie du LLM -- un comportement qui decide de la DEPENSE et que rien ne
+    # surveillait (famille §5.32). Mesure : avec l'ancienne cle, deux tiers du vivier
+    # tombaient dans un SEUL paquet d'ex aequo. Une empreinte de la requete est arbitraire
+    # elle aussi, mais elle est STABLE et rejouable, et surtout independante de l'ordre
+    # d'arrivee -- deux runs sur le meme vivier paient les memes niches.
+    empreinte = int(hashlib.sha1((requete or "").encode("utf-8")).hexdigest()[:8], 16)
+    return (mots, valeur, profondeur, demand, empreinte)
 
 
 def run_lowcontent_scout(seed: str | None = None, format_cle: str | None = None,
