@@ -78,6 +78,7 @@ PLAFOND_USD_DEFAUT = 2.0
 # indécidable APRÈS dépense (2), ni avec une exception en cours de run (4).
 CODE_REFUS_AVANT_DEPENSE = 5
 OPTION_PURGE = "--purger-fiches-sans-pages"
+OPTION_PROLONGER = "--prolonger-cache"
 
 _RACINE = Path(__file__).resolve().parent.parent
 
@@ -371,6 +372,131 @@ def purger_fiches_sans_pages(requetes: list[str], chemin_cache, confirmer: bool 
                 raise RuntimeError(f"la clé {k} a changé depuis l'aperçu : rien n'est supprimé.")
         for k in visees:
             res["supprimees"] += cx.execute("DELETE FROM kv WHERE key=?", (k,)).rowcount
+        cx.commit()
+    except BaseException:
+        cx.rollback()
+        raise
+    finally:
+        cx.close()
+    return res
+
+
+def cles_prolongeables(chemin_cache, requetes: list[str] | None = None, tout: bool = False,
+                       n_asin: int | None = None, location: int | None = None,
+                       language: str | None = None,
+                       maintenant: float | None = None) -> list[tuple[str, float]]:
+    """`(clé, expires)` des lignes VIVANTES visées, lues sans rien écrire.
+
+    Portée par défaut : les seules clés du JEU passé (`search:` des requêtes, `book:` des ASIN
+    de leurs SERP en cache). Le cache est MUTUALISÉ et porte aussi de la fiction et du
+    non-fiction : geler tout le fichier parce qu'on teste 44 requêtes figerait des mesures qui
+    n'ont rien à voir. `tout=True` vise toutes les lignes vivantes, et c'est un choix explicite.
+
+    Une ligne DÉJÀ expirée est ignorée : `Cache.get` la traite comme absente, la relever
+    ferait resservir à tous les comptes une mesure dont le TTL a déjà statué."""
+    from marketplace import ACTIF
+    chemin = Path(chemin_cache)
+    if not chemin.exists():
+        raise FileNotFoundError(f"cache introuvable : {chemin}")
+    maintenant = time.time() if maintenant is None else maintenant
+    if tout:
+        cx = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True)
+        try:
+            lignes = cx.execute("SELECT key, expires FROM kv WHERE expires >= ? ORDER BY key",
+                                (maintenant,)).fetchall()
+        finally:
+            cx.close()
+        return [(k, e) for k, e in lignes]
+
+    cache = ouvrir_cache_lecture(chemin)
+    loc = location or ACTIF.location_code
+    lang = language or ACTIF.language_code
+    _, _, union = _jeu_en_cache(requetes or [], cache, n_asin or _n_asin_par_requete(),
+                                loc, lang)
+    voulues = [Cache._search_key(q, loc, lang) for q in (requetes or [])]
+    voulues += [Cache._book_key(a, loc) for a in union]
+    cx = sqlite3.connect(f"file:{chemin}?mode=ro", uri=True)
+    try:
+        out = []
+        for k in dict.fromkeys(voulues):
+            ligne = cx.execute("SELECT expires FROM kv WHERE key=?", (k,)).fetchone()
+            if ligne is not None and ligne[0] >= maintenant:
+                out.append((k, ligne[0]))
+    finally:
+        cx.close()
+    return out
+
+
+def prolonger_cache(chemin_cache, jusqu_a: float, requetes: list[str] | None = None,
+                    tout: bool = False, confirmer: bool = False,
+                    horodatage: str | None = None, n_asin: int | None = None,
+                    location: int | None = None, language: str | None = None) -> dict:
+    """Repousse `expires` à `jusqu_a` sur les lignes visées. APERÇU par défaut.
+
+    Pourquoi un outil et pas un `UPDATE` à la main : le TTL s'applique à l'ÉCRITURE
+    (`Cache.set` stocke `now() + ttl_s`, `get` compare cette colonne), donc changer une
+    constante ne déplace AUCUNE ligne déjà écrite — les 301 fiches du run 5, payées 0,9 $,
+    expirent à leur date quoi qu'on fasse aux constantes. Réécrire la colonne est la seule
+    voie, et elle touche le cache MUTUALISÉ : même protocole que la purge ciblée (§2.14),
+    plus un JOURNAL DE RESTAURATION, parce qu'une prolongation d'essai doit pouvoir se
+    défaire sans restaurer toute la base.
+
+    Ne RACCOURCIT jamais : une date antérieure à l'expiration d'une ligne visée lève. Jeter
+    de la donnée payée ne se fait pas par l'outil qui s'appelle « prolonger ».
+
+    À lancer serveur arrêté et hors run : la sauvegarde est une copie de fichiers."""
+    chemin = Path(chemin_cache)
+    visees = cles_prolongeables(chemin, requetes=requetes, tout=tout, n_asin=n_asin,
+                                location=location, language=language)
+    res = {"cles": [k for k, _ in visees], "sauvegarde": None, "journal": None,
+           "prolongees": 0, "jusqu_a": jusqu_a}
+    trop_loin = [k for k, e in visees if e > jusqu_a]
+    if trop_loin:
+        raise ValueError(
+            f"{len(trop_loin)} ligne(s) expirent APRÈS la date demandée : cette date les "
+            f"raccourcirait (ex. {trop_loin[0]}). Prolonger n'abrège pas.")
+    if not confirmer or not visees:
+        return res
+
+    h = horodatage or _horodatage()
+    sauvegarde = chemin.with_name(f"{chemin.stem}.sauvegarde-{h}{chemin.suffix}")
+    if sauvegarde.exists():
+        raise FileExistsError(f"sauvegarde déjà présente, rien n'est modifié : {sauvegarde}")
+    for suffixe in ("", "-wal", "-shm"):
+        source = Path(str(chemin) + suffixe)
+        if source.exists():
+            shutil.copy2(source, Path(str(sauvegarde) + suffixe))
+    cx = sqlite3.connect(sauvegarde)
+    try:
+        trous = [k for k, _ in visees
+                 if cx.execute("SELECT 1 FROM kv WHERE key=?", (k,)).fetchone() is None]
+    finally:
+        cx.close()
+    if trous:
+        raise RuntimeError(f"sauvegarde incomplète ({len(trous)} clé(s) absente(s)) : "
+                           f"rien n'est modifié.")
+    res["sauvegarde"] = str(sauvegarde)
+
+    # Le journal s'écrit AVANT l'écriture : il dit ce qu'on s'apprête à faire et porte les
+    # dates d'origine, clé par clé. Une restauration ciblée n'exige alors pas de remettre
+    # toute la base — donc pas de perdre au passage ce qui a été acheté depuis.
+    journal = chemin.with_name(f"{chemin.stem}.prolongation-{h}.json")
+    journal.write_text(json.dumps(
+        {"jusqu_a": jusqu_a, "cache": str(chemin), "sauvegarde": str(sauvegarde),
+         "lignes": [{"cle": k, "expires_avant": e} for k, e in visees]},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    res["journal"] = str(journal)
+
+    cx = sqlite3.connect(chemin, timeout=10)
+    try:
+        cx.execute("BEGIN IMMEDIATE")
+        for k, e in visees:
+            ligne = cx.execute("SELECT expires FROM kv WHERE key=?", (k,)).fetchone()
+            if ligne is None or ligne[0] != e:
+                raise RuntimeError(f"la clé {k} a changé depuis l'aperçu : rien n'est modifié.")
+        for k, _ in visees:
+            res["prolongees"] += cx.execute("UPDATE kv SET expires=? WHERE key=?",
+                                            (jusqu_a, k)).rowcount
         cx.commit()
     except BaseException:
         cx.rollback()
@@ -701,6 +827,31 @@ def _purger(a, etiquetees, chemin_cache: Path) -> int:
     return 0
 
 
+def _prolonger(a, etiquetees, chemin_cache: Path) -> int:
+    requetes = [e.requete for e in etiquetees]
+    try:
+        res = prolonger_cache(chemin_cache, jusqu_a=a.jusqu_a_ts, requetes=requetes,
+                              tout=a.tout, confirmer=a.confirmer)
+    except (FileNotFoundError, FileExistsError, RuntimeError, ValueError) as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    portee = ("toutes les lignes vivantes du cache" if a.tout
+              else f"les clés du jeu ({len(requetes)} requête(s))")
+    print(f"{len(res['cles'])} ligne(s) visée(s) — {portee} ({chemin_cache}). "
+          f"Les lignes DÉJÀ expirées sont laissées telles quelles : les relever ferait "
+          f"resservir une mesure dont le TTL a statué.")
+    if not a.confirmer:
+        print(f"APERÇU — rien n'a été modifié. Pour écrire, après sauvegarde horodatée : "
+              f"{OPTION_PROLONGER} --jusqu-a {a.jusqu_a} --confirmer"
+              + (" --tout" if a.tout else ""))
+    elif res["cles"]:
+        print(f"Sauvegarde : {res['sauvegarde']}")
+        print(f"Journal de restauration (dates d'origine, clé par clé) : {res['journal']}")
+        print(f"{res['prolongees']} ligne(s) prolongée(s) jusqu'au {a.jusqu_a}. "
+              f"Rien n'a été racheté : c'est la même donnée, servie plus longtemps.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--gabarit", metavar="XLSX",
@@ -729,6 +880,16 @@ def main(argv: list[str] | None = None) -> int:
                     help=f"avec {OPTION_PURGE} : ne vise que les fiches écrites en cache avant "
                          f"cette date (AAAA-MM-JJ ou AAAA-MM-JJTHH:MM:SS, heure locale) — la "
                          f"date du correctif du parseur")
+    ap.add_argument(OPTION_PROLONGER, action="store_true",
+                    help="repousse la date d'expiration des lignes du cache (aperçu par "
+                         "défaut) : un TTL s'applique à l'ÉCRITURE, changer une constante ne "
+                         "prolonge aucune ligne déjà écrite")
+    ap.add_argument("--jusqu-a", metavar="DATE", default=None,
+                    help=f"avec {OPTION_PROLONGER} : nouvelle date d'expiration "
+                         f"(AAAA-MM-JJ ou AAAA-MM-JJTHH:MM:SS, heure locale)")
+    ap.add_argument("--tout", action="store_true",
+                    help=f"avec {OPTION_PROLONGER} : viser TOUTES les lignes vivantes du "
+                         f"cache mutualisé, pas seulement celles du jeu (--xlsx)")
     ap.add_argument("--rejouer", metavar="ENTREES_JSON",
                     help="rescore hors ligne les entrées capturées d'un run (0 $)")
     ap.add_argument("--criteres", metavar="JSON",
@@ -762,10 +923,29 @@ def main(argv: list[str] | None = None) -> int:
     if a.rejouer:
         return _rejouer(a)
 
+    if a.prolonger_cache:
+        # Le seul mode qui peut se passer de jeu : `--tout` vise le fichier entier.
+        if not a.jusqu_a:
+            ap.error(f"{OPTION_PROLONGER} exige --jusqu-a <AAAA-MM-JJ> : une prolongation sans "
+                     f"date serait une péremption invisible, décidée par personne")
+        if not a.xlsx and not a.tout:
+            ap.error(f"{OPTION_PROLONGER} sans --tout vise les clés d'un jeu : il faut --xlsx")
+        try:
+            a.jusqu_a_ts = datetime.fromisoformat(a.jusqu_a).timestamp()
+        except ValueError:
+            ap.error(f"--jusqu-a illisible : {a.jusqu_a!r} (AAAA-MM-JJ attendu)")
+        chemin_cache = Path(a.cache) if a.cache else _chemin_cache_defaut()
+        etiquetees = charger_etiquettes(a.xlsx) if a.xlsx else []
+        return _prolonger(a, etiquetees, chemin_cache)
+    if a.tout:
+        ap.error(f"--tout ne s'utilise qu'avec {OPTION_PROLONGER}")
+    if a.jusqu_a:
+        ap.error(f"--jusqu-a ne s'utilise qu'avec {OPTION_PROLONGER}")
+
     if not a.xlsx:
         ap.error("il faut --gabarit, --xlsx ou --rejouer")
     if a.confirmer and not a.purger_fiches_sans_pages:
-        ap.error(f"--confirmer ne s'utilise qu'avec {OPTION_PURGE}")
+        ap.error(f"--confirmer ne s'utilise qu'avec {OPTION_PURGE} ou {OPTION_PROLONGER}")
     if a.ecrites_avant and not a.purger_fiches_sans_pages:
         ap.error(f"--ecrites-avant ne s'utilise qu'avec {OPTION_PURGE}")
     if a.confirmer and not a.ecrites_avant:
