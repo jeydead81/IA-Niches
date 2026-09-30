@@ -322,9 +322,17 @@ def test_la_profondeur_dans_l_arbre_nourrit_la_demande():
 
 def test_les_seuils_viennent_du_fichier_de_criteres():
     """G1 recalibre le FICHIER, jamais le code. Un seuil qui migre dans le .py redevient
-    invisible et non discutable."""
+    invisible et non discutable.
+
+    `variantes_max` valait 6 ; il est NEUTRALISÉ à 1000 depuis le 2026-09-30 (décision de
+    Baptiste, rejeu hors ligne des runs 5 et 6) : 1000 est au-delà de tout maximum observé
+    (29 variantes sur 95 niches), donc le terme ne se déclenche jamais. Le test garde une
+    valeur en dur pour la même raison qu'avant — c'est le FICHIER qui doit porter le
+    réglage — mais il ne peut plus prétendre que 6 est un seuil calibré."""
     c = charger_criteres()
-    assert c["variantes_max"] == 6 and c["seuil_prix_60pct"] == 9.99
+    assert c["variantes_max"] == 1000 and c["cibles_max"] == 1000, \
+        "termes neutralisés : les remettre en service est une décision, pas un ajustement"
+    assert c["seuil_prix_60pct"] == 9.99
 
 
 def test_les_criteres_peuvent_etre_surcharges_par_l_appelant():
