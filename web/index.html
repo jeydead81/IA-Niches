@@ -159,6 +159,14 @@
      piege n1 du depot transpose ici -- une jauge coloree uniformement ferait
      recommander exactement les pires rayons. */
   .lc-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  /* Les niches sont GROUPEES par ce que la mesure sait dire (vivant / mort / non mesure),
+     jamais classees par qualite supposee : le score ne departage pas une bonne niche d'une
+     mauvaise, mesure sur 95 rayons. Le titre de groupe porte le compte, la note dit ce que
+     le groupe ne promet pas. */
+  .lc-groupe{grid-column:1/-1;display:grid;grid-template-columns:inherit;gap:inherit}
+  .lc-groupe>h3{grid-column:1/-1;margin:14px 0 2px;font-size:15px;letter-spacing:.2px}
+  .lc-groupe-note{grid-column:1/-1;margin:0 0 6px;color:var(--muted);font-size:12.5px;
+    line-height:1.45;max-width:72ch}
   .lc-carte{background:#fff;border:1px solid var(--border);border-radius:12px;
     padding:15px 17px;display:flex;flex-direction:column;gap:11px}
   .lc-tete{display:flex;align-items:flex-start;gap:10px}
@@ -1342,7 +1350,9 @@ function carteLowContent(r){
     // le serveur classait jaune s'affichait rouge. Sans verdict (ancien job) : le score.
     + '<span class="pill ' + (nm ? 'n'
         : ({'🟢': 'g', '🟡': 'a', '🔴': 'r'}[Array.from(r.priorite || '')[0]]
-           || grade(r.global_score))) + '">'
+           || grade(r.global_score))) + '" title="Indice de vitalité du rayon, sur 10. Mesuré sur 95 '
+    + 'rayons étiquetés : il sépare un rayon mort d’un rayon vivant, il ne départage '
+    + 'PAS une bonne niche d’une mauvaise — ce n’est pas une note de qualité.">'
     + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
     + '<h3>' + esc(n.niche || n.requete_amazon || '—') + '</h3></div>'
     + '<div class="lc-req">« ' + esc(n.requete_amazon || '') + ' »</div>'
@@ -1373,12 +1383,49 @@ fetch('/api/lowcontent/formats').then(r=>r.json()).then(list=>{
       ).join('');
 }).catch(()=>{ lcFormat.innerHTML='<option value="">(formats indisponibles)</option>'; });
 
+// Groupe les niches par ce que la mesure sait dire — vivant, mort, non mesuré — et jamais
+// par qualité supposée. Mesuré sur 95 rayons étiquetés à l'aveugle, validé sur un lot neuf :
+// le score sépare mort/vivant (AUC 0,82 puis 0,91) et ne départage pas bonne/mauvaise (0,64
+// puis 0,43, les deux intervalles à cheval sur le hasard). Une liste ordonnée par score
+// promettait donc un classement inexistant. Fonction PURE : elle est appelée telle quelle
+// par les tests (§2.10), le DOM reste dans `renderLc`.
+function grouperLc(rows){
+  const vivant = [], mort = [], nonmesure = [];
+  (rows || []).forEach(r => {
+    const tete = Array.from(r.priorite || '')[0];
+    if (r.concurrence_mesuree === false || tete === '⚪') nonmesure.push(r);
+    else if (tete === '🔴') mort.push(r);
+    else vivant.push(r);
+  });
+  return [
+    {cle: 'vivant', titre: 'Rayons vivants', rows: vivant,
+     note: "à examiner vous-même. L'ordre dans ce groupe n'est PAS un classement de "
+         + "qualité : mesuré sur 95 rayons, le score ne départage pas une bonne niche "
+         + "d'une mauvaise."},
+    {cle: 'mort', titre: 'Signaux de rayon mort', rows: mort,
+     note: "à vérifier avant d'y passer du temps — ce n'est pas un rejet : sur les lots "
+         + "mesurés, environ un rayon sur trois de ce groupe était quand même une bonne "
+         + "niche."},
+    {cle: 'nonmesure', titre: 'Non mesurés', rows: nonmesure,
+     note: "la recherche Amazon n'a pas répondu : ce n'est pas un rayon vide, c'est une "
+         + "absence de mesure. À relancer."},
+  ].filter(g => g.rows.length);
+}
+
 function renderLc(rows){
-  gridLc.innerHTML = (rows||[]).map(carteLowContent).join('');
+  const groupes = grouperLc(rows);
+  // L'ordre de branchement doit suivre l'ordre RENDU, pas celui de `rows` : regrouper sans
+  // reconstruire cette liste rebrancherait les boutons d'une carte sur les données d'une
+  // autre — un dossier PDF payé pour la mauvaise niche (§5.26, même famille).
+  const rendus = groupes.flatMap(g => g.rows);
+  gridLc.innerHTML = groupes.map(g =>
+      '<section class="lc-groupe"><h3>' + esc(g.titre) + ' (' + g.rows.length + ')</h3>'
+    + '<p class="lc-groupe-note">' + esc(g.note) + '</p>'
+    + g.rows.map(carteLowContent).join('') + '</section>').join('');
   rcountLc.textContent = rows.length
     ? rows.length + ' niche(s) analysée(s)' : 'aucune niche';
   gridLc.querySelectorAll('.lc-carte').forEach((carte, i) => {
-    brancherActionsLc(rows[i], carte);
+    brancherActionsLc(rendus[i], carte);
   });
   emptyLc.style.display='none'; resultsLc.classList.add('on');
 }

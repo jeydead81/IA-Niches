@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.js_harness import appeler
+from tests.js_harness import appeler, appeler_json
 
 _INDEX = Path(__file__).resolve().parent.parent / "web" / "index.html"
 # Dépendances de `carteLowContent`, dans l'ordre où node en a besoin.
@@ -256,3 +256,51 @@ def test_la_pastille_suit_le_verdict_du_serveur_et_non_des_seuils_recopies():
 def test_sans_verdict_serveur_la_pastille_retombe_sur_le_score():
     """Un résultat sans `priorite` (ancien job) garde l'ancienne couleur : jamais vide."""
     assert 'class="pill g"' in _carte(global_score=8.0, priorite="")
+
+
+# ── Ce que l'écran a le droit de promettre (2026-10-02) ────────────────────────
+#
+# Mesuré sur 95 rayons étiquetés à l'aveugle par Baptiste, validé sur un lot neuf : le score
+# sépare un rayon MORT d'un rayon vivant (AUC 0,82 puis 0,91) et ne départage PAS une bonne
+# niche d'une mauvaise (0,64 puis 0,43, les deux intervalles à cheval sur le hasard). Une
+# liste triée par score, avec une note sur 10 en tête de carte, promet donc un classement
+# qui n'existe pas. On regroupe par ce qui est mesuré, et on écrit ce qu'on ne sait pas.
+
+def _rows_melanges():
+    return [_lc(global_score=7.0, priorite="🟢 Rayon vivant — à examiner"),
+            _lc(global_score=3.1, priorite="🔴 Signaux de rayon mort — à vérifier"),
+            _lc(global_score=5.4, priorite="⚪ Concurrence non mesurée — à relancer",
+                concurrence_mesuree=False),
+            _lc(global_score=6.2, priorite="🟢 Rayon vivant — à examiner")]
+
+
+def test_les_niches_sont_groupees_par_ce_qui_est_MESURE():
+    groupes = appeler_json("grouperLc", _rows_melanges())
+    assert [g["cle"] for g in groupes] == ["vivant", "mort", "nonmesure"]
+    assert [len(g["rows"]) for g in groupes] == [2, 1, 1]
+    assert sum(len(g["rows"]) for g in groupes) == 4, "aucune niche ne disparaît du regroupement"
+
+
+def test_un_groupe_vide_ne_s_affiche_pas():
+    rows = [_lc(priorite="🟢 Rayon vivant — à examiner")]
+    assert [g["cle"] for g in appeler_json("grouperLc", rows)] == ["vivant"]
+
+
+def test_le_groupe_VIVANT_dit_que_l_ordre_n_est_pas_un_classement():
+    g = appeler_json("grouperLc", _rows_melanges())[0]
+    assert "classement" in g["note"].lower()
+
+
+def test_le_groupe_MORT_dit_que_ce_n_est_pas_un_rejet():
+    """« rouge ⇒ mort » est FAUX : le rouge enterrait 7 bonnes sur 39 au lot 1 et 12 sur 32
+    au lot 2. L'écran doit le dire, sinon il fait renoncer à une bonne niche — la faute la
+    plus grave que ce produit puisse commettre (règle 3)."""
+    g = appeler_json("grouperLc", _rows_melanges())[1]
+    assert "rejet" in g["note"].lower()
+
+
+def test_la_pastille_annonce_une_VITALITE_pas_une_note_de_qualite():
+    html = appeler("carteLowContent", _lc(priorite="🟢 Rayon vivant — à examiner"),
+                   dependances=_DEPS)
+    assert "vitalité" in html.lower()
+    assert "priorité" not in html.lower(), "le moteur ne sait pas classer par priorité"

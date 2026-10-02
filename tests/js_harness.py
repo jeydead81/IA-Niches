@@ -81,13 +81,27 @@ def extraire_fonction(nom: str, src: str | None = None) -> str:
 
 def appeler(nom: str, *args, dependances: tuple[str, ...] = ()) -> str:
     """Appelle une fonction de rendu avec `args` et rend sa sortie (chaîne)."""
+    return _executer(nom, args, dependances, "String({appel})")
+
+
+def appeler_json(nom: str, *args, dependances: tuple[str, ...] = ()):
+    """Comme `appeler`, mais pour une fonction qui rend une STRUCTURE et non du HTML.
+
+    `appeler` fait `String(f(...))` : sur un tableau d'objets il rendrait « [object Object] »
+    et le test passerait au vert en ne vérifiant rien — exactement la famille de faux vert
+    que ce harnais existe pour éviter (§5.26). On sérialise côté node, on relit côté Python."""
+    return json.loads(_executer(nom, args, dependances, "JSON.stringify({appel})"))
+
+
+def _executer(nom: str, args, dependances: tuple[str, ...], enveloppe: str) -> str:
     node = shutil.which("node")
     if not node:
         pytest.skip("node absent : le rendu JS ne peut pas être exercé ici")
     src = _source_js()
     bloc = "\n".join(extraire_fonction(d, src) for d in dependances)
+    appel = f"{nom}(...{json.dumps(list(args))})"
     prog = (bloc + "\n" + extraire_fonction(nom, src) + "\n"
-            + f"process.stdout.write(String({nom}(...{json.dumps(list(args))})));")
+            + f"process.stdout.write({enveloppe.format(appel=appel)});")
     r = subprocess.run([node, "-e", prog], capture_output=True, text=True,
                        encoding="utf-8", timeout=30)
     if r.returncode != 0:
