@@ -304,3 +304,25 @@ def test_la_pastille_annonce_une_VITALITE_pas_une_note_de_qualite():
                    dependances=_DEPS)
     assert "vitalité" in html.lower()
     assert "priorité" not in html.lower(), "le moteur ne sait pas classer par priorité"
+
+
+def test_le_selecteur_de_FORMATS_se_charge_APRES_la_connexion():
+    """« (formats indisponibles) » vu à l'écran le 2026-10-02, sur un compte connecté.
+
+    L'appel `fetch('/api/lowcontent/formats')` était au niveau module : il partait au
+    chargement de la page, donc AVANT que `GET /api/auth/moi` ait confirmé la session, se
+    prenait un 401 et retombait sur le message d'indisponibilité — définitivement, car rien
+    ne le rejouait après la connexion. Exactement le piège §2.9, qui avait déjà coûté la
+    reprise des travaux low-content, dans le même fichier.
+
+    Le test porte sur la PLACE de l'appel, pas sur sa présence : c'est la place qui était
+    fausse, et une chaîne présente ne prouve rien (§5.26)."""
+    src = _INDEX.read_text(encoding="utf-8")
+    assert src.count("'/api/lowcontent/formats'") == 1, "un seul site d'appel"
+    debut = src.index("function chargerFormatsLc")
+    fin = src.index("\n}", debut)
+    assert "'/api/lowcontent/formats'" in src[debut:fin], \
+        "l'appel vit dans la fonction, pas au niveau module"
+    entrer = src.index("function entrer(")
+    assert "chargerFormatsLc()" in src[entrer:src.index("\n  }", entrer)], \
+        "et `entrer()` l'appelle, une fois la session confirmée"

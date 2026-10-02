@@ -1372,6 +1372,13 @@ let esLc=null;
 
 // Selecteur peuple depuis la taxonomie (source de verite unique), groupe par famille.
 // Jamais une liste en dur : elle se perimerait a la premiere taxo v2.
+//
+// APPELE PAR `entrer()`, jamais au niveau module : tous les endpoints sauf `/` exigent une
+// session, donc un appel au chargement part AVANT que `GET /api/auth/moi` ait repondu, se
+// prend un 401 et laisse « (formats indisponibles) » a l'ecran -- definitivement, rien ne le
+// rejouait apres la connexion. Vu en vrai le 2026-10-02 sur un compte connecte. C'est le
+// piege §2.9, qui avait deja coute la reprise des travaux low-content, dans ce meme fichier.
+function chargerFormatsLc(){
 fetch('/api/lowcontent/formats').then(r=>r.json()).then(list=>{
   const familles = {};
   list.forEach(f => { (familles[f.famille] = familles[f.famille] || []).push(f); });
@@ -1383,6 +1390,7 @@ fetch('/api/lowcontent/formats').then(r=>r.json()).then(list=>{
             + (f.norme ? ' (normé)' : '') + '</option>').join('')
       ).join('');
 }).catch(()=>{ lcFormat.innerHTML='<option value="">(formats indisponibles)</option>'; });
+}
 
 // Groupe les niches par ce que la mesure sait dire — vivant, mort, non mesuré — et jamais
 // par qualité supposée. Mesuré sur 95 rayons étiquetés à l'aveugle, validé sur un lot neuf :
@@ -1973,6 +1981,7 @@ function chargerUsage(){
     emailAffiche.textContent = adresse;
     mdp.value = '';
     chargerUsage();
+    chargerFormatsLc();
     reprendreTravail(VUE_NF);
     reprendreTravail(VUE_FIC);
     reprendreTravail(VUE_LC);
