@@ -326,3 +326,44 @@ def test_le_selecteur_de_FORMATS_se_charge_APRES_la_connexion():
     entrer = src.index("function entrer(")
     assert "chargerFormatsLc()" in src[entrer:src.index("\n  }", entrer)], \
         "et `entrer()` l'appelle, une fois la session confirmée"
+
+
+# ── Historique des analyses (2026-10-02) ──────────────────────────────────────
+#
+# « aucun moyen de récupérer ses analyses ? » — question de Baptiste devant le bandeau
+# « Ce mois-ci : 3 analyse(s) ». Les runs sont TOUS en base, avec leur résultat complet, et
+# `GET /api/jobs` les rend déjà. Il manquait l'écran : l'interface ne savait reprendre que
+# le DERNIER run de chaque onglet, via localStorage. Un run payé 15 minutes plus tôt était
+# donc inatteignable — la même famille que §5.26, une donnée produite et jamais affichée.
+
+def _job(**kw):
+    base = {"id": "a1b2", "type": "lowcontent", "statut": "termine",
+            "params": {"seed": "registre", "n_search": 6},
+            "resultat": [{"niche": {}}, {"niche": {}}, {"niche": {}}],
+            "cree_le": 1790000000.0, "erreur": None}
+    base.update(kw)
+    return base
+
+
+def test_une_analyse_terminee_est_REOUVRABLE_avec_son_contenu():
+    html = appeler("ligneAnalyse", _job(), dependances=("esc", "TYPE_LABEL", "fmtDate"))
+    assert "registre" in html and "3 niche" in html
+    assert "Low-content" in html
+    assert 'data-id="a1b2"' in html, "le bouton doit porter l'identifiant du run"
+
+
+def test_une_analyse_en_cours_n_est_pas_proposee_a_la_reouverture():
+    """Rouvrir un run sans résultat afficherait un écran vide en faisant croire qu'il n'a
+    rien trouvé — une absence de mesure présentée comme un verdict (règle 3)."""
+    html = appeler("ligneAnalyse", _job(statut="en_cours", resultat=None),
+                   dependances=("esc", "TYPE_LABEL", "fmtDate"))
+    assert "data-id" not in html
+    assert "cours" in html.lower()
+
+
+def test_une_analyse_en_ECHEC_dit_pourquoi_et_ne_se_rouvre_pas():
+    html = appeler("ligneAnalyse",
+                   _job(statut="echec", resultat=None, erreur="compte DataForSEO refusé"),
+                   dependances=("esc", "TYPE_LABEL", "fmtDate"))
+    assert "data-id" not in html
+    assert "dataforseo" in html.lower()

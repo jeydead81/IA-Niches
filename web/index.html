@@ -163,6 +163,16 @@
      jamais classees par qualite supposee : le score ne departage pas une bonne niche d'une
      mauvaise, mesure sur 95 rayons. Le titre de groupe porte le compte, la note dit ce que
      le groupe ne promet pas. */
+  .hist{margin-bottom:14px}
+  .hist-tete{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .hist-tete h2{margin:0;font-size:16px}
+  .hist-note{margin:4px 0 10px;color:#334155;font-size:12.5px}
+  .hist-ligne{display:flex;align-items:center;gap:10px;padding:8px 0;
+    border-top:1px solid var(--border);font-size:13.5px;flex-wrap:wrap}
+  .hist-ligne .quand{color:#64748B;font-size:12.5px;min-width:112px}
+  .hist-ligne .type{font-weight:600}
+  .hist-ligne .etat{color:#64748B;font-size:12.5px}
+  .hist-vide{color:#64748B;font-size:13px;padding:8px 0}
   .vangle-src{margin:10px 0 2px;font-size:11.5px;letter-spacing:.3px;text-transform:uppercase;
     color:#6366F1;font-weight:600}
   .lc-groupe{grid-column:1/-1;display:grid;grid-template-columns:inherit;gap:inherit}
@@ -534,6 +544,16 @@
     <button type="button" class="tab" id="tab-fic" role="tab" aria-selected="false">Fiction</button>
     <button type="button" class="tab" id="tab-lc" role="tab" aria-selected="false">Low-content</button>
   </div>
+
+  <section id="historique" class="panel hist" hidden>
+    <div class="hist-tete">
+      <h2>Mes analyses</h2>
+      <button type="button" id="hist-rafraichir" class="btn-act">Rafraîchir</button>
+    </div>
+    <p class="hist-note">Vos analyses passées, relues depuis votre compte. Les rouvrir ne
+      relance rien et ne coûte rien : c'est le résultat déjà payé.</p>
+    <div id="hist-liste"></div>
+  </section>
 
   <div id="view-nf">
     <div class="panel controls">
@@ -1605,6 +1625,82 @@ function reprendreTravail(vue){
 // ================= Fiction =================
 const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>';
 
+// ================= Mes analyses (historique) =================
+// « aucun moyen de recuperer ses analyses ? » : les runs sont TOUS en base avec leur
+// resultat complet, et `GET /api/jobs` les rend deja. Il manquait l'ecran -- l'interface ne
+// savait reprendre que le DERNIER run de chaque onglet (localStorage). Un run paye quinze
+// minutes plus tot etait donc inatteignable : une donnee produite et jamais affichee,
+// meme famille que §5.26. Rouvrir ne relance RIEN et ne coute rien.
+const TYPE_LABEL = {scout: 'Non-fiction', fiction: 'Fiction', lowcontent: 'Low-content'};
+
+function fmtDate(ts){
+  if(!ts) return '—';
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getDate()) + '/' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// PURE : appelee telle quelle par les tests (§2.10). Un run sans resultat n'est jamais
+// proposable -- l'ouvrir afficherait un ecran vide qui se lirait « rien trouve », c'est-a-dire
+// une absence de mesure presentee comme un verdict (regle 3).
+function ligneAnalyse(job){
+  const p = job.params || {};
+  const sujet = p.seed || p.graine || p.format_cle || p.sous_genre || 'sans graine';
+  const n = Array.isArray(job.resultat) ? job.resultat.length : 0;
+  const ouvrable = job.statut === 'termine' && n > 0;
+  const etat = ouvrable ? n + ' niche(s)'
+    : job.statut === 'echec' ? 'échec — ' + (job.erreur || 'cause non enregistrée')
+    : job.statut === 'en_cours' ? 'en cours…'
+    : 'en attente';
+  return '<div class="hist-ligne">'
+    + '<span class="quand">' + esc(fmtDate(job.cree_le)) + '</span>'
+    + '<span class="type">' + esc(TYPE_LABEL[job.type] || job.type) + '</span>'
+    + '<span class="sujet">« ' + esc(String(sujet)) + ' »</span>'
+    + '<span class="etat">' + esc(etat) + '</span>'
+    + (ouvrable
+        ? '<button type="button" class="btn-act hist-ouvrir" data-id="' + esc(job.id)
+          + '">Rouvrir</button>'
+        : '')
+    + '</div>';
+}
+
+const histSection=$('#historique'), histListe=$('#hist-liste'), histBtn=$('#hist-rafraichir');
+let HISTORIQUE = [];
+
+async function chargerHistorique(){
+  try{
+    const rep = await fetch('/api/jobs?limit=20');
+    if(!rep.ok) throw new Error(String(rep.status));
+    HISTORIQUE = await rep.json();
+  }catch(e){
+    // Une panne n'est pas « aucune analyse » : on le dit, on n'affiche pas une liste vide.
+    histListe.innerHTML = '<p class="hist-vide">Historique indisponible pour le moment.</p>';
+    histSection.hidden = false;
+    return;
+  }
+  histListe.innerHTML = HISTORIQUE.length
+    ? HISTORIQUE.map(ligneAnalyse).join('')
+    : '<p class="hist-vide">Aucune analyse pour l'instant.</p>';
+  histSection.hidden = false;
+  histListe.querySelectorAll('.hist-ouvrir').forEach(b => {
+    b.addEventListener('click', () => rouvrirAnalyse(b.dataset.id));
+  });
+}
+
+function rouvrirAnalyse(id){
+  const job = HISTORIQUE.find(j => j.id === id);
+  if(!job) return;
+  const vue = {scout: VUE_NF, fiction: VUE_FIC, lowcontent: VUE_LC}[job.type];
+  const onglet = {scout: 'nf', fiction: 'fic', lowcontent: 'lc'}[job.type];
+  if(!vue || !onglet) return;
+  switchTab(onglet);
+  vue.viderEtapes();
+  (job.progression || []).forEach(m => vue.etape(m));
+  vue.resultat(job.resultat);
+}
+
+if(histBtn) histBtn.addEventListener('click', chargerHistorique);
+
 const tabNf=$('#tab-nf'), tabFic=$('#tab-fic'), tabLc=$('#tab-lc'),
       viewNf=$('#view-nf'), viewFic=$('#view-fic'), viewLc=$('#view-lc');
 // Table (onglet, vue) plutot qu'une cascade de booleens : a deux onglets un `nf ? : `
@@ -1628,11 +1724,17 @@ let esFic=null;
 
 // Peuple le sélecteur depuis la taxonomie (source de vérité unique) — jamais une liste
 // dupliquée en dur ici, qui se périmerait à la moindre taxo v2.
+//
+// APPELÉ PAR `entrer()`, jamais au niveau module : même défaut que les formats low-content,
+// corrigé le même jour — l'appel partait avant la session, se prenait un 401, et laissait
+// « (taxonomie indisponible) » définitivement à l'écran (§2.9).
+function chargerSousGenres(){
 fetch('/api/fiction/sous-genres').then(r=>r.json()).then(list=>{
   sgSelect.innerHTML = list.map(o=>`<option value="${esc(o.cle)}">${esc(o.label)}</option>`).join('')
     || '<option value="">(aucun sous-genre)</option>';
   chargerTaxonomie();
 }).catch(()=>{ sgSelect.innerHTML='<option value="">(taxonomie indisponible)</option>'; });
+}
 
 // Menus du compositeur : rechargés à CHAQUE changement de sous-genre, parce que les tropes
 // et les décors ne sont pas les mêmes d'un sous-genre à l'autre. Garder les anciens ferait
@@ -1985,6 +2087,8 @@ function chargerUsage(){
     mdp.value = '';
     chargerUsage();
     chargerFormatsLc();
+    chargerSousGenres();
+    chargerHistorique();
     reprendreTravail(VUE_NF);
     reprendreTravail(VUE_FIC);
     reprendreTravail(VUE_LC);
@@ -1992,6 +2096,7 @@ function chargerUsage(){
 
   function sortir(){
     barre.hidden = true;
+    histSection.hidden = true; histListe.innerHTML = ''; HISTORIQUE = [];
     ecran.classList.add('on');
     inscription = false;
     rendre();
