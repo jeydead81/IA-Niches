@@ -468,6 +468,33 @@
   /* Accueil : UNE information principale (que cherchez-vous), puis l'action. Le pave
      explicatif permanent est parti dans l'aide par onglet -- il repoussait le champ sous la
      ligne de flottaison et se lisait comme un mode d'emploi, pas comme un produit. */
+  .rsum{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .tri{font-size:12.5px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
+  .tri select{font:inherit;font-size:12.5px;padding:4px 8px;border:1px solid var(--border);
+    border-radius:7px;background:var(--surface);color:var(--heading)}
+  .rnote{margin:6px 0 12px;color:var(--text-muted);font-size:12.5px;max-width:78ch}
+  .nicheC-liste{display:flex;flex-direction:column;gap:10px}
+  .nicheC{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow);overflow:hidden}
+  .nicheC-tete{display:flex;align-items:center;gap:18px;width:100%;padding:14px 18px;
+    background:none;border:none;text-align:left;cursor:pointer;font:inherit}
+  .nicheC-tete:hover{background:#F8FAFC}
+  .nicheC-note{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:92px}
+  .nicheC-id{flex:1;min-width:150px;display:flex;flex-direction:column;gap:2px}
+  .nicheC-id strong{font-size:15.5px;color:var(--heading)}
+  .nicheC-kpis{display:flex;gap:22px;flex-wrap:wrap}
+  .nicheC-kpi{display:flex;flex-direction:column;gap:1px;min-width:74px}
+  .nicheC-kpi i{font-style:normal;font-size:11px;letter-spacing:.3px;text-transform:uppercase;
+    color:var(--text-muted)}
+  .nicheC-kpi b{font-family:var(--mono);font-size:15px;color:var(--heading);font-weight:600}
+  .nicheC-chev{color:var(--text-muted);font-size:20px;transition:transform .15s}
+  .nicheC.open .nicheC-chev{transform:rotate(90deg)}
+  .nicheC-corps{display:none;padding:0 18px 16px;border-top:1px solid var(--border)}
+  .nicheC.open .nicheC-corps{display:block}
+  @media (max-width:760px){
+    .nicheC-tete{flex-wrap:wrap;gap:12px}
+    .nicheC-kpis{gap:14px;width:100%}
+  }
   .hero{margin:4px 0 18px}
   .hero h2{margin:0 0 6px;font-size:28px;line-height:1.2;letter-spacing:-.4px;
     color:var(--heading)}
@@ -633,8 +660,23 @@
     <div class="errbox" id="errbox" role="alert" aria-live="assertive"></div>
 
     <section class="results panel" id="results" style="border:none;background:none;box-shadow:none">
-      <div class="rsum"><h2>Niches classées</h2><span id="rcount"></span></div>
-      <div class="tablewrap">
+      <div class="rsum">
+        <div><h2 id="rtitre">Niches analysées</h2><span id="rcount"></span></div>
+        <label class="tri">Trier par
+          <select id="tri-nf">
+            <option value="score">score</option>
+            <option value="demande">demande</option>
+            <option value="bsr">meilleur BSR</option>
+          </select>
+        </label>
+      </div>
+      <!-- Ce que le score est, et ce qu'il n'est pas : ecrit une fois, au-dessus de la
+           liste, plutot que repete sur chaque carte. -->
+      <p class="rnote">Le score résume la demande mesurée et la place restante. Il trie, il
+        ne juge pas : deux niches vertes ne sont pas classées l'une devant l'autre par
+        qualité.</p>
+      <div id="cartes-nf" class="nicheC-liste"></div>
+      <div class="tablewrap" hidden>
         <table>
           <thead><tr>
             <th>Score</th><th>Niche</th><th class="num">Demande</th><th class="num">Pénétration</th>
@@ -1188,30 +1230,81 @@ function blocPrix(r){
     <span class="mut">(sur ${r.n_prix_connus} livre(s) affichant un prix)</span></p>`;
 }
 
+// Tete de carte : UNE information principale (le score), puis quatre chiffres secondaires,
+// puis le detail a la demande. L'ancien tableau alignait huit colonnes de meme importance et
+// laissait le lecteur trier lui-meme ce qui compte. Aucune donnee ne disparait : ce qui
+// sortait du tableau descend dans la carte depliee.
+//
+// « Accessibilite » et non « Penetration » : l'auteur ne parle pas le vocabulaire du moteur.
+function carteNicheTete(r){
+  const nm = nonMesuree(r);
+  const g = nm ? 'n' : grade(r.global_score);
+  const kpi = (libelle, valeur) =>
+    '<span class="nicheC-kpi"><i>' + libelle + '</i><b>' + valeur + '</b></span>';
+  return '<span class="nicheC-note">'
+      + '<span class="pill ' + g + '">' + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
+      + '<span class="verdict ' + g + '">' + (nm ? 'Non mesurée' : verdict(r.global_score))
+      + '</span></span>'
+    + '<span class="nicheC-id"><strong>' + esc(r.niche) + '</strong>'
+      + '<span class="cat">' + esc(r.categorie || '') + '</span></span>'
+    + '<span class="nicheC-kpis">'
+      + kpi('Demande', nm ? '—' : fmtDec(r.demande, 1))
+      + kpi('Accessibilité', nm ? '—' : fmtDec(r.penetration, 1))
+      + kpi('BSR meilleur', fmt(r.bsr_best))
+      + kpi('Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles))
+    + '</span><span class="nicheC-chev">›</span>';
+}
+
+// Tri PUR. Jamais « par potentiel » : mesure sur 95 niches, le score ne departage pas une
+// bonne niche d'une mauvaise. On trie sur des faits, et une valeur ABSENTE part en fin de
+// liste -- `null` traite comme zero remonterait en tete les niches dont on ne sait rien,
+// c'est-a-dire le classement le plus flatteur possible pour une absence de mesure (§5.10).
+function trierNiches(rows, cle){
+  const copie = (rows || []).slice();
+  const val = r => cle === 'demande' ? r.demande
+    : cle === 'bsr' ? r.bsr_best
+    : r.global_score;
+  const croissant = cle === 'bsr';     // un petit BSR est meilleur
+  return copie.sort((a, b) => {
+    const va = val(a), vb = val(b);
+    if(va == null && vb == null) return 0;
+    if(va == null) return 1;
+    if(vb == null) return -1;
+    return croissant ? va - vb : vb - va;
+  });
+}
+
+let LIGNES_NF = [], THEMATIQUE_NF = '';
+
 function render(rows){
-  tbody.innerHTML='';
-  rcount.textContent = rows.length ? `${rows.length} niche(s) analysée(s) en profondeur` : 'aucune niche validée';
-  rows.forEach((r,i)=>{
+  LIGNES_NF = rows || [];
+  rcount.textContent = LIGNES_NF.length
+    ? `${LIGNES_NF.length} niche(s) analysée(s)` : 'aucune niche validée';
+  $('#rtitre').textContent = THEMATIQUE_NF
+    ? `Niches analysées pour « ${THEMATIQUE_NF} »` : 'Niches analysées';
+  dessinerCartesNf();
+  empty.style.display='none'; results.classList.add('on');
+}
+
+// Le DOM est reconstruit a chaque tri : les cartes portent des ecouteurs et un etat
+// « depliee », et reordonner des noeuds vivants ferait diverger l'ordre affiche de l'ordre
+// des donnees -- exactement le defaut corrige sur l'ecran low-content (boutons branches sur
+// la mauvaise niche).
+function dessinerCartesNf(){
+  const hote = $('#cartes-nf');
+  hote.innerHTML = '';
+  trierNiches(LIGNES_NF, $('#tri-nf').value).forEach(r => {
     const nm = nonMesuree(r);
-    const g = nm ? 'n' : grade(r.global_score);
-    const gap = r.criteres_bsr_ok ? `<span class="badge41">${ICON_CHECK}§4.1</span>` : '';
-    const tr=document.createElement('tr'); tr.className='row';
-    tr.innerHTML=`
-      <td><span class="score"><span class="pill ${g}">${nm?'—':fmtDec(r.global_score,1)}</span><span class="verdict ${g}">${nm?'Non mesurée':verdict(r.global_score)}</span></span></td>
-      <td><div class="niche-name">${esc(r.niche)}</div><div class="cat">${esc(r.categorie)}</div></td>
-      <td class="num">${fmtDec(r.demande,1)}</td>
-      <td class="num">${fmtDec(r.penetration,1)}</td>
-      <td><span style="font-family:var(--mono)">${fmt(r.bsr_best)}</span> <span class="mut">/ ${fmt(r.bsr_top5_avg)}</span>${gap}</td>
-      <td class="num">${fmt(r.n_concurrents_cibles)}</td>
-      <td class="num mut">${fmt(r.n_sponsored)}</td>
-      <td>${ICON_CHEV}</td>`;
-    const det=document.createElement('tr'); det.className='detail';
     const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
     const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
         La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
         et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
         Le score n'est pas exploitable — à relancer.</p>` : '';
-    det.innerHTML=`<td colspan="8"><div class="inner">
+    const carte = document.createElement('article');
+    carte.className = 'nicheC';
+    carte.innerHTML = `
+      <button type="button" class="nicheC-tete" aria-expanded="false">${carteNicheTete(r)}</button>
+      <div class="nicheC-corps">
         ${alerteNm}
         ${blocSuggestions(r)}
         ${blocPrix(r)}
@@ -1219,33 +1312,42 @@ function render(rows){
         <div class="verdictslot" aria-live="polite">${verdictSlot(r)}</div>
         <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
         ${blocConcurrents(r)}
-      </div></td>`;
-    let histCharge=false;
-    tr.addEventListener('click',()=>{
-      tr.classList.toggle('open');det.classList.toggle('open');
+        <p class="dl">Données détaillées</p>
+        <div class="chips"><span class="chip">BSR moyen du top : ${fmt(r.bsr_top5_avg)}</span>
+          <span class="chip">Livres sponsorisés écartés : ${fmt(r.n_sponsored)}</span>
+          ${r.criteres_bsr_ok ? '<span class="chip">Critères BSD §4.1 réunis</span>' : ''}</div>
+      </div>`;
+    const tete = carte.querySelector('.nicheC-tete');
+    let histCharge = false;
+    tete.addEventListener('click', () => {
+      const ouvert = carte.classList.toggle('open');
+      tete.setAttribute('aria-expanded', ouvert);
       // Chargé à l'ouverture seulement : inutile d'interroger l'historique de dix niches
       // que l'utilisateur ne dépliera jamais.
-      if(det.classList.contains('open') && !histCharge){
-        histCharge=true; loadHistorique(r.niche, det.querySelector('.histslot'));
+      if(ouvert && !histCharge){
+        histCharge = true;
+        loadHistorique(r.niche, carte.querySelector('.histslot'));
       }
     });
-    brancherActions(r, det);
-    tbody.appendChild(tr); tbody.appendChild(det);
+    brancherActions(r, carte);
+    hote.appendChild(carte);
   });
-  empty.style.display='none'; results.classList.add('on');
 }
+
+$('#tri-nf').addEventListener('change', dessinerCartesNf);
 
 form.addEventListener('submit',e=>{
   e.preventDefault();
   if(es) es.close();
-  steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
+  steps.innerHTML=''; $('#cartes-nf').innerHTML=''; results.classList.remove('on');
   errbox.classList.remove('on'); errbox.textContent='';
   empty.style.display='none'; progress.classList.add('on');
   runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
 
-  lancerTravail('scout', {seed:$('#seed').value.trim(), n_search:Number($('#search').value)}, VUE_NF);
+  THEMATIQUE_NF = $('#seed').value.trim();
+  lancerTravail('scout', {seed:THEMATIQUE_NF, n_search:Number($('#search').value)}, VUE_NF);
 });
 
 
@@ -1963,7 +2065,7 @@ const VUE_NF = {
   cle: 'ia-niches-job-scout',
   avant(){
     if(es) es.close();
-    steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
+    steps.innerHTML=''; $('#cartes-nf').innerHTML=''; results.classList.remove('on');
     errbox.classList.remove('on'); errbox.textContent='';
     empty.style.display='none'; progress.classList.add('on');
     runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
