@@ -465,6 +465,20 @@
      par un lecteur d'écran sans JS. Ouvert par défaut (attribut `open`) ; si l'utilisateur
      le referme, JS mémorise son choix (localStorage) pour ne pas le réimposer à chaque
      visite — mais on ne force jamais sa fermeture au premier chargement. */
+  /* Accueil : UNE information principale (que cherchez-vous), puis l'action. Le pave
+     explicatif permanent est parti dans l'aide par onglet -- il repoussait le champ sous la
+     ligne de flottaison et se lisait comme un mode d'emploi, pas comme un produit. */
+  .hero{margin:4px 0 18px}
+  .hero h2{margin:0 0 6px;font-size:28px;line-height:1.2;letter-spacing:-.4px;
+    color:var(--heading)}
+  .hero p{margin:0;color:var(--text-muted);font-size:14.5px;max-width:70ch}
+  .hero-aide{background:none;border:none;padding:0;font:inherit;color:var(--secondary);
+    text-decoration:underline;cursor:pointer}
+  .suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .suggestions button{font:inherit;font-size:12.5px;color:var(--text-muted);
+    background:#F1F5F9;border:1px solid var(--border);border-radius:999px;
+    padding:4px 11px;cursor:pointer;min-height:26px}
+  .suggestions button:hover{background:#E2E8F0;color:var(--heading)}
   .help-panel{margin-bottom:16px;padding:16px 20px}
   .help-panel summary{cursor:pointer;font-weight:600;color:var(--heading);font-size:14.5px;
     list-style:none;display:flex;align-items:center;gap:8px;min-height:24px}
@@ -535,24 +549,12 @@
     </div>
   </header>
 
-  <details class="panel help-panel" id="help-panel" open>
-    <summary>Comment lire ces résultats ?</summary>
-    <div class="help-body">
-      <p><strong>À quoi sert l'outil</strong> — il repère des niches de livres qui se
-      vendent déjà sur Amazon.fr, avant que vous n'écriviez une ligne. L'IA propose des
-      idées, mais c'est Amazon qui tranche : les chiffres affichés viennent de vraies
-      fiches produit, pas d'une estimation.</p>
-      <p><strong>Ce qu'est un bon résultat</strong> — un score global élevé (vert), un BSR
-      sous 10 000 chez au moins un concurrent (preuve que ça se vend), et de la place
-      encore libre (peu de concurrents vraiment installés sur le sujet). Un résultat en
-      rouge n'est pas une erreur de l'outil : c'est un signal clair pour passer à la
-      niche suivante.</p>
-      <p><strong>Ordre de lecture des colonnes</strong> — en non-fiction : d'abord le
-      Score (vert = à regarder en priorité), puis le BSR (plus petit = mieux), puis la
-      Pénétration (élevée = facile à percer). En fiction : d'abord le badge de conclusion
-      (🟢🟠🔴⚪), puis la Saturation du trio, puis Profondeur et Ouverture.</p>
-    </div>
-  </details>
+  <section class="hero">
+    <h2>Trouvez votre prochaine niche KDP</h2>
+    <p>Explorez Amazon et identifiez les rayons où la demande existe et où la place reste
+      prenable. <button type="button" class="hero-aide" id="hero-aide">Comment ça marche ?</button></p>
+  </section>
+
 
   <div class="tabs" role="tablist">
     <button type="button" class="tab active" id="tab-nf" role="tab" aria-selected="true">Non-fiction</button>
@@ -574,22 +576,33 @@
     <div class="panel controls">
       <form id="form">
         <div class="field grow">
-          <label for="seed">Graine</label>
-          <input type="text" id="seed" placeholder="ex. ésotérisme, sommeil, stoïcisme…  (vide = à partir de rien)" autocomplete="off" />
+          <label for="seed">Quelle thématique voulez-vous explorer ?</label>
+          <input type="text" id="seed" placeholder="sommeil, anxiété, jardinage, organisation…" autocomplete="off" />
+          <!-- Un champ vide devant quelqu'un qui découvre l'outil est un mur : les
+               suggestions montrent la FORME attendue, elles ne sont pas décoratives. Le
+               champ reste libre, et vide il lance le mode « à partir de rien ». -->
+          <div class="suggestions" id="suggestions-nf">
+            <button type="button" data-theme="sommeil">Sommeil</button>
+            <button type="button" data-theme="développement personnel">Développement personnel</button>
+            <button type="button" data-theme="bien-être">Bien-être</button>
+            <button type="button" data-theme="organisation">Organisation</button>
+            <button type="button" data-theme="animaux">Animaux</button>
+            <button type="button" data-theme="spiritualité">Spiritualité</button>
+          </div>
         </div>
         <!-- Le nombre d'idées n'est plus réglable : l'ideator est UN SEUL appel LLM quel
              que soit le nombre demandé. En proposer 20 au lieu de 10 coûte des millièmes de
              dollar et donne au tri gratuit (autocomplete) un meilleur vivier. Le poste qui
              coûte vraiment, c'est le nombre de niches ANALYSÉES. -->
         <div class="field">
-          <label>Profondeur d'analyse</label>
-          <div class="presets" id="presets-nf" role="radiogroup" aria-label="Profondeur d'analyse">
+          <label>Niveau d'analyse</label>
+          <div class="presets" id="presets-nf" role="radiogroup" aria-label="Niveau d'analyse">
             <label class="preset"><input type="radio" name="preset-nf" value="rapide" />
-              <span><b>Rapide</b><i>~2 min</i></span></label>
+              <span><b>⚡ Rapide</b><i>~2 min</i></span></label>
             <label class="preset"><input type="radio" name="preset-nf" value="standard" checked />
-              <span><b>Standard</b><i>~4 min</i></span></label>
+              <span><b>🎯 Standard</b><i>~4 min</i></span></label>
             <label class="preset"><input type="radio" name="preset-nf" value="approfondi" />
-              <span><b>Approfondi</b><i>~7 min</i></span></label>
+              <span><b>🔎 Complète</b><i>~7 min</i></span></label>
           </div>
         </div>
         <!-- Le chiffre exact reste accessible : les presets simplifient le cas courant,
@@ -603,10 +616,12 @@
         </details>
         <button class="run" id="run" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
-          <span id="run-label">Lancer le scout</span>
+          <span id="run-label">Trouver les niches</span>
         </button>
       </form>
-      <p class="hint">La profondeur fixe combien de niches sont réellement confrontées à la concurrence Amazon. Le tri en amont, lui, est gratuit et illimité — élargir le vivier ne change pas la note de demande, seulement quelles niches sont testées.</p>
+      <p class="hint">Le niveau fixe combien de rayons sont réellement ouverts et comparés
+        sur Amazon. Le tri en amont est gratuit : en élargir le vivier change quels rayons
+        sont testés, jamais leur note de demande.</p>
     </div>
 
     <div class="panel progress" id="progress">
@@ -654,14 +669,14 @@
           </select>
         </div>
         <div class="field">
-          <span class="lbl-gloss"><label>Profondeur d'analyse</label><button type="button" class="gloss" data-term="Trio" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Trio ? (aide)">?</button></span>
-          <div class="presets" id="presets-fic" role="radiogroup" aria-label="Profondeur d'analyse">
+          <span class="lbl-gloss"><label>Niveau d'analyse</label><button type="button" class="gloss" data-term="Trio" aria-haspopup="true" aria-expanded="false" aria-describedby="gloss-tip" aria-label="Qu'est-ce que Trio ? (aide)">?</button></span>
+          <div class="presets" id="presets-fic" role="radiogroup" aria-label="Niveau d'analyse">
             <label class="preset"><input type="radio" name="preset-fic" value="rapide" />
-              <span><b>Rapide</b><i>~5 min</i></span></label>
+              <span><b>⚡ Rapide</b><i>~5 min</i></span></label>
             <label class="preset"><input type="radio" name="preset-fic" value="standard" checked />
-              <span><b>Standard</b><i>~8 min</i></span></label>
+              <span><b>🎯 Standard</b><i>~8 min</i></span></label>
             <label class="preset"><input type="radio" name="preset-fic" value="approfondi" />
-              <span><b>Approfondi</b><i>~12 min</i></span></label>
+              <span><b>🔎 Complète</b><i>~12 min</i></span></label>
           </div>
         </div>
         <details class="avance">
@@ -737,14 +752,14 @@
           <select id="lc-format"><option value="">Chargement…</option></select>
         </div>
         <div class="field">
-          <label>Profondeur d'analyse</label>
-          <div class="presets" id="presets-lc" role="radiogroup" aria-label="Profondeur d'analyse">
+          <label>Niveau d'analyse</label>
+          <div class="presets" id="presets-lc" role="radiogroup" aria-label="Niveau d'analyse">
             <label class="preset"><input type="radio" name="preset-lc" value="rapide" />
-              <span><b>Rapide</b><i>~3 min</i></span></label>
+              <span><b>⚡ Rapide</b><i>~3 min</i></span></label>
             <label class="preset"><input type="radio" name="preset-lc" value="standard" checked />
-              <span><b>Standard</b><i>~5 min</i></span></label>
+              <span><b>🎯 Standard</b><i>~5 min</i></span></label>
             <label class="preset"><input type="radio" name="preset-lc" value="approfondi" />
-              <span><b>Approfondi</b><i>~9 min</i></span></label>
+              <span><b>🔎 Complète</b><i>~9 min</i></span></label>
           </div>
         </div>
         <button class="run" id="run-lc" type="submit">
@@ -806,6 +821,16 @@
 
 <script>
 const $ = s => document.querySelector(s);
+// Les suggestions ne lancent RIEN : elles remplissent le champ et rendent la main. Lancer
+// a leur place depenserait sur un clic d'exploration, ce que personne n'a demande.
+document.querySelectorAll('#suggestions-nf button').forEach(b => {
+  b.addEventListener('click', () => {
+    const champ = $('#seed');
+    champ.value = b.dataset.theme || '';
+    champ.focus();
+  });
+});
+
 const form=$('#form'), runBtn=$('#run'), runLabel=$('#run-label');
 const progress=$('#progress'), steps=$('#steps'), results=$('#results'),
       tbody=$('#tbody'), rcount=$('#rcount'), empty=$('#empty'), errbox=$('#errbox');
@@ -1216,7 +1241,7 @@ form.addEventListener('submit',e=>{
   steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
   errbox.classList.remove('on'); errbox.textContent='';
   empty.style.display='none'; progress.classList.add('on');
-  runBtn.disabled=true; runLabel.textContent='Scout en cours…';
+  runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
 
@@ -1941,7 +1966,7 @@ const VUE_NF = {
     steps.innerHTML=''; tbody.innerHTML=''; results.classList.remove('on');
     errbox.classList.remove('on'); errbox.textContent='';
     empty.style.display='none'; progress.classList.add('on');
-    runBtn.disabled=true; runLabel.textContent='Scout en cours…';
+    runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
     const ic=runBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ es=e; },
@@ -1951,7 +1976,7 @@ const VUE_NF = {
   erreur(m){ errbox.textContent='Erreur : '+m; errbox.classList.add('on'); },
   apres(){
     progress.classList.remove('on');
-    runBtn.disabled=false; runLabel.textContent='Lancer le scout';
+    runBtn.disabled=false; runLabel.textContent='Trouver les niches';
     const sp=runBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
     if(!tbody.children.length && !errbox.classList.contains('on')) empty.style.display='block';
   },
@@ -2234,7 +2259,16 @@ const AIDE = {
       recherche d'Amazon, puis va observer les livres déjà en place sur les meilleurs d'entre
       eux. Vous obtenez un tableau classé, du plus prometteur au moins prometteur.</p>
 
-      <h3>Le champ « Graine »</h3>
+      <h3>Ce qu'est un bon résultat, et l'ordre de lecture</h3>
+      <p>Regardez d'abord le <strong>BSR</strong> : s'il passe sous 10 000 chez au moins un
+      concurrent, c'est la preuve que le sujet se vend. Puis le nombre de concurrents
+      réellement installés dessus : peu de concurrents sur un sujet qui vend, c'est de la
+      place à prendre. Le score en tête de ligne résume ces deux lectures — il vous dit si
+      le rayon est vivant, <strong>il ne classe pas la qualité d'une niche</strong>, et un
+      résultat en rouge n'est pas une erreur de l'outil : c'est un signal pour passer à la
+      suivante.</p>
+
+      <h3>Le champ « Thématique »</h3>
       <p>Tapez un domaine <strong>large</strong>, en un à trois mots : <em>sommeil</em>,
       <em>jardinage urbain</em>, <em>reconversion</em>. L'IA part de ce mot et cherche
       <strong>à côté</strong> : si vous saisissez déjà un sujet très précis, vous bridez la

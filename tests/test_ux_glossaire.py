@@ -65,12 +65,17 @@ def test_duree_reelle_annoncee():
         "la promesse n'est vraie que si l'interface passe par POST /api/jobs")
 
 
-def test_panneau_aide_repliable_present():
-    """Panneau repliable, ouvert la première fois : à quoi sert l'outil, ce qu'est un bon
-    résultat, l'ordre de lecture des colonnes."""
+def test_l_aide_reste_atteignable_apres_le_retrait_du_pave_permanent():
+    """Le pavé permanent « Comment lire ces résultats ? » a été retiré le 2026-10-02 : ouvert
+    en haut de page, il repoussait le champ principal sous la ligne de flottaison et se
+    lisait comme un mode d'emploi. Son CONTENU n'a pas été supprimé — il a rejoint l'aide
+    contextuelle par onglet (pastille « ? », §2.9), où il arrive au moment où l'on en a
+    besoin. Ce test interdit de perdre le contenu en route."""
     assert "<details" in HTML, "un élément repliable natif (<details>) est attendu"
     for extrait in ("à quoi sert", "bon résultat", "ordre de lecture"):
         assert extrait.lower() in HTML.lower(), f"contenu d'aide manquant : {extrait}"
+    assert "id=\"aide-corps\"" in HTML or "AIDE" in HTML, (
+        "le contenu doit vivre dans l'aide contextuelle, pas dans un pavé permanent")
 
 
 def test_consommation_mensuelle_affichee():
