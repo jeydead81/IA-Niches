@@ -2001,7 +2001,7 @@ async function chargerHistorique(){
   }
   histListe.innerHTML = HISTORIQUE.length
     ? HISTORIQUE.map(ligneAnalyse).join('')
-    : '<p class="hist-vide">Aucune analyse pour l'instant.</p>';
+    : '<p class="hist-vide">Aucune analyse pour l’instant.</p>';
   histSection.hidden = false;
   histListe.querySelectorAll('.hist-ouvrir').forEach(b => {
     b.addEventListener('click', () => rouvrirAnalyse(b.dataset.id));
@@ -2499,8 +2499,8 @@ function chargerUsage(){
         body: JSON.stringify({mot_de_passe: $('#cloture-mdp').value})}).catch(()=>null);
       if(rep && rep.status === 204){ location.reload(); return; }
       msg.textContent = rep && rep.status === 401
-        ? 'Mot de passe incorrect — rien n'a été supprimé.'
-        : 'Clôture impossible pour le moment — rien n'a été supprimé.';
+        ? 'Mot de passe incorrect — rien n’a été supprimé.'
+        : 'Clôture impossible pour le moment — rien n’a été supprimé.';
     });
   }
 
