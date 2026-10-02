@@ -68,3 +68,48 @@ def test_le_tri_par_BSR_ignore_les_niches_SANS_bsr_plutot_que_de_les_mettre_en_t
     rows = [_niche(niche="connu", bsr_best=500), _niche(niche="inconnu", bsr_best=None)]
     tries = appeler_json("trierNiches", rows, "bsr", dependances=())
     assert [n["niche"] for n in tries] == ["connu", "inconnu"]
+
+
+# ── Fiche niche (2026-10-02) ───────────────────────────────────────────────────
+#
+# Le cœur du produit : ce qu'un auteur lit avant de décider d'écrire. Elle ne doit INVENTER
+# aucun seuil — « pourquoi cette niche ? » rejoue exactement ceux du scoring (10 000 pour la
+# preuve de vente, 30 et 50 pour la concurrence, le critère « place à prendre »). Une phrase
+# d'explication qui reposerait sur un seuil maison dirait autre chose que la note affichée
+# juste au-dessus, et c'est l'utilisateur qui paierait l'incohérence.
+
+def test_pourquoi_lit_la_PREUVE_DE_VENTE_au_seuil_du_scoring():
+    cartes = appeler_json("pourquoiNiche", _niche(bsr_best=964),
+                            dependances=("fmt", "nonMesuree"))
+    demande = [c for c in cartes if c["cle"] == "demande"][0]
+    assert demande["ton"] == "bon" and "964" in demande["texte"]
+
+    faible = appeler_json("pourquoiNiche", _niche(bsr_best=48000),
+                           dependances=("fmt", "nonMesuree"))
+    assert [c for c in faible if c["cle"] == "demande"][0]["ton"] == "neutre"
+
+
+def test_pourquoi_signale_une_concurrence_INSTALLEE():
+    cartes = appeler_json("pourquoiNiche", _niche(n_concurrents_cibles=98),
+                           dependances=("fmt", "nonMesuree"))
+    conc = [c for c in cartes if c["cle"] == "concurrence"][0]
+    assert conc["ton"] == "alerte" and "98" in conc["texte"]
+
+
+def test_pourquoi_ne_conclut_RIEN_quand_la_concurrence_n_est_pas_mesuree():
+    """Règle 3 : une absence de mesure n'est pas un verdict de marché."""
+    cartes = appeler_json("pourquoiNiche", _niche(concurrence_mesuree=False),
+                           dependances=("fmt", "nonMesuree"))
+    assert [c["cle"] for c in cartes] == ["non_mesuree"]
+    assert "pas" in cartes[0]["texte"].lower()
+
+
+def test_la_fiche_porte_les_quatre_chiffres_et_le_retour():
+    html = appeler("ficheNiche", _niche(),
+                   dependances=("esc", "fmt", "fmtDec", "grade", "verdict", "nonMesuree",
+                                "pourquoiNiche"))
+    assert "Retour aux résultats" in html
+    assert "Sommeil et insomnie" in html
+    for valeur in ("7,4", "10,0", "964", "98"):
+        assert valeur in html
+    assert "Pourquoi cette niche" in html

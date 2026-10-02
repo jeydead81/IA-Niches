@@ -468,6 +468,32 @@
   /* Accueil : UNE information principale (que cherchez-vous), puis l'action. Le pave
      explicatif permanent est parti dans l'aide par onglet -- il repoussait le champ sous la
      ligne de flottaison et se lisait comme un mode d'emploi, pas comme un produit. */
+  .fiche{padding:20px 22px}
+  .fiche-retour{background:none;border:none;padding:0 0 10px;font:inherit;font-size:13px;
+    color:var(--secondary);cursor:pointer}
+  .fiche-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;
+    flex-wrap:wrap}
+  .fiche-tete h2{margin:0;font-size:24px;letter-spacing:-.3px;color:var(--heading)}
+  .fiche-tete .cat{margin:2px 0 0;color:var(--text-muted);font-size:13px}
+  .fiche-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0 4px}
+  .fiche-kpi{background:#F8FAFC;border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+  .fiche-kpi i{font-style:normal;font-size:11px;letter-spacing:.3px;text-transform:uppercase;
+    color:var(--text-muted)}
+  .fiche-kpi b{font-family:var(--mono);font-size:20px;color:var(--heading);font-weight:600}
+  .fiche-h{margin:20px 0 8px;font-size:15px;color:var(--heading)}
+  .pq-liste{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .pq{border:1px solid var(--border);border-left-width:3px;border-radius:0 10px 10px 0;
+    padding:10px 12px;background:var(--surface)}
+  .pq strong{display:block;font-size:13.5px;color:var(--heading);margin-bottom:3px}
+  .pq p{margin:0;font-size:12.5px;line-height:1.5;color:#334155}
+  .pq-bon{border-left-color:#16A34A}
+  .pq-neutre{border-left-color:#F59E0B}
+  .pq-alerte{border-left-color:#DC2626}
+  @media (max-width:760px){
+    .fiche-kpis{grid-template-columns:repeat(2,1fr)}
+    .pq-liste{grid-template-columns:1fr}
+  }
   .rsum{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
   .tri{font-size:12.5px;color:var(--text-muted);display:flex;align-items:center;gap:6px}
   .tri select{font:inherit;font-size:12.5px;padding:4px 8px;border:1px solid var(--border);
@@ -658,6 +684,8 @@
     </div>
 
     <div class="errbox" id="errbox" role="alert" aria-live="assertive"></div>
+
+    <section class="panel fiche" id="fiche" hidden aria-live="polite"></section>
 
     <section class="results panel" id="results" style="border:none;background:none;box-shadow:none">
       <div class="rsum">
@@ -1274,6 +1302,77 @@ function trierNiches(rows, cle){
   });
 }
 
+// « Pourquoi cette niche ? » — PUR, et sans AUCUN seuil maison : 10 000 pour la preuve de
+// vente, 30 et 50 pour la concurrence, « place a prendre » pour le critere 3. Ce sont
+// exactement ceux du scoring (§4.1). Une explication reposant sur d'autres seuils dirait
+// autre chose que la note affichee juste au-dessus, et c'est l'auteur qui paierait
+// l'incoherence.
+function pourquoiNiche(r){
+  if(nonMesuree(r)) return [{cle:'non_mesuree', ton:'alerte', titre:'Rayon non mesuré',
+    texte:"La recherche Amazon n'a pas répondu pour cette niche. Les compteurs sont à zéro "
+        + "faute de mesure, pas parce que le rayon est vide — relancez avant de conclure."}];
+  const cartes = [];
+  if(r.bsr_best == null){
+    cartes.push({cle:'demande', ton:'neutre', titre:'Preuve de vente absente',
+      texte:"Aucun classement de ventes n'a pu être lu sur le top du rayon."});
+  }else if(r.bsr_best < 10000){
+    cartes.push({cle:'demande', ton:'bon', titre:'Demande réelle',
+      texte:'Au moins un livre du top se vend bien : meilleur classement ' + fmt(r.bsr_best)
+          + ' sur Amazon. Sous 10 000, la preuve est solide.'});
+  }else{
+    cartes.push({cle:'demande', ton:'neutre', titre:'Demande à confirmer',
+      texte:'Le meilleur classement du rayon est ' + fmt(r.bsr_best) + ' : au-delà de '
+          + '10 000, la preuve que le sujet se vend est plus faible.'});
+  }
+  const n = r.n_concurrents_cibles;
+  if(n > 50){
+    cartes.push({cle:'concurrence', ton:'alerte', titre:'Concurrence installée',
+      texte: fmt(n) + ' livres visent déjà exactement cette requête. Un angle plus '
+          + 'spécifique sera plus accessible que le mot-clé général.'});
+  }else if(n > 30){
+    cartes.push({cle:'concurrence', ton:'neutre', titre:'Concurrence présente',
+      texte: fmt(n) + ' livres visent cette requête : la place existe, mais elle se dispute.'});
+  }else{
+    cartes.push({cle:'concurrence', ton:'bon', titre:'Peu de concurrents ciblés',
+      texte: fmt(n) + ' livres seulement visent cette requête précise.'});
+  }
+  if(r.criteres_bsr_ok){
+    cartes.push({cle:'opportunite', ton:'bon', titre:'Place à prendre',
+      texte:"Le rayon vend, et l'un des livres du top est déjà loin derrière : il reste de "
+          + "la place devant lui."});
+  }
+  return cartes;
+}
+
+// La fiche. Les blocs existants (prix, suggestions, verdict, concurrents, mots-cles) sont
+// REUTILISES tels quels : le moteur ne change pas, c'est l'ordre de lecture qui change.
+function ficheNiche(r){
+  const nm = nonMesuree(r);
+  const g = nm ? 'n' : grade(r.global_score);
+  const tuile = (libelle, valeur) =>
+    '<div class="fiche-kpi"><i>' + libelle + '</i><b>' + valeur + '</b></div>';
+  const carte = c =>
+    '<div class="pq pq-' + c.ton + '"><strong>' + esc(c.titre) + '</strong>'
+    + '<p>' + esc(c.texte) + '</p></div>';
+  return '<button type="button" class="fiche-retour" id="fiche-retour">‹ Retour aux résultats</button>'
+    + '<div class="fiche-tete">'
+      + '<div><h2>' + esc(r.niche) + '</h2>'
+      + '<p class="cat">' + esc(r.categorie || '') + '</p></div>'
+      + '<span class="nicheC-note"><span class="pill ' + g + '">'
+      + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
+      + '<span class="verdict ' + g + '">' + (nm ? 'Non mesurée' : verdict(r.global_score))
+      + '</span></span>'
+    + '</div>'
+    + '<div class="fiche-kpis">'
+      + tuile('Demande', nm ? '—' : fmtDec(r.demande, 1))
+      + tuile('Accessibilité', nm ? '—' : fmtDec(r.penetration, 1))
+      + tuile('BSR meilleur', fmt(r.bsr_best))
+      + tuile('Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles))
+    + '</div>'
+    + '<h3 class="fiche-h">Pourquoi cette niche ?</h3>'
+    + '<div class="pq-liste">' + pourquoiNiche(r).map(carte).join('') + '</div>';
+}
+
 let LIGNES_NF = [], THEMATIQUE_NF = '';
 
 function render(rows){
@@ -1294,44 +1393,52 @@ function dessinerCartesNf(){
   const hote = $('#cartes-nf');
   hote.innerHTML = '';
   trierNiches(LIGNES_NF, $('#tri-nf').value).forEach(r => {
-    const nm = nonMesuree(r);
-    const kws=(r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
-    const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
-        La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
-        et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
-        Le score n'est pas exploitable — à relancer.</p>` : '';
     const carte = document.createElement('article');
     carte.className = 'nicheC';
-    carte.innerHTML = `
-      <button type="button" class="nicheC-tete" aria-expanded="false">${carteNicheTete(r)}</button>
-      <div class="nicheC-corps">
-        ${alerteNm}
-        ${blocSuggestions(r)}
-        ${blocPrix(r)}
-        <div class="histslot"></div>
-        <div class="verdictslot" aria-live="polite">${verdictSlot(r)}</div>
-        <p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>
-        ${blocConcurrents(r)}
-        <p class="dl">Données détaillées</p>
-        <div class="chips"><span class="chip">BSR moyen du top : ${fmt(r.bsr_top5_avg)}</span>
-          <span class="chip">Livres sponsorisés écartés : ${fmt(r.n_sponsored)}</span>
-          ${r.criteres_bsr_ok ? '<span class="chip">Critères BSD §4.1 réunis</span>' : ''}</div>
-      </div>`;
-    const tete = carte.querySelector('.nicheC-tete');
-    let histCharge = false;
-    tete.addEventListener('click', () => {
-      const ouvert = carte.classList.toggle('open');
-      tete.setAttribute('aria-expanded', ouvert);
-      // Chargé à l'ouverture seulement : inutile d'interroger l'historique de dix niches
-      // que l'utilisateur ne dépliera jamais.
-      if(ouvert && !histCharge){
-        histCharge = true;
-        loadHistorique(r.niche, carte.querySelector('.histslot'));
-      }
-    });
-    brancherActions(r, carte);
+    carte.innerHTML = '<button type="button" class="nicheC-tete">'
+      + carteNicheTete(r) + '</button>';
+    carte.querySelector('.nicheC-tete').addEventListener('click', () => ouvrirFiche(r));
     hote.appendChild(carte);
   });
+}
+
+// La fiche REMPLACE la liste au lieu de se deplier dedans : c'est l'ecran ou l'on decide
+// d'ecrire ou non, il merite la page entiere. Les blocs du moteur sont reutilises tels
+// quels -- rien n'est recalcule, rien n'est perdu, seul l'ordre de lecture change.
+function ouvrirFiche(r){
+  const nm = nonMesuree(r);
+  const kws = (r.satellite_keywords||[]).map(k=>`<span class="chip">${esc(k)}</span>`).join('')
+    || '<span class="mut">—</span>';
+  const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
+      La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
+      et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
+      Le score n'est pas exploitable — à relancer.</p>` : '';
+  const fiche = $('#fiche');
+  fiche.innerHTML = ficheNiche(r)
+    + alerteNm
+    + `<div class="verdictslot" aria-live="polite">${verdictSlot(r)}</div>`
+    + blocSuggestions(r)
+    + blocPrix(r)
+    + '<div class="histslot"></div>'
+    + `<p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>`
+    + blocConcurrents(r)
+    + '<details class="avance"><summary>Données détaillées</summary><div class="chips">'
+      + `<span class="chip">BSR moyen du top : ${fmt(r.bsr_top5_avg)}</span>`
+      + `<span class="chip">Livres sponsorisés écartés : ${fmt(r.n_sponsored)}</span>`
+      + (r.criteres_bsr_ok ? '<span class="chip">Critères BSR §4.1 réunis</span>' : '')
+      + '</div></details>';
+  fiche.hidden = false;
+  results.classList.remove('on');
+  $('#fiche-retour').addEventListener('click', fermerFiche);
+  brancherActions(r, fiche);
+  loadHistorique(r.niche, fiche.querySelector('.histslot'));
+  fiche.scrollIntoView({block:'start'});
+}
+
+function fermerFiche(){
+  const fiche = $('#fiche');
+  fiche.hidden = true; fiche.innerHTML = '';
+  results.classList.add('on');
 }
 
 $('#tri-nf').addEventListener('change', dessinerCartesNf);
@@ -1340,6 +1447,7 @@ form.addEventListener('submit',e=>{
   e.preventDefault();
   if(es) es.close();
   steps.innerHTML=''; $('#cartes-nf').innerHTML=''; results.classList.remove('on');
+  fermerFiche();
   errbox.classList.remove('on'); errbox.textContent='';
   empty.style.display='none'; progress.classList.add('on');
   runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
@@ -2066,6 +2174,7 @@ const VUE_NF = {
   avant(){
     if(es) es.close();
     steps.innerHTML=''; $('#cartes-nf').innerHTML=''; results.classList.remove('on');
+  fermerFiche();
     errbox.classList.remove('on'); errbox.textContent='';
     empty.style.display='none'; progress.classList.add('on');
     runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
