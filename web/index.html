@@ -468,6 +468,24 @@
   /* Accueil : UNE information principale (que cherchez-vous), puis l'action. Le pave
      explicatif permanent est parti dans l'aide par onglet -- il repoussait le champ sous la
      ligne de flottaison et se lisait comme un mode d'emploi, pas comme un produit. */
+  /* Coquille : une barre laterale etroite, le reste a la lecture. Les trois MOTEURS
+     restent des onglets a l'interieur d'Explorer -- en faire des entrees de navigation
+     aurait suggere trois produits distincts. */
+  .app{display:grid;grid-template-columns:168px minmax(0,1fr);gap:26px;align-items:start}
+  .nav{position:sticky;top:24px;display:flex;flex-direction:column;gap:2px}
+  .nav-item{font:inherit;font-size:13.5px;text-align:left;background:none;border:none;
+    padding:8px 11px;border-radius:8px;color:var(--text-muted);cursor:pointer}
+  .nav-item:hover{background:#E2E8F0;color:var(--heading)}
+  .nav-item.actif{background:var(--surface);color:var(--heading);font-weight:600;
+    box-shadow:var(--shadow)}
+  .nav-pied{margin-top:14px;padding-top:12px;border-top:1px solid var(--border);
+    font-size:12px;color:var(--text-muted);line-height:1.4}
+  .app-main{min-width:0}
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr;gap:14px}
+    .nav{position:static;flex-direction:row;flex-wrap:wrap;align-items:center}
+    .nav-pied{margin:0 0 0 auto;padding:0;border:none}
+  }
   .fiche{padding:20px 22px}
   .fiche-retour{background:none;border:none;padding:0 0 10px;font:inherit;font-size:13px;
     color:var(--secondary);cursor:pointer}
@@ -598,10 +616,19 @@
     <div class="compte-bar" id="compte-bar" hidden>
       <button type="button" id="compte-email" aria-haspopup="true" aria-expanded="false"></button>
       <button type="button" id="btn-deconnexion">Se déconnecter</button>
-      <div class="compte-menu" id="compte-menu" hidden></div>
     </div>
   </header>
 
+  <div class="app">
+  <aside class="nav" id="nav" hidden>
+    <button type="button" class="nav-item actif" data-vue="explorer">Explorer</button>
+    <button type="button" class="nav-item" data-vue="analyses">Analyses</button>
+    <button type="button" class="nav-item" data-vue="compte">Compte</button>
+    <div class="nav-pied"><span id="nav-usage"></span></div>
+  </aside>
+  <div class="app-main">
+
+  <section id="vue-explorer">
   <section class="hero">
     <h2>Trouvez votre prochaine niche KDP</h2>
     <p>Explorez Amazon et identifiez les rayons où la demande existe et où la place reste
@@ -615,15 +642,6 @@
     <button type="button" class="tab" id="tab-lc" role="tab" aria-selected="false">Low-content</button>
   </div>
 
-  <section id="historique" class="panel hist" hidden>
-    <div class="hist-tete">
-      <h2>Mes analyses</h2>
-      <button type="button" id="hist-rafraichir" class="btn-act">Rafraîchir</button>
-    </div>
-    <p class="hist-note">Vos analyses passées, relues depuis votre compte. Les rouvrir ne
-      relance rien et ne coûte rien : c'est le résultat déjà payé.</p>
-    <div id="hist-liste"></div>
-  </section>
 
   <div id="view-nf">
     <div class="panel controls">
@@ -720,7 +738,7 @@
 
     <div class="panel empty" id="empty">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
-      <div>Entre une graine et lance le scout pour voir les niches classées.</div>
+      <div>Entrez une thématique et lancez l'analyse pour voir les niches.</div>
     </div>
   </div>
 
@@ -867,8 +885,34 @@
 
     <div class="panel empty" id="empty-lc">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
-      <div>Saisis une graine (ou laisse vide) et lance le scout pour voir ce qu'Amazon complète.</div>
+      <div>Entrez une thématique (ou laissez vide) et lancez l'analyse pour voir ce qu'Amazon complète.</div>
     </div>
+  </div>
+
+  </section>
+
+  <section id="vue-analyses" hidden>
+  <section class="panel hist">
+    <div class="hist-tete">
+      <h2>Mes analyses</h2>
+      <button type="button" id="hist-rafraichir" class="btn-act">Rafraîchir</button>
+    </div>
+    <p class="hist-note">Vos analyses passées, relues depuis votre compte. Les rouvrir ne
+      relance rien et ne coûte rien : c'est le résultat déjà payé.</p>
+    <div id="hist-liste"></div>
+  </section>
+  </section>
+
+  <section id="vue-compte" hidden>
+    <section class="panel">
+      <h2 class="fiche-h" style="margin-top:0">Compte</h2>
+      <p class="hist-note">Connecté en tant que <strong id="compte-email-txt"></strong>.</p>
+      <div id="compte-reglages"></div>
+      <button type="button" id="btn-deconnexion-2" class="btn-act">Se déconnecter</button>
+    </section>
+  </section>
+
+  </div>
   </div>
 
   <footer>IA-Niches · moteur local · données Amazon.fr</footer>
@@ -1922,7 +1966,7 @@ function fmtDate(ts){
 // une absence de mesure presentee comme un verdict (regle 3).
 function ligneAnalyse(job){
   const p = job.params || {};
-  const sujet = p.seed || p.graine || p.format_cle || p.sous_genre || 'sans graine';
+  const sujet = p.seed || p.graine || p.format_cle || p.sous_genre || 'sans thématique';
   const n = Array.isArray(job.resultat) ? job.resultat.length : 0;
   const ouvrable = job.statut === 'termine' && n > 0;
   const etat = ouvrable ? n + ' niche(s)'
@@ -2292,6 +2336,8 @@ function chargerUsage(){
     if(!el || !u) return;
     el.hidden = false;
     el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s)`;
+    const pied = $('#nav-usage');
+    if(pied) pied.innerHTML = `<strong>${fmt(u.n_analyses)}</strong> analyse(s)<br>ce mois-ci`;
   }).catch(()=>{});
 }
 
@@ -2363,6 +2409,8 @@ function chargerUsage(){
     barre.hidden = false;
     emailAffiche.textContent = adresse;
     mdp.value = '';
+    $('#nav').hidden = false;
+    montrerVue('explorer');
     chargerUsage();
     chargerFormatsLc();
     chargerSousGenres();
@@ -2374,7 +2422,7 @@ function chargerUsage(){
 
   function sortir(){
     barre.hidden = true;
-    $('#compte-menu').hidden = true;
+    $('#nav').hidden = true;
     histSection.hidden = true; histListe.innerHTML = ''; HISTORIQUE = [];
     ecran.classList.add('on');
     inscription = false;
@@ -2382,20 +2430,41 @@ function chargerUsage(){
     email.focus();
   }
 
-  // ── Menu de compte ──────────────────────────────────────────────────────────
-  const menuCompte = $('#compte-menu');
+  // ── Navigation ──────────────────────────────────────────────────────────────
+  // Trois vues, une seule visible. Les onglets des trois moteurs vivent DANS Explorer :
+  // ce sont trois façons d'analyser, pas trois produits.
+  const VUES_NAV = ['explorer', 'analyses', 'compte'];
 
-  function fermerMenuCompte(){
-    menuCompte.hidden = true;
-    emailAffiche.setAttribute('aria-expanded', 'false');
+  function montrerVue(cle){
+    VUES_NAV.forEach(v => {
+      const section = $('#vue-' + v);
+      if(section) section.hidden = v !== cle;
+    });
+    document.querySelectorAll('.nav-item').forEach(b =>
+      b.classList.toggle('actif', b.dataset.vue === cle));
+    // L'historique se relit a l'ouverture : un run lance depuis Explorer doit apparaitre
+    // sans que l'utilisateur ait a cliquer « Rafraichir ».
+    if(cle === 'analyses') chargerHistorique();
+    if(cle === 'compte'){
+      $('#compte-email-txt').textContent = emailAffiche.textContent;
+      $('#compte-reglages').innerHTML = menuCompteHtml();
+      brancherReglagesCompte();
+    }
   }
 
-  emailAffiche.addEventListener('click', () => {
-    if(!menuCompte.hidden){ fermerMenuCompte(); return; }
-    menuCompte.innerHTML = menuCompteHtml();
-    menuCompte.hidden = false;
-    emailAffiche.setAttribute('aria-expanded', 'true');
+  document.querySelectorAll('.nav-item').forEach(b =>
+    b.addEventListener('click', () => montrerVue(b.dataset.vue)));
+  $('#btn-deconnexion-2').addEventListener('click', async () => {
+    await fetch('/api/auth/deconnexion', {method:'POST'}).catch(()=>{});
+    location.reload();
+  });
 
+  // ── Reglages du compte ──────────────────────────────────────────────────────
+  // Le menu deroulant sur l'adresse a vecu : les reglages vivent dans la vue « Compte »,
+  // une seule fois. Deux endroits qui injectent le MEME markup, ce sont deux formulaires
+  // portant les memes ids au meme instant, et `querySelector` sert alors silencieusement
+  // le mauvais champ.
+  function brancherReglagesCompte(){
     $('#form-mdp').addEventListener('submit', async ev => {
       ev.preventDefault();
       const msg = $('#mdp-msg');
@@ -2433,12 +2502,11 @@ function chargerUsage(){
         ? 'Mot de passe incorrect — rien n'a été supprimé.'
         : 'Clôture impossible pour le moment — rien n'a été supprimé.';
     });
-  });
+  }
 
-  document.addEventListener('click', ev => {
-    if(!menuCompte.hidden && !menuCompte.contains(ev.target) && ev.target !== emailAffiche)
-      fermerMenuCompte();
-  });
+  // L'adresse en en-tete mene a la vue Compte plutot que d'ouvrir un menu : une seule
+  // destination, et elle est atteignable aussi depuis la navigation.
+  emailAffiche.addEventListener('click', () => montrerVue('compte'));
 
   $('#btn-deconnexion').addEventListener('click', async ()=>{
     // Déconnexion côté SERVEUR, pas seulement effacement du cookie : sinon le jeton
@@ -2488,7 +2556,7 @@ const AIDE = {
       <h3>Le réglage « Niches à analyser »</h3>
       <p>Il fixe combien d'idées seront réellement confrontées à Amazon — c'est le seul
       réglage qui pèse sur la durée et sur votre consommation. Restez à <strong>4 ou 5</strong>
-      pour tester une graine nouvelle ; montez seulement quand la graine donne déjà de bons
+      pour tester une thématique nouvelle ; montez seulement quand elle donne déjà de bons
       résultats et qu'il faut départager plusieurs pistes.</p>
 
       <h3>Lire le tableau</h3>
@@ -2516,7 +2584,7 @@ const AIDE = {
       <p><strong>Cliquez sur une ligne</strong> pour ouvrir le détail : mises en garde,
       fourchette de prix du rayon, requêtes proches et liens vers les livres concurrents.
       Retenez une ou deux niches au maximum, allez taper la recherche vous-même sur
-      Amazon.fr, puis relancez la même graine deux ou trois semaines plus tard : l'outil
+      Amazon.fr, puis relancez la même thématique deux ou trois semaines plus tard : l'outil
       vous dira alors ce qui a bougé.</p>`,
     pieges: [
       "Une ligne grise « Non mesurée » n'est PAS une mauvaise niche : la recherche Amazon n'a pas répondu et tous les compteurs sont à zéro faute de mesure. Relancez avant de conclure.",
