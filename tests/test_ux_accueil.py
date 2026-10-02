@@ -57,3 +57,13 @@ def test_aucun_ecran_ne_promet_un_classement_par_POTENTIEL(html):
     qualité (AUC 0,43 sur le lot de validation, intervalle à cheval sur le hasard)."""
     assert "potentiel élevé" not in html.lower()
     assert "trier par potentiel" not in html.lower()
+
+
+def test_le_bouton_COMMENT_CA_MARCHE_ouvre_vraiment_l_aide(html):
+    """Signalé par Baptiste : le bouton du hero ne faisait rien. Il avait un identifiant et
+    aucun écouteur — exactement le défaut §5.26 (une chaîne présente dans le fichier ne
+    prouve rien sur ce qui est cliquable), reproduit par la refonte."""
+    assert 'id="hero-aide"' in html
+    debut = html.index("(function initAide(){")
+    assert "$('#hero-aide')" in html[debut:], \
+        "le bouton doit être branché sur l'ouverture de l'aide, pas seulement exister"

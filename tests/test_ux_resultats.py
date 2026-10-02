@@ -113,3 +113,30 @@ def test_la_fiche_porte_les_quatre_chiffres_et_le_retour():
     for valeur in ("7,4", "10,0", "964", "98"):
         assert valeur in html
     assert "Pourquoi cette niche" in html
+
+
+# ── Hiérarchie de la fiche (2026-10-02, second passage) ────────────────────────
+#
+# Verdict de Baptiste devant l'écran : « quand on regarde le screen on soupire, y'a aucune
+# hiérarchie ». C'était vrai : le titre proposé par l'IA — ce que l'auteur peut réellement
+# écrire — arrivait APRÈS un paragraphe d'analyse, dans la même taille que tout le reste, et
+# le prix du rayon se perdait au milieu d'une page de texte.
+
+def test_le_prix_du_rayon_est_une_TUILE_pas_une_ligne_perdue():
+    html = appeler("ficheNiche", _niche(prix_median=12.93, n_prix_connus=56),
+                   dependances=("esc", "fmt", "fmtEur", "fmtDec", "grade", "verdict",
+                                "nonMesuree", "pourquoiNiche"))
+    tuiles = html[html.index('class="fiche-kpis"'):html.index('class="fiche-h"')]
+    assert "Prix médian" in tuiles and "12,93" in tuiles
+
+
+def test_l_ANGLE_passe_AVANT_le_facteur_decisif():
+    """L'angle est ce que l'auteur peut écrire ; le facteur décisif est le raisonnement du
+    modèle. Mettre le raisonnement en premier, c'est faire lire l'outil avant le livre."""
+    verdict = {"verdict": "Go prudent", "confiance": 6, "facteur_decisif": "raisonnement long",
+               "angles": [{"angle": "a", "titre": "Mieux Dormir en 21 Jours",
+                           "sous_titre": "le protocole simple", "pourquoi": "parce que",
+                           "requete_principale": "mieux dormir", "requetes_secondaires": []}]}
+    html = appeler("verdictBlock", {"verdict": verdict}, dependances=("esc", "verdictGrade"))
+    assert html.index("Mieux Dormir en 21 Jours") < html.index("raisonnement long")
+    assert "Angle proposé par l’IA" in html or "Angle proposé par l'IA" in html
