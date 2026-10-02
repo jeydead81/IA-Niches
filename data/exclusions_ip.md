@@ -390,3 +390,23 @@ insta
 vuitton
 gabby
 dollhouse
+
+### Editeurs jeunesse et fabricants de jeux — 2026-10-02
+
+Trouve pendant l'etiquetage du lot 3 : « coloriage magique djeco » est sorti du tirage. Le
+corpus portait les licences de dessin anime (Disney, Pat'Patrouille...) mais AUCUN editeur
+ni fabricant de jeux, alors que ce sont eux qui remplissent l'autocomplete du coloriage et
+des cahiers d'activites. Aucun de ces termes n'a d'usage courant hors marque en francais.
+
+PAS d'entree `nathan`, deliberement : c'est d'abord un prenom, et « coloriage prenom
+Nathan » est une requete legitime et frequente. L'ajouter ecarterait en silence une
+categorie entiere du rayon — meme arbitrage que `bts` et `puma` plus haut. La marque Nathan
+reste donc non couverte. Voir tests/test_ip_editeurs_jeunesse.py.
+
+djeco
+ravensburger
+auzou
+usborne
+janod
+sentosphere
+lito jeunesse
