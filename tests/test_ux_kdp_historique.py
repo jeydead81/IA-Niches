@@ -270,3 +270,29 @@ def test_le_plafond_atteint_se_dit_et_ne_passe_pas_pour_une_panne():
     dépensé. Le dire évite que l'utilisateur relance en boucle."""
     assert "limite d'analyses pour ce mois-ci" in HTML
     assert "Rien n'a été lancé" in HTML
+
+
+def test_l_angle_est_annonce_comme_une_PROPOSITION_pas_un_concurrent():
+    """Question posée par Baptiste devant l'écran le 2026-10-02 : « ce titre, c'est une
+    proposition ou un livre concurrent ? »
+
+    C'est une proposition — `angles[].titre`, écrit par le modèle, qui n'existe nulle part
+    sur Amazon. L'écran l'affichait en gras, juste sous les chiffres mesurés du rayon, sans
+    rien qui distingue les deux. Confondre une suggestion de l'IA avec une référence
+    observée, c'est la règle 3 appliquée au texte : un auteur pourrait renoncer à son angle
+    en croyant qu'il est déjà pris, ou pire, croire qu'un titre a été vérifié sur Amazon."""
+    from tests.js_harness import appeler
+    verdict = {"verdict": "Go prudent", "confiance": 6,
+               "facteur_decisif": "demande prouvée, concurrence massive",
+               "angles": [{"angle": "a", "titre": "Stop aux Nuits Blanches",
+                           "sous_titre": "la méthode en 21 jours", "pourquoi": "parce que",
+                           "requete_principale": "mieux dormir",
+                           "requetes_secondaires": ["anxiété nocturne"]}]}
+    html = appeler("verdictBlock", {"verdict": verdict},
+                   dependances=("esc", "verdictGrade"))
+    assert "Stop aux Nuits Blanches" in html
+    bas = html.lower()
+    assert "proposé" in bas or "proposition" in bas, \
+        "rien ne dit que ce titre vient de l'IA"
+    assert "concurrent" not in bas.split("stop aux nuits blanches")[0][-200:], \
+        "et surtout rien ne doit laisser croire qu'il est observé sur Amazon"

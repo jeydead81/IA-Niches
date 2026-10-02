@@ -163,6 +163,8 @@
      jamais classees par qualite supposee : le score ne departage pas une bonne niche d'une
      mauvaise, mesure sur 95 rayons. Le titre de groupe porte le compte, la note dit ce que
      le groupe ne promet pas. */
+  .vangle-src{margin:10px 0 2px;font-size:11.5px;letter-spacing:.3px;text-transform:uppercase;
+    color:#6366F1;font-weight:600}
   .lc-groupe{grid-column:1/-1;display:grid;grid-template-columns:inherit;gap:inherit}
   .lc-groupe>h3{grid-column:1/-1;margin:14px 0 2px;font-size:15px;letter-spacing:.2px}
   .lc-groupe-note{grid-column:1/-1;margin:0 0 10px;color:#334155;font-size:13px;
@@ -905,6 +907,7 @@ function verdictBlock(r){
   if(a){
     const reqs=[a.requete_principale,...(a.requetes_secondaires||[])].filter(Boolean).map(esc).join(', ')||'—';
     angleHtml=`
+      <p class="vangle-src">Angle proposé par l’IA — titre à écrire, pas un livre existant</p>
       <p class="vangle"><strong>${esc(a.titre)}</strong> — <span class="sous">${esc(a.sous_titre)}</span></p>
       <p class="vrow"><strong>Pourquoi :</strong> ${esc(a.pourquoi)}</p>
       <p class="vrow"><strong>Requêtes :</strong> ${reqs}</p>`;
