@@ -11,7 +11,7 @@ import sqlite3
 import pytest
 
 from auth import (LONGUEUR_MIN_MOT_DE_PASSE, SESSION_TTL_S, EmailInvalide, EmailDejaPris,
-                  MotDePasseFaible, UserStore, normaliser_email)
+                  IdentifiantsInvalides, MotDePasseFaible, UserStore, normaliser_email)
 
 
 def _store(tmp_path, now=None):
@@ -196,3 +196,55 @@ def test_durcir_la_politique_ne_verrouille_pas_les_comptes_existants(tmp_path, m
     # …mais la création, elle, applique bien la nouvelle règle.
     with pytest.raises(MotDePasseFaible):
         s.creer_compte("nouveau@example.com", "dix-caract")
+
+
+# ── Changer de mot de passe · clôturer son compte (2026-10-02) ─────────────────
+#
+# §7 disait « aucun de ces chemins n'est codé ». Décision de Baptiste : les deux premiers le
+# sont désormais. Ils restent les routes les plus sensibles du produit — un défaut n'y donne
+# pas un mauvais chiffre mais une compromission (auth.py:1-5).
+
+def test_changer_le_mot_de_passe_exige_l_ANCIEN(tmp_path):
+    s = UserStore(tmp_path / "c.db")
+    s.creer_compte("a@b.fr", "ancien-mot-de-passe-long")
+    with pytest.raises(IdentifiantsInvalides):
+        s.changer_mot_de_passe("a@b.fr", "pas-le-bon-du-tout", "nouveau-mot-de-passe-long")
+    assert s.verifier("a@b.fr", "ancien-mot-de-passe-long") is not None, \
+        "un refus ne doit rien avoir écrit"
+
+
+def test_changer_le_mot_de_passe_applique_la_POLITIQUE(tmp_path):
+    s = UserStore(tmp_path / "c.db")
+    s.creer_compte("a@b.fr", "ancien-mot-de-passe-long")
+    with pytest.raises(MotDePasseFaible):
+        s.changer_mot_de_passe("a@b.fr", "ancien-mot-de-passe-long", "court")
+    assert s.verifier("a@b.fr", "ancien-mot-de-passe-long") is not None
+
+
+def test_changer_le_mot_de_passe_ferme_les_AUTRES_sessions(tmp_path):
+    """Un mot de passe changé pendant qu'une session volée reste ouverte ne protège de
+    rien — c'est le scénario même où on le change. La session COURANTE est épargnée : se
+    faire déconnecter de l'écran où l'on vient de taper son nouveau mot de passe se lirait
+    comme un échec."""
+    s = UserStore(tmp_path / "c.db")
+    c = s.creer_compte("a@b.fr", "ancien-mot-de-passe-long")
+    courante, autre = s.creer_session(c.user_id), s.creer_session(c.user_id)
+    s.changer_mot_de_passe("a@b.fr", "ancien-mot-de-passe-long", "nouveau-mot-de-passe-long",
+                           garder=courante)
+    assert s.session_valide(courante) is not None
+    assert s.session_valide(autre) is None
+    assert s.verifier("a@b.fr", "nouveau-mot-de-passe-long") is not None
+
+
+def test_cloturer_un_compte_exige_le_mot_de_passe_et_efface_tout(tmp_path):
+    s = UserStore(tmp_path / "c.db")
+    c = s.creer_compte("a@b.fr", "mot-de-passe-bien-long")
+    jeton = s.creer_session(c.user_id)
+    with pytest.raises(IdentifiantsInvalides):
+        s.supprimer_compte("a@b.fr", "pas-le-bon-du-tout")
+    assert s.compte(c.user_id) is not None, "un refus ne supprime rien"
+
+    s.supprimer_compte("a@b.fr", "mot-de-passe-bien-long")
+    assert s.compte(c.user_id) is None
+    assert s.session_valide(jeton) is None, "les sessions meurent avec le compte"
+    assert s.verifier("a@b.fr", "mot-de-passe-bien-long") is None

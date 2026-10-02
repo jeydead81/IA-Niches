@@ -163,6 +163,20 @@
      jamais classees par qualite supposee : le score ne departage pas une bonne niche d'une
      mauvaise, mesure sur 95 rayons. Le titre de groupe porte le compte, la note dit ce que
      le groupe ne promet pas. */
+  .compte-bar{position:relative}
+  #compte-email{background:none;border:none;font:inherit;color:inherit;cursor:pointer;
+    text-decoration:underline dotted;padding:2px 4px}
+  .compte-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:330px;
+    background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;
+    box-shadow:0 10px 30px rgba(15,23,42,.12);text-align:left}
+  .compte-menu h4{margin:0 0 6px;font-size:13.5px}
+  .compte-menu p{margin:0 0 8px;font-size:12.5px;color:#334155;line-height:1.45}
+  .compte-menu input{width:100%;margin-bottom:6px;padding:6px 8px;font:inherit;
+    border:1px solid var(--border);border-radius:6px}
+  .compte-menu form{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+  .compte-menu form:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+  .compte-menu .danger{color:#B91C1C}
+  .compte-msg{font-size:12.5px;margin:4px 0 0}
   .hist{margin-bottom:14px}
   .hist-tete{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .hist-tete h2{margin:0;font-size:16px}
@@ -515,8 +529,9 @@
     </div>
     <div class="usage-bar" id="usage-bar" hidden></div>
     <div class="compte-bar" id="compte-bar" hidden>
-      <span id="compte-email"></span>
+      <button type="button" id="compte-email" aria-haspopup="true" aria-expanded="false"></button>
       <button type="button" id="btn-deconnexion">Se déconnecter</button>
+      <div class="compte-menu" id="compte-menu" hidden></div>
     </div>
   </header>
 
@@ -1625,6 +1640,33 @@ function reprendreTravail(vue){
 // ================= Fiction =================
 const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>';
 
+// ================= Menu de compte =================
+// Changer son mot de passe et cloturer son compte n'existaient nulle part : §7 disait « un
+// mot de passe perdu est un compte perdu ». Decision de Baptiste le 2026-10-02 : les deux
+// routes existent desormais (POST /api/auth/mot-de-passe, POST /api/auth/compte/suppression).
+//
+// Le markup est une fonction PURE, appelee par les tests : la cloture est la seule action
+// IRREVERSIBLE du produit, et l'ecran doit nommer ce qui part comme ce qui reste. Consentir
+// a l'aveugle n'est pas consentir.
+function menuCompteHtml(){
+  return '<form id="form-mdp" autocomplete="off">'
+    + '<h4>Changer de mot de passe</h4>'
+    + '<p>Les autres appareils connectés seront déconnectés ; celui-ci reste ouvert.</p>'
+    + '<input type="password" id="mdp-ancien" placeholder="Mot de passe actuel" required>'
+    + '<input type="password" id="mdp-nouveau" placeholder="Nouveau (12 caractères minimum)" required>'
+    + '<button type="submit" class="btn-act">Changer</button>'
+    + '<p class="compte-msg" id="mdp-msg"></p></form>'
+    + '<form id="form-cloture" autocomplete="off">'
+    + '<h4 class="danger">Clôturer mon compte</h4>'
+    + '<p><strong>Irréversible.</strong> Sont effacés : votre compte, vos analyses passées et '
+    + 'leurs résultats, votre consommation et votre historique de niches. Reste en place : le '
+    + 'cache des rayons Amazon, partagé entre tous les comptes, qui ne contient aucune donnée '
+    + 'personnelle.</p>'
+    + '<input type="password" id="cloture-mdp" placeholder="Votre mot de passe" required>'
+    + '<button type="submit" class="btn-act danger">Clôturer définitivement</button>'
+    + '<p class="compte-msg" id="cloture-msg"></p></form>';
+}
+
 // ================= Mes analyses (historique) =================
 // « aucun moyen de recuperer ses analyses ? » : les runs sont TOUS en base avec leur
 // resultat complet, et `GET /api/jobs` les rend deja. Il manquait l'ecran -- l'interface ne
@@ -2096,12 +2138,71 @@ function chargerUsage(){
 
   function sortir(){
     barre.hidden = true;
+    $('#compte-menu').hidden = true;
     histSection.hidden = true; histListe.innerHTML = ''; HISTORIQUE = [];
     ecran.classList.add('on');
     inscription = false;
     rendre();
     email.focus();
   }
+
+  // ── Menu de compte ──────────────────────────────────────────────────────────
+  const menuCompte = $('#compte-menu');
+
+  function fermerMenuCompte(){
+    menuCompte.hidden = true;
+    emailAffiche.setAttribute('aria-expanded', 'false');
+  }
+
+  emailAffiche.addEventListener('click', () => {
+    if(!menuCompte.hidden){ fermerMenuCompte(); return; }
+    menuCompte.innerHTML = menuCompteHtml();
+    menuCompte.hidden = false;
+    emailAffiche.setAttribute('aria-expanded', 'true');
+
+    $('#form-mdp').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const msg = $('#mdp-msg');
+      msg.textContent = 'Changement en cours…';
+      const rep = await fetch('/api/auth/mot-de-passe', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ancien: $('#mdp-ancien').value, nouveau: $('#mdp-nouveau').value})
+      }).catch(()=>null);
+      if(rep && rep.status === 204){
+        msg.textContent = 'Mot de passe changé. Les autres appareils ont été déconnectés.';
+        $('#mdp-ancien').value = ''; $('#mdp-nouveau').value = '';
+      }else{
+        // Le serveur distingue « identité refusée » (401) de « mot de passe trop faible »
+        // (400) : les confondre ferait chercher au mauvais endroit.
+        const d = rep ? await rep.json().catch(()=>({})) : {};
+        msg.textContent = rep && rep.status === 401
+          ? 'Mot de passe actuel incorrect.'
+          : (d.detail || 'Changement impossible pour le moment.');
+      }
+    });
+
+    $('#form-cloture').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const msg = $('#cloture-msg');
+      // Confirmation EN PLUS du mot de passe : c'est la seule action irréversible du
+      // produit, et un clic de trop ne doit pas suffire.
+      if(!confirm('Clôturer définitivement le compte et effacer vos analyses ? '
+                  + 'Cette action est irréversible.')) return;
+      msg.textContent = 'Clôture en cours…';
+      const rep = await fetch('/api/auth/compte/suppression', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({mot_de_passe: $('#cloture-mdp').value})}).catch(()=>null);
+      if(rep && rep.status === 204){ location.reload(); return; }
+      msg.textContent = rep && rep.status === 401
+        ? 'Mot de passe incorrect — rien n'a été supprimé.'
+        : 'Clôture impossible pour le moment — rien n'a été supprimé.';
+    });
+  });
+
+  document.addEventListener('click', ev => {
+    if(!menuCompte.hidden && !menuCompte.contains(ev.target) && ev.target !== emailAffiche)
+      fermerMenuCompte();
+  });
 
   $('#btn-deconnexion').addEventListener('click', async ()=>{
     // Déconnexion côté SERVEUR, pas seulement effacement du cookie : sinon le jeton

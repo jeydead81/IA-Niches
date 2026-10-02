@@ -63,7 +63,7 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
 mais rien n'est déployé) : FastAPI (`web/server.py`, **1 171 lignes,
-18 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-09-14) + un unique
+20 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-02) + un unique
 `web/index.html` de **125 534 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
 page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
 page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
@@ -379,7 +379,7 @@ plafond entier — ce qui se lit comme une arnaque, pas comme une protection. **
 relever sans relever le plafond** : `tests/test_devis.py` tient les deux ensemble, ainsi
 que les `max` des champs HTML et les presets.
 
-### 2.6 Endpoints (`web/server.py`) — **18**
+### 2.6 Endpoints (`web/server.py`) — **20**
 
 **`GET /api/scout` et `GET /api/fiction` N'EXISTENT PLUS** (commit `5257323`). Deux chemins pour
 le même travail, dont un seul exercé, divergent — c'est arrivé aux contraintes de composition,
@@ -1500,10 +1500,15 @@ Section critique. Chacun a coûté un bug réel.
   facturation future, mais aucun montant n'est présenté à l'utilisateur et aucun encaissement
   n'existe. **En revanche l'authentification, les comptes et le multi-utilisateur EXISTENT
   désormais** (§2.1) — ne plus les lister ici.
-- **Réinitialisation de mot de passe, vérification d'adresse e-mail, changement d'e-mail,
-  suppression de compte, rôles ou administration** : aucun de ces chemins n'est codé. Un mot de
-  passe perdu est un compte perdu ; `INSCRIPTIONS_OUVERTES` se règle par `.env`, pas par une
-  interface. **Nuance depuis `notification.py`** : un e-mail SORTANT existe désormais (message
+- **Réinitialisation de mot de passe (par e-mail), vérification d'adresse, changement
+  d'e-mail, rôles ou administration** : aucun de ces chemins n'est codé. `INSCRIPTIONS_OUVERTES`
+  se règle par `.env`, pas par une interface. **Nuance depuis le 2026-10-02** : le CHANGEMENT
+  de mot de passe par un utilisateur connecté (`POST /api/auth/mot-de-passe`, exige l'ancien,
+  referme les autres sessions) et la CLÔTURE de compte (`POST /api/auth/compte/suppression`,
+  exige le mot de passe, efface travaux, consommation et historique — jamais le cache
+  mutualisé) existent, avec leur menu dans l'interface. Un mot de passe OUBLIÉ reste un compte
+  perdu : il n'y a ni envoi de lien, ni question secrète, et c'est délibéré — ce serait une
+  surface d'attaque sur un service sans adresse vérifiée. **Nuance depuis `notification.py`** : un e-mail SORTANT existe désormais (message
   de fin d'analyse, §2.16), éteint par défaut. Ça ne rend ni l'adresse vérifiée, ni le mot de
   passe récupérable — le seul envoi codé est transactionnel et ne porte aucun lien d'action.
 - **Support d'une autre place de marché qu'`amazon.fr`** : `marketplace.py` rassemble les

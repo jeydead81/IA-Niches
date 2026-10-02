@@ -296,3 +296,16 @@ def test_l_angle_est_annonce_comme_une_PROPOSITION_pas_un_concurrent():
         "rien ne dit que ce titre vient de l'IA"
     assert "concurrent" not in bas.split("stop aux nuits blanches")[0][-200:], \
         "et surtout rien ne doit laisser croire qu'il est observé sur Amazon"
+
+
+def test_le_menu_de_compte_dit_CE_QUI_EST_EFFACE_avant_de_cloturer():
+    """Clôturer est la seule action irréversible du produit. L'écran doit nommer ce qui part
+    (compte, analyses, consommation, historique) et ce qui reste (le cache mutualisé, qui ne
+    contient aucune donnée personnelle) — sinon l'utilisateur consent à l'aveugle."""
+    from tests.js_harness import appeler
+    html = appeler("menuCompteHtml", dependances=())
+    bas = html.lower()
+    assert "irréversible" in bas
+    for mot in ("analyses", "mot de passe"):
+        assert mot in bas
+    assert 'id="form-mdp"' in html and 'id="form-cloture"' in html

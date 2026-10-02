@@ -54,7 +54,8 @@ from categories import suggerer_categories  # noqa: E402
 from jobs import JobStore, recuperer_orphelins  # noqa: E402
 from usage import PlafondAtteint, UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
-from auth import (EmailDejaPris, EmailInvalide, MAX_INSCRIPTIONS_PAR_CLIENT,  # noqa: E402
+from auth import (EmailDejaPris, EmailInvalide, IdentifiantsInvalides,  # noqa: E402
+                  MAX_INSCRIPTIONS_PAR_CLIENT,
                   MotDePasseFaible, SESSION_TTL_S, TropDeTentatives, UserStore)
 
 @asynccontextmanager
@@ -552,6 +553,73 @@ def api_deconnexion(request: Request, response: Response) -> Response:
     """Ferme la session côté serveur ET retire le cookie. Effacer le seul cookie ne
     suffirait pas : le jeton resterait valide pour quiconque en aurait gardé copie."""
     UserStore(_USERS_DB).fermer_session(request.cookies.get(COOKIE_SESSION, ""))
+    reponse = Response(status_code=204)
+    reponse.delete_cookie(COOKIE_SESSION, path="/")
+    return reponse
+
+
+@app.post("/api/auth/mot-de-passe", status_code=204)
+async def api_changer_mot_de_passe(request: Request,
+                                   user_id: str = Depends(utilisateur_courant)) -> Response:
+    """Change le mot de passe. Exige l'ANCIEN — une session volée ne doit pas suffire à
+    verrouiller le propriétaire hors de son compte — et referme les AUTRES sessions, la
+    courante exceptée : on change son mot de passe précisément quand on craint qu'un jeton
+    traîne ailleurs, et un jeton vit 30 jours.
+
+    `origine_sure` comme l'inscription et la connexion : `SameSite=Lax` laisse partir le
+    cookie sur une navigation de premier niveau, et un changement de mot de passe déclenché
+    depuis un site tiers prendrait le compte."""
+    origine_sure(request)
+    body = await _corps_json(request)
+    ancien, nouveau = body.get("ancien"), body.get("nouveau")
+    if not isinstance(ancien, str) or not isinstance(nouveau, str):
+        raise HTTPException(status_code=400,
+                            detail="« ancien » et « nouveau » doivent être du texte")
+    magasin = UserStore(_USERS_DB)
+    compte = magasin.compte(user_id)
+    if compte is None:
+        raise HTTPException(status_code=401, detail="authentification requise")
+    try:
+        magasin.changer_mot_de_passe(compte.email, ancien, nouveau,
+                                     garder=request.cookies.get(COOKIE_SESSION, ""))
+    except IdentifiantsInvalides:
+        # 401 et non 400 : c'est l'identité qui est refusée, pas la forme de la requête.
+        raise HTTPException(status_code=401, detail="mot de passe actuel incorrect")
+    except MotDePasseFaible as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Response(status_code=204)
+
+
+@app.post("/api/auth/compte/suppression", status_code=204)
+async def api_supprimer_compte(request: Request,
+                               user_id: str = Depends(utilisateur_courant)) -> Response:
+    """Clôture le compte ET efface ce qu'il a produit : travaux, consommation, historique.
+
+    Exige le mot de passe : c'est la seule action irréversible du produit, une session volée
+    ne doit pas pouvoir l'exercer. Le cache des rayons Amazon n'est PAS touché — il est
+    mutualisé, ne porte aucun `user_id`, et ne contient que des pages publiques ; l'effacer
+    ferait repayer tous les autres comptes (§1).
+
+    Les trois effacements suivent la suppression du compte : si l'un d'eux échouait, le
+    compte serait déjà parti et l'utilisateur ne pourrait plus rien réclamer. On les fait
+    donc après, et une panne y laisse des lignes orphelines plutôt qu'un compte fantôme
+    encore ouvert."""
+    origine_sure(request)
+    body = await _corps_json(request)
+    mdp = body.get("mot_de_passe")
+    if not isinstance(mdp, str):
+        raise HTTPException(status_code=400, detail="« mot_de_passe » doit être du texte")
+    magasin = UserStore(_USERS_DB)
+    compte = magasin.compte(user_id)
+    if compte is None:
+        raise HTTPException(status_code=401, detail="authentification requise")
+    try:
+        magasin.supprimer_compte(compte.email, mdp)
+    except IdentifiantsInvalides:
+        raise HTTPException(status_code=401, detail="mot de passe incorrect")
+    JobStore(_JOBS_DB).supprimer_utilisateur(user_id)
+    UsageMeter(_USAGE_DB).supprimer_utilisateur(user_id)
+    NicheHistory(_HISTORY_DB).supprimer_utilisateur(user_id)
     reponse = Response(status_code=204)
     reponse.delete_cookie(COOKIE_SESSION, path="/")
     return reponse

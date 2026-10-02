@@ -241,3 +241,61 @@ def test_le_second_compte_n_adopte_rien(tmp_path, monkeypatch):
     client.post("/api/auth/deconnexion")
     _inscrire(client, "second@example.com")
     assert not client.get("/api/history", params={"niche": "ancienne"}).json()["passages"]
+
+
+# ── Changer de mot de passe · clôturer son compte (2026-10-02) ──────────────────────
+
+def test_changer_son_mot_de_passe_exige_l_ancien_et_referme_les_autres_sessions(
+        tmp_path, monkeypatch):
+    client, server = _client(monkeypatch, tmp_path)
+    _inscrire(client)
+    # Le jeton de l'inscription joue le « téléphone resté connecté » : `TestClient` n'a
+    # qu'un bocal à cookies, donc la connexion suivante le remplace dans le client, mais le
+    # premier jeton reste valide côté serveur — exactement la session qu'on veut voir mourir.
+    jeton_autre = client.cookies.get(server.COOKIE_SESSION)
+    client.post("/api/auth/connexion",
+                json={"email": "baptiste@example.com", "mot_de_passe": MDP})
+    assert client.cookies.get(server.COOKIE_SESSION) != jeton_autre
+
+    refus = client.post("/api/auth/mot-de-passe",
+                        json={"ancien": "pas-le-bon-du-tout", "nouveau": "un-nouveau-tres-long"})
+    assert refus.status_code == 401
+
+    ok = client.post("/api/auth/mot-de-passe",
+                     json={"ancien": MDP, "nouveau": "un-nouveau-mot-de-passe"})
+    assert ok.status_code == 204
+    assert client.get("/api/auth/moi").status_code == 200, "la session courante survit"
+    assert server.UserStore(server._USERS_DB).session_valide(jeton_autre) is None
+    assert client.post("/api/auth/connexion",
+                       json={"email": "baptiste@example.com",
+                             "mot_de_passe": "un-nouveau-mot-de-passe"}).status_code == 200
+
+
+def test_un_nouveau_mot_de_passe_FAIBLE_est_refuse_en_400(tmp_path, monkeypatch):
+    client, _ = _client(monkeypatch, tmp_path)
+    _inscrire(client)
+    r = client.post("/api/auth/mot-de-passe", json={"ancien": MDP, "nouveau": "court"})
+    assert r.status_code == 400
+    assert client.post("/api/auth/connexion",
+                       json={"email": "baptiste@example.com",
+                             "mot_de_passe": MDP}).status_code == 200
+
+
+def test_cloturer_son_compte_efface_le_compte_ET_ses_donnees(tmp_path, monkeypatch):
+    client, server = _client(monkeypatch, tmp_path)
+    _inscrire(client)
+    user_id = client.get("/api/auth/moi").json()["user_id"]
+    server.UsageMeter(server._USAGE_DB).enregistrer(user_id, type="scout", cout_usd=0.03,
+                                                    n_analyses=1)
+    server.JobStore(server._JOBS_DB).create("scout", {"seed": "x"}, user_id=user_id)
+
+    assert client.post("/api/auth/compte/suppression",
+                       json={"mot_de_passe": "pas-le-bon"}).status_code == 401
+    assert client.get("/api/auth/moi").status_code == 200, "un refus ne supprime rien"
+
+    r = client.post("/api/auth/compte/suppression", json={"mot_de_passe": MDP})
+    assert r.status_code == 204
+    assert client.get("/api/auth/moi").status_code == 401, "la session est morte"
+    assert server.UserStore(server._USERS_DB).compte(user_id) is None
+    assert server.JobStore(server._JOBS_DB).list_jobs(user_id=user_id) == []
+    assert server.UsageMeter(server._USAGE_DB).resume(user_id).n_analyses == 0

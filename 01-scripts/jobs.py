@@ -186,6 +186,16 @@ class JobStore:
         return [self._row_to_job(r) for r in rows]
 
     # ── lecture ──
+    def supprimer_utilisateur(self, user_id: str) -> int:
+        """Efface tout ce qu'un compte a produit ici. Rend le nombre de lignes supprimées.
+
+        Appelé par la clôture de compte (§2.1) : supprimer le compte sans ses données
+        laisserait des lignes orphelines, rattachées à un `user_id` dont plus personne ne
+        connaît l'adresse. Un compte qui n'a rien produit rend 0, sans lever — une clôture
+        ne doit pas échouer sur une absence."""
+        with self._conn() as cx:
+            return cx.execute("DELETE FROM jobs WHERE user_id=?", (user_id,)).rowcount
+
     @staticmethod
     def _row_to_job(row: tuple) -> Job:
         (jid, user_id, type_, params, statut, progression, resultat, cout, erreur,

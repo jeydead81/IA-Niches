@@ -139,6 +139,14 @@ ENDPOINTS = [
     ("POST /api/auth/deconnexion", "Ferme cette session cote serveur et retire le cookie. "
                                    "Les autres sessions du meme compte restent ouvertes."),
     ("GET  /api/auth/moi", "Le compte de la session en cours."),
+    ("POST /api/auth/mot-de-passe", "Change le mot de passe. Exige l'ANCIEN -- une session "
+                                    "volee ne doit pas verrouiller le proprietaire hors de "
+                                    "son compte -- et referme les AUTRES sessions, la "
+                                    "courante exceptee."),
+    ("POST /api/auth/compte/suppression", "Cloture le compte et efface ce qu'il a produit "
+                                          "(travaux, consommation, historique). Exige le mot "
+                                          "de passe : seule action irreversible du produit. "
+                                          "Le cache mutualise n'est PAS touche."),
     ("GET  /api/fiction/sous-genres", "Peuple le sélecteur depuis la taxonomie."),
     ("GET  /api/lowcontent/formats", "Peuple le sélecteur de format low-content depuis la taxonomie, avec le drapeau « normé »."),
     ("GET  /api/fiction/taxonomie/{sous_genre}", "Tropes et decors autorises du sous-genre. Alimente les menus du compositeur de trio : la taxonomie est la source de verite UNIQUE, jamais une liste en dur cote JS."),

@@ -97,6 +97,12 @@ class MotDePasseFaible(ValueError):
     pass
 
 
+class IdentifiantsInvalides(ValueError):
+    """Le mot de passe ACTUEL ne correspond pas. Distincte de `MotDePasseFaible` : l'une dit
+    « vous n'êtes pas qui vous prétendez », l'autre « votre nouveau mot de passe ne tient
+    pas ». Les confondre ferait afficher la politique à qui n'a pas prouvé son identité."""
+
+
 class TropDeTentatives(ValueError):
     """L'e-mail a épuisé son quota d'essais sur la fenêtre courante."""
     pass
@@ -290,6 +296,50 @@ class UserStore:
     def n_comptes(self) -> int:
         with self._conn() as cx:
             return cx.execute("SELECT COUNT(*) FROM comptes").fetchone()[0]
+
+    def changer_mot_de_passe(self, email: str, ancien: str, nouveau: str,
+                             garder: str | None = None) -> None:
+        """Redéfinit le mot de passe. Exige l'ANCIEN, applique la politique, et ferme les
+        autres sessions.
+
+        Fermer les sessions n'est pas du zèle : on change son mot de passe précisément quand
+        on craint qu'une session traîne ailleurs, et un jeton reste valide 30 jours. `garder`
+        épargne la session COURANTE — se faire déconnecter de l'écran où l'on vient de taper
+        son nouveau mot de passe se lirait comme un échec.
+
+        L'identité est vérifiée AVANT la politique : afficher les règles de mot de passe à
+        qui n'a pas prouvé qui il est serait une fuite gratuite."""
+        compte = self.verifier(email, ancien)
+        if compte is None:
+            raise IdentifiantsInvalides("mot de passe actuel incorrect")
+        valider_mot_de_passe(nouveau)
+        sel = secrets.token_bytes(16)
+        empreinte = self._deriver(nouveau, sel)
+        params = f"scrypt:{SCRYPT_N}:{SCRYPT_R}:{SCRYPT_P}"
+        with self._conn() as cx:
+            cx.execute("UPDATE comptes SET sel=?, empreinte=?, params=? WHERE user_id=?",
+                       (sel, empreinte, params, compte.user_id))
+            if garder:
+                cx.execute("DELETE FROM sessions WHERE user_id=? AND jeton_empreinte<>?",
+                           (compte.user_id, _empreinte_jeton(garder)))
+            else:
+                cx.execute("DELETE FROM sessions WHERE user_id=?", (compte.user_id,))
+
+    def supprimer_compte(self, email: str, mot_de_passe: str) -> str:
+        """Efface le compte et ses sessions. Rend le `user_id` supprimé, pour que l'appelant
+        puisse effacer les données qui lui appartiennent ailleurs (historique, consommation,
+        travaux) — ce magasin ne connaît que les comptes.
+
+        Exige le mot de passe : une session volée ne doit pas pouvoir détruire le compte,
+        c'est la seule action irréversible du produit."""
+        compte = self.verifier(email, mot_de_passe)
+        if compte is None:
+            raise IdentifiantsInvalides("mot de passe incorrect")
+        with self._conn() as cx:
+            cx.execute("DELETE FROM sessions WHERE user_id=?", (compte.user_id,))
+            cx.execute("DELETE FROM comptes WHERE user_id=?", (compte.user_id,))
+            cx.execute("DELETE FROM tentatives WHERE email=?", (compte.email,))
+        return compte.user_id
 
     # ── Sessions ────────────────────────────────────────────────────────────────────
 
