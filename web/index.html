@@ -5,16 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>IA-Niches — Explorateur de niches KDP</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+  /* Charte IA-Niches v2 — « clair, vivant, rassurant ». Vert forêt pour la marque,
+     un accent chaud (pêche) réservé aux moments de récompense, verdicts 🟢🟡🔴 sur leur
+     propre trio. Les noms historiques sont gardés : aucun sélecteur existant ne casse. */
   :root {
-    --primary:#1E40AF; --primary-600:#1D4ED8; --secondary:#3B82F6; --accent:#D97706;
-    --bg:#F1F5F9; --surface:#FFFFFF; --muted:#E9EEF6; --border:#E2E8F0;
-    --text:#0F172A; --text-muted:#556274; --heading:#1E3A8A; /* 5,7 sur blanc et non 4,76 : tout le texte secondaire etait cale a la decimale sous le seuil AA de 4,5, sur des tailles de 11 a 12,5 px. Un gris legerement eclairci ou un fond de carte modifie le faisait basculer sans que rien ne le signale. */
-    --green:#16A34A; --green-bg:#DCFCE7; --amber:#D97706; --amber-bg:#FEF3C7;
-    --red:#DC2626; --red-bg:#FEE2E2;
-    --mono:'Fira Code',ui-monospace,monospace; --sans:'Fira Sans',system-ui,sans-serif;
-    --radius:12px; --shadow:0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.06);
+    --primary:#1F5B45; --primary-600:#184A38; --secondary:#2E7D5B; --accent:#E8935F;
+    --bg:#F6F5F0; --surface:#FFFFFF; --muted:#EFEEE7; --border:#E6E4DA;
+    --text:#14231C; --text-muted:#56645C; --heading:#14231C; /* 6,0 sur blanc : marge large au-dessus du seuil AA de 4,5 pour le texte secondaire de 11 a 12,5 px. */
+    --green:#16A36A; --green-bg:#E3F6EC; --amber:#F2A93B; --amber-bg:#FFF4DE;
+    --red:#E5533D; --red-bg:#FDECE8;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace; --sans:'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --radius:16px; --shadow:0 1px 2px rgba(15,42,42,.04),0 4px 14px rgba(15,42,42,.05);
+    --shadow-2:0 2px 4px rgba(15,42,42,.04),0 18px 40px rgba(15,42,42,.10);
+    --brand-soft:#E5EFE8; --brand-ink:#184A38; --line-control:#CFCDBF;
+    --go-ink:#0B6B42; --maybe-ink:#8A5300; --low-ink:#A8301F;
+    --ease:cubic-bezier(.2,.8,.2,1);
+    --sidebar:#123A2C; --serif:"Newsreader",Georgia,"Times New Roman",serif;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--sans);color:var(--text);background:var(--bg);
@@ -561,6 +569,385 @@
   .help-body p{margin:0 0 10px}
   .help-body p:last-child{margin-bottom:0}
   .help-body strong{color:var(--heading)}
+
+  /* ══ Surcouche IA-Niches v2 ═════════════════════════════════════════════════════
+     Posée en fin de feuille : elle gagne la cascade sans renommer aucun sélecteur
+     (le JS et les tests UX s'appuient dessus). Mouvement : 150–450 ms, une seule courbe
+     (--ease), coupé par prefers-reduced-motion plus haut. */
+  html{background:var(--bg)}
+  body{font-size:15px;line-height:1.55;
+    background:radial-gradient(1000px 460px at 80% -200px, rgba(46,125,91,.08), transparent 70%),var(--bg);
+    background-attachment:fixed}
+  .wrap{max-width:1280px;padding:20px 24px 64px}
+  .vh,.controls #form > .field.grow > label[for=seed]{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  /* Coquille : barre latérale + contenu */
+  .app{grid-template-columns:232px minmax(0,1fr);gap:32px}
+  .nav{top:20px;gap:4px;min-height:calc(100vh - 40px);padding:4px 0 0}
+  .marque{display:flex;align-items:center;gap:10px;padding:4px 10px 22px}
+  .marque h1{margin:0;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--heading)}
+  .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;
+    background:linear-gradient(140deg,#2E8B66 0%,#1F5B45 100%);box-shadow:0 6px 14px rgba(31,91,69,.28)}
+  .logo svg{width:19px;height:19px;color:#fff}
+  .nav-item{display:flex;align-items:center;gap:11px;font-size:14px;font-weight:500;padding:10px 12px;
+    border-radius:11px;color:var(--text-muted);transition:background .18s var(--ease),color .18s var(--ease)}
+  .nav-item svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .nav-item:hover{background:rgba(31,91,69,.06);color:var(--heading)}
+  .nav-item.actif{background:var(--surface);color:var(--brand-ink);font-weight:600;
+    box-shadow:var(--shadow),inset 0 0 0 1px var(--border)}
+  .nav-item.actif svg{color:var(--primary)}
+  .nav-pied{margin-top:auto;margin-bottom:8px;border:1px solid var(--border);background:var(--surface);
+    border-radius:14px;padding:14px;font-size:13px;color:var(--text-muted);box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:2px}
+  .nav-pied-titre{font-size:12px;font-weight:600;color:var(--text-muted)}
+  .nav-pied strong{font-size:22px;font-weight:800;color:var(--heading);letter-spacing:-.02em}
+  #nav-usage{display:flex;align-items:baseline;gap:8px}
+  #nav-usage:empty + *, .nav-pied:has(#nav-usage:empty){display:none}
+
+  .topbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;min-height:40px;margin:0 0 6px}
+  .topbar .usage-bar{display:none}
+  .compte-bar{gap:8px}
+  #compte-email{text-decoration:none;font-weight:500;color:var(--heading);background:var(--surface);
+    border:1px solid var(--border);border-radius:999px;padding:6px 14px 6px 6px;display:inline-flex;align-items:center;gap:8px;box-shadow:var(--shadow)}
+  #compte-email::before{content:"👤";display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+    background:var(--brand-soft);font-size:13px}
+  .compte-bar button#btn-deconnexion{background:transparent;border:none;color:var(--text-muted);font-weight:500}
+  .compte-bar button#btn-deconnexion:hover{color:var(--heading);background:var(--muted)}
+
+  /* Hero */
+  .hero{display:grid;grid-template-columns:minmax(0,1fr) 240px;align-items:center;gap:24px;margin:0 0 22px}
+  .hero-tag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--brand-ink);
+    background:var(--brand-soft);border-radius:999px;padding:5px 12px;margin-bottom:14px}
+  .hero h2{font-size:40px;line-height:1.08;font-weight:800;letter-spacing:-.035em;margin:0 0 12px;max-width:16ch}
+  .hero p{font-size:16px;line-height:1.55;color:var(--text-muted);margin:0 0 14px;max-width:52ch}
+  .hero-aide{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--brand-ink);
+    text-decoration:none;padding:0}
+  .hero-aide span{transition:transform .2s var(--ease)}
+  .hero-aide:hover span{transform:translateX(3px)}
+  .hero-illu{width:240px;height:auto;animation:flotte 6s ease-in-out infinite}
+  @keyframes flotte{50%{transform:translateY(-6px)}}
+  .i-ombre{fill:rgba(31,91,69,.10)} .i-livre1{fill:#1F5B45} .i-livre2{fill:#2E8B66} .i-livre3{fill:#9CCBB4}
+  .i-tranche{fill:rgba(255,255,255,.35)} .i-loupe{fill:none;stroke:#14231C;stroke-width:6;stroke-linecap:round}
+  .i-loupe-verre{fill:#fff} .i-coche{fill:none;stroke:#16A36A;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+  .i-point{fill:#F59E6B}
+
+  /* Onglets moteurs */
+  .tabs{background:rgba(31,91,69,.07);border-radius:12px;padding:4px;gap:2px;margin-bottom:14px}
+  .tab{font-weight:600;font-size:14px;border-radius:9px;padding:8px 18px;color:var(--text-muted);
+    transition:background .2s var(--ease),color .2s var(--ease),box-shadow .2s var(--ease)}
+  .tab.active{background:var(--surface);color:var(--brand-ink);box-shadow:0 1px 2px rgba(20,35,28,.08),0 0 0 1px var(--border)}
+
+  /* Carte de lancement — une grille, pas un flex qui s'enroule au hasard :
+     ligne 1 = la question (et ses menus), ligne 2 = niveau + réglages. */
+  .controls{padding:22px;border-radius:20px;box-shadow:var(--shadow-2);border-color:transparent}
+  .controls form{display:flex;flex-wrap:wrap;gap:18px 16px;align-items:flex-end}
+  .controls .field{gap:8px}
+  .controls .field.grow{flex:1 1 360px;min-width:0}
+  .controls form > .field:has(.presets){order:3;flex:1 1 520px}
+  .controls form > details.avance{order:4;align-self:center;margin:22px 0 0}
+  .controls form > button.run{order:2}
+  .controls form > details.compo{order:5;flex:1 1 100%}
+  label,.lbl-gloss label{font-size:13px;font-weight:600;color:var(--heading)}
+  input[type=text],input[type=number],select{border:1.5px solid var(--line-control);border-radius:12px;height:48px;
+    padding:0 14px;font-size:15px;background:var(--surface);transition:border-color .15s,box-shadow .15s}
+  select[multiple]{height:auto;padding:6px}
+  input[type=number]{width:110px}
+  input:focus,select:focus{border-color:var(--secondary);box-shadow:0 0 0 4px rgba(46,125,91,.14);outline:none}
+  :focus-visible{outline:2px solid var(--secondary);outline-offset:2px}
+
+  .searchbar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1.5px solid var(--line-control);
+    border-radius:16px;padding:6px 6px 6px 16px;transition:border-color .18s,box-shadow .18s}
+  .searchbar:focus-within{border-color:var(--secondary);box-shadow:0 0 0 5px rgba(46,125,91,.13)}
+  .searchbar-ico{width:20px;height:20px;fill:none;stroke:var(--text-muted);stroke-width:2;stroke-linecap:round;flex:none}
+  .searchbar input[type=text]{border:none;box-shadow:none!important;height:44px;padding:0 4px;font-size:16px;flex:1;min-width:0;background:transparent}
+  .sugg-titre{font-size:12.5px;font-weight:600;color:var(--text-muted);margin-top:6px}
+  .suggestions{margin-top:0;gap:8px}
+  .suggestions button{font-size:13px;font-weight:500;color:var(--heading);background:var(--muted);border:1px solid transparent;
+    border-radius:999px;padding:6px 14px;min-height:32px;transition:all .18s var(--ease)}
+  .suggestions button:hover{background:var(--surface);border-color:var(--secondary);color:var(--brand-ink);transform:translateY(-1px);box-shadow:var(--shadow)}
+
+  button.run{height:48px;border-radius:12px;padding:0 22px;font-weight:700;font-size:15px;gap:10px;
+    background:linear-gradient(180deg,#24694F 0%,#1F5B45 100%);
+    box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 6px 16px rgba(31,91,69,.28);
+    transition:transform .15s var(--ease),box-shadow .2s var(--ease),filter .2s}
+  button.run:hover{background:linear-gradient(180deg,#24694F 0%,#1F5B45 100%);filter:brightness(1.06);transform:translateY(-1px);
+    box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 10px 22px rgba(31,91,69,.32)}
+  button.run:active{transform:translateY(0)}
+  button.run svg{transition:transform .2s var(--ease)}
+  button.run:hover svg{transform:translateX(3px)}
+  button.run:disabled{background:#A9B8AF;box-shadow:none;transform:none;filter:none}
+  .searchbar button.run{height:46px}
+
+  .presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .preset span{display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--border);border-radius:14px;
+    padding:12px 16px;background:var(--surface);transition:all .18s var(--ease)}
+  .preset span b{font-size:14.5px;font-weight:700;color:var(--heading)}
+  .preset span i{font-family:var(--sans);font-size:12.5px;color:var(--text-muted)}
+  .preset span:hover{border-color:var(--line-control);transform:translateY(-1px);box-shadow:var(--shadow)}
+  .preset input:checked + span{border-color:var(--secondary);background:linear-gradient(180deg,#F1F7F3,#E5EFE8);
+    box-shadow:0 0 0 3px rgba(46,125,91,.12)}
+  .preset input:checked + span i{color:var(--brand-ink);font-weight:600}
+  .avance summary,.compo summary{font-size:13.5px;font-weight:600;color:var(--text-muted);list-style:none;
+    padding:8px 12px;border-radius:10px;transition:background .15s}
+  .avance summary::-webkit-details-marker,.compo summary::-webkit-details-marker{display:none}
+  .avance summary:hover,.compo summary:hover{background:var(--muted);color:var(--heading)}
+  .avance[open] summary{color:var(--brand-ink)}
+  .compo{border-top:1px dashed var(--border);margin-top:4px;padding-top:10px}
+  .controls > .hint{margin:16px 2px 0;font-size:13px;color:var(--text-muted);max-width:90ch}
+  .controls > .hint-nf{display:none}
+
+  /* Progression : vivante, pas une liste de logs */
+  .progress{border-radius:18px;padding:20px 22px;box-shadow:var(--shadow)}
+  .bar{height:8px;background:var(--muted);border-radius:99px;margin-bottom:16px}
+  .bar span{width:40%;background:linear-gradient(90deg,#2E8B66,#1F5B45,#2E8B66);background-size:200% 100%;
+    animation:slide 1.6s var(--ease) infinite,brille 2s linear infinite}
+  @keyframes brille{to{background-position:-200% 0}}
+  .steps li{padding:6px 0;font-size:14px}
+  .steps li .dot{width:18px;height:18px;border-radius:50%;display:grid;place-items:center}
+  .steps li.cur{color:var(--heading);font-weight:600}
+  .steps li.cur .dot{color:var(--secondary);animation:pouls 1.2s ease-in-out infinite}
+  @keyframes pouls{50%{transform:scale(1.35);opacity:.6}}
+  .steps li{animation:entre .35s var(--ease) both}
+
+  /* Résultats */
+  .results{margin-top:28px}
+  .rsum{align-items:flex-end;margin:0 0 4px}
+  .rsum h2{font-size:24px;font-weight:800;letter-spacing:-.025em}
+  #rcount{font-size:13.5px;color:var(--text-muted)}
+  .tri select{height:36px;border-radius:10px;font-size:13px;padding:0 10px;border:1.5px solid var(--border)}
+  .rnote{font-size:13px;margin:6px 0 16px}
+  .bilan{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 16px}
+  .bilan:empty{display:none}
+  .bilan-tuile{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px;animation:entre .45s var(--ease) both}
+  .bilan-tuile:nth-child(2){animation-delay:.05s} .bilan-tuile:nth-child(3){animation-delay:.1s} .bilan-tuile:nth-child(4){animation-delay:.15s}
+  .bilan-tuile b{font-size:28px;font-weight:800;letter-spacing:-.03em;line-height:1.1;color:var(--heading);font-variant-numeric:tabular-nums}
+  .bilan-tuile span{font-size:13px;color:var(--text-muted);font-weight:500}
+  .bilan-tuile.t-g{background:linear-gradient(160deg,#EEF6F0,#fff 60%)} .bilan-tuile.t-g b{color:var(--go-ink)}
+  .bilan-tuile.t-bsr{background:linear-gradient(160deg,#FBF3EA,#fff 60%)}
+  .filtres{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+  .filtres button{font:inherit;font-size:13px;font-weight:600;color:var(--text-muted);background:var(--surface);
+    border:1px solid var(--border);border-radius:999px;padding:7px 14px;cursor:pointer;display:inline-flex;gap:7px;align-items:center;
+    transition:all .18s var(--ease)}
+  .filtres button span{font-size:12px;background:var(--muted);border-radius:99px;padding:1px 8px;color:var(--heading)}
+  .filtres button:hover{border-color:var(--line-control);color:var(--heading)}
+  .filtres button[aria-checked=true]{background:var(--heading);border-color:var(--heading);color:#fff}
+  .filtres button[aria-checked=true] span{background:rgba(255,255,255,.18);color:#fff}
+  .filtre-vide{padding:28px;text-align:center;color:var(--text-muted);background:var(--surface);border-radius:16px;border:1px dashed var(--border)}
+  .lien{font:inherit;color:var(--brand-ink);font-weight:600;background:none;border:none;cursor:pointer;text-decoration:underline}
+
+  .nicheC-liste{gap:12px}
+  .nicheC{border-radius:18px;border:1px solid var(--border);box-shadow:var(--shadow);
+    transition:transform .22s var(--ease),box-shadow .22s var(--ease),border-color .22s;
+    animation:entre .45s var(--ease) both;animation-delay:calc(var(--i,0) * 60ms)}
+  @keyframes entre{from{opacity:0;transform:translateY(10px)}}
+  .nicheC:hover{transform:translateY(-2px);box-shadow:var(--shadow-2);border-color:#D5E3D9}
+  .nicheC-tete{display:grid;grid-template-columns:72px minmax(0,1fr) auto 24px;align-items:center;gap:20px;padding:16px 20px}
+  .nicheC-tete:hover{background:none}
+  .nicheC-note{min-width:0}
+  .nicheC-id{min-width:0;gap:4px}
+  .nicheC-titre{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .nicheC-id strong{font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .nicheC-id .cat{font-size:13px;color:var(--text-muted)}
+  .nicheC-kpis{display:grid;grid-template-columns:repeat(4,96px);gap:0;border-left:1px solid var(--border)}
+  .nicheC-kpi{padding:2px 0 2px 18px;min-width:0}
+  .nicheC-kpi i,.fiche-kpi i{text-transform:none;letter-spacing:0;font-size:12px;color:var(--text-muted);font-weight:500}
+  .nicheC-kpi b{font-family:var(--sans);font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .pt{width:8px;height:8px;border-radius:50%;flex:none}
+  .pt-g{background:var(--green)} .pt-a{background:var(--amber)} .pt-r{background:var(--red)}
+  .nicheC-chev{width:24px;height:24px;display:grid;place-items:center;border-radius:8px;color:var(--text-muted);transition:all .2s var(--ease)}
+  .nicheC-chev svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .nicheC:hover .nicheC-chev{background:var(--brand-soft);color:var(--brand-ink);transform:translateX(2px)}
+
+  .verdict-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .verdict-pill.g{background:var(--green-bg);color:var(--go-ink)}
+  .verdict-pill.a{background:var(--amber-bg);color:var(--maybe-ink)}
+  .verdict-pill.r{background:var(--red-bg);color:var(--low-ink)}
+  .verdict-pill.n{background:var(--muted);color:var(--text-muted)}
+
+  /* Anneau de score : se remplit à l'apparition */
+  @property --pa{syntax:'<number>';inherits:false;initial-value:0}
+  .anneau{position:relative;width:64px;height:64px;display:grid;place-items:center;flex:none}
+  .anneau svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+  .anneau circle{fill:none;stroke-width:5.5}
+  .anneau-fond{stroke:var(--muted)}
+  .anneau-val{stroke-linecap:round;stroke-dasharray:163.4;--pa:var(--p);stroke-dashoffset:calc(163.4 * (1 - var(--pa)));
+    animation:remplit 1s var(--ease) both;animation-delay:calc(var(--i,0) * 60ms + .1s)}
+  @keyframes remplit{from{--pa:0}}
+  .nicheC .anneau-val{animation-delay:calc(var(--i,0) * 60ms + .15s)}
+  .anneau-g .anneau-val{stroke:var(--green)} .anneau-a .anneau-val{stroke:var(--amber)}
+  .anneau-r .anneau-val{stroke:var(--red)} .anneau-n .anneau-val{stroke:transparent}
+  .anneau-n .anneau-fond{stroke-dasharray:4 5}
+  .anneau-txt{position:relative;display:flex;flex-direction:column;align-items:center;line-height:1}
+  .anneau-txt b{font-size:17px;font-weight:800;letter-spacing:-.03em;color:var(--heading)}
+  .anneau-txt i{font-style:normal;font-size:10px;color:var(--text-muted);margin-top:2px}
+  .anneau-xl{width:104px;height:104px}
+  .anneau-xl .anneau-txt b{font-size:28px} .anneau-xl .anneau-txt i{font-size:12px}
+  .anneau-xl circle{stroke-width:5}
+
+  /* Fiche niche */
+  .fiche{padding:26px 28px;border-radius:20px;box-shadow:var(--shadow-2);border-color:transparent;animation:entre .4s var(--ease) both}
+  .fiche-retour{font-weight:600;color:var(--brand-ink);padding:0 0 16px}
+  .fiche-tete{display:flex;align-items:center;gap:22px;justify-content:flex-start;flex-wrap:nowrap}
+  .fiche-id{display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0}
+  .fiche-tete h2{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.15}
+  .fiche-tete .cat{margin:0}
+  .fiche-kpis{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0 6px}
+  .fiche-kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;gap:6px}
+  .fiche-kpi i{display:flex;align-items:center;gap:7px}
+  .fk-ico{font-size:14px}
+  .fiche-kpi b{font-family:var(--sans);font-size:22px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+  .fiche-h{font-size:17px;font-weight:800;letter-spacing:-.015em;margin:26px 0 12px}
+  .pq-liste{gap:12px}
+  .pq{border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--surface);position:relative}
+  .pq-ico{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;margin-bottom:10px}
+  .pq-bon{border-left-color:var(--border)} .pq-bon .pq-ico{background:var(--green-bg);color:var(--go-ink)}
+  .pq-neutre{border-left-color:var(--border)} .pq-neutre .pq-ico{background:var(--amber-bg);color:var(--maybe-ink)}
+  .pq-alerte{border-left-color:var(--border)} .pq-alerte .pq-ico{background:var(--red-bg);color:var(--low-ink)}
+  .pq strong{font-size:14.5px;font-weight:700;margin-bottom:4px}
+  .pq p{color:var(--text-muted);font-size:13px}
+  .btn-act{border-radius:11px;padding:9px 16px;font-weight:600;font-size:13.5px;background:var(--primary);transition:all .18s var(--ease)}
+  .btn-act:hover{background:var(--primary-600);transform:translateY(-1px)}
+  .btn-kdp{background:var(--surface);color:var(--brand-ink);border:1.5px solid var(--line-control)}
+  .btn-kdp:hover{background:var(--brand-soft);border-color:var(--secondary)}
+  .vbox,.kdpbox,.vask{border-radius:14px}
+  .chip{border-radius:999px;background:var(--muted);border-color:transparent;color:var(--heading)}
+  .asin{background:var(--muted)} .asin:hover{background:var(--brand-soft)}
+  .dl,.lc-m .k,.metric .mlabel,.ctab th,.fic-sat .stext strong,.vangle-src{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600}
+  .vangle-src{color:var(--brand-ink)}
+  .pill{border-radius:999px;font-family:var(--sans);font-weight:700}
+  .pill.g,.vbadge.g,.dm.g,.kdptag.ok,.badge41{color:var(--go-ink)}
+  .pill.a,.vbadge.a,.dm.a,.kdptag.tv{color:var(--maybe-ink)}
+  .pill.r,.vbadge.r,.dm.r{color:var(--low-ink)}
+  .verdict.g{color:var(--go-ink)} .verdict.a{color:var(--maybe-ink)} .verdict.r{color:var(--low-ink)}
+  .vbadge,.dm{font-family:var(--sans);border-radius:999px}
+
+  /* Fiction / low-content : mêmes cartes */
+  .fic-card,.lc-carte{border-radius:18px;box-shadow:var(--shadow);transition:transform .22s var(--ease),box-shadow .22s var(--ease);animation:entre .45s var(--ease) both}
+  .fic-card:hover,.lc-carte:hover{transform:translateY(-2px);box-shadow:var(--shadow-2)}
+  .metric{background:var(--bg);border-radius:12px}
+  .metric .mval{font-family:var(--sans);font-weight:700}
+  .fic-sat .sval{font-family:var(--sans);font-weight:800}
+  .lc-m .v{font-family:var(--sans);font-weight:700}
+
+  /* États vides, erreurs, historique, aide */
+  .empty{padding:48px 24px;border-radius:20px;border:1.5px dashed var(--line-control);background:rgba(255,255,255,.6);box-shadow:none;margin-top:16px}
+  .empty svg{width:44px;height:44px;color:var(--secondary);background:var(--brand-soft);border-radius:14px;padding:10px;margin-bottom:12px}
+  .empty div{font-size:15px;color:var(--text-muted)}
+  .errbox{border-radius:16px}
+  .panel{border-radius:18px}
+  .hist{padding:20px 22px}
+  .hist-tete h2{font-size:22px;font-weight:800;letter-spacing:-.02em}
+  .hist-ligne{padding:12px 0}
+  .aide-btn{background:linear-gradient(180deg,#24694F,#1F5B45);box-shadow:0 8px 22px rgba(31,91,69,.35);transition:transform .2s var(--ease)}
+  .aide-btn:hover{transform:scale(1.06)}
+  .aide-panneau{border-radius:20px}
+  .gloss-tip{background:#14231C;color:#F6F5F0;border-radius:12px}
+  .gloss-tip strong{color:#9CCBB4;text-transform:none;letter-spacing:0}
+  .gloss:hover,.gloss[aria-expanded=true]{background:var(--secondary);border-color:var(--secondary)}
+  .auth-ecran{background:radial-gradient(800px 400px at 70% 0,rgba(46,125,91,.16),transparent 70%),var(--bg)}
+  .auth-carte{border-radius:22px;box-shadow:var(--shadow-2);border-color:transparent;padding:30px}
+  .auth-carte h2{font-size:24px;font-weight:800;letter-spacing:-.02em}
+  .auth-carte input{height:46px;border:1.5px solid var(--line-control);border-radius:12px;padding:0 14px}
+  .auth-btn{height:48px;border-radius:12px;font-weight:700;background:linear-gradient(180deg,#24694F,#1F5B45);box-shadow:0 6px 16px rgba(31,91,69,.28)}
+  .auth-bascule button,.ctab a,.compo summary:hover{color:var(--brand-ink)}
+  footer{color:var(--text-muted);margin-top:40px}
+
+  @media (max-width:1100px){
+    .nicheC-tete{grid-template-columns:64px minmax(0,1fr) 24px}
+    .nicheC-kpis{grid-column:1/-1;grid-template-columns:repeat(4,minmax(0,1fr));border-left:none;border-top:1px solid var(--border);padding-top:12px}
+    .nicheC-kpi:first-child{padding-left:0}
+    .nicheC-chev{grid-row:1;grid-column:3}
+  }
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr;gap:12px}
+    .nav{min-height:0;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px}
+    .marque{padding:0 8px 0 0;width:100%}
+    .nav-pied{display:none}
+    .hero{grid-template-columns:1fr}
+    .hero-illu{display:none}
+    .hero h2{font-size:30px}
+    .bilan{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media (max-width:640px){
+    .wrap{padding:14px 16px 48px}
+    .searchbar{flex-wrap:wrap;padding:8px}
+    .searchbar button.run{width:100%;justify-content:center}
+    .presets{grid-template-columns:1fr}
+    .nicheC-kpis{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:10px}
+    .nicheC-kpi:nth-child(3){padding-left:0}
+    .fiche-tete{flex-wrap:wrap}
+    .fiche-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .controls form > .field:has(.presets){flex-basis:100%}
+  }
+
+  /* ── Direction « Foyer » : barre latérale forêt, titres serif, une tuile sombre ── */
+  .nav{background:var(--sidebar);border-radius:22px;padding:18px 12px 12px;top:20px;min-height:calc(100vh - 40px);
+    box-shadow:0 20px 40px rgba(18,58,44,.18)}
+  .marque{padding:2px 8px 20px}
+  .marque h1{font-family:var(--serif);font-weight:600;font-size:22px;letter-spacing:-.01em;color:#F4F1E8}
+  .logo{background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);border-radius:10px}
+  .logo svg{color:#F4F1E8}
+  .nav-sec{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:rgba(244,241,232,.66);padding:14px 12px 6px}
+  .nav-item{color:rgba(244,241,232,.82)}
+  .nav-item svg{color:rgba(244,241,232,.7)}
+  .nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav-item.actif{background:rgba(255,255,255,.11);color:#fff;box-shadow:inset 3px 0 0 #9CCBB4}
+  .nav-item.actif svg{color:#9CCBB4}
+  .nav-pied{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);box-shadow:none;color:rgba(244,241,232,.7)}
+  .nav-pied-titre{color:rgba(244,241,232,.66);letter-spacing:.12em;text-transform:uppercase;font-size:11px}
+  .nav-pied strong{font-family:var(--serif);font-weight:500;font-size:28px;color:#F4F1E8}
+  #nav-usage{color:rgba(244,241,232,.75)}
+
+  .hero h2,.rsum h2,.fiche-tete h2,.hist-tete h2,.fiche-h,.auth-carte h2{font-family:var(--serif);font-weight:500;letter-spacing:-.02em}
+  .hero h2{font-size:46px;line-height:1.04}
+  .rsum h2{font-size:28px} .fiche-tete h2{font-size:34px} .fiche-h{font-size:21px}
+  .anneau-txt b,.bilan-tuile b,.fiche-kpi b{font-family:var(--serif);font-weight:500;letter-spacing:-.02em}
+  .bilan-tuile b{font-size:34px}
+  .anneau-txt b{font-size:19px} .anneau-xl .anneau-txt b{font-size:32px}
+  .bilan-tuile.t-g{background:var(--sidebar);border-color:var(--sidebar);box-shadow:0 14px 30px rgba(18,58,44,.22)}
+  .bilan-tuile.t-g b{color:#F4F1E8} .bilan-tuile.t-g span{color:rgba(244,241,232,.75)}
+  .hero-tag{background:var(--surface);box-shadow:inset 0 0 0 1px var(--border)}
+  .filtres button[aria-checked=true]{background:var(--primary);border-color:var(--primary)}
+  button.run{background:var(--primary);box-shadow:0 6px 16px rgba(31,91,69,.25)}
+  button.run:hover{background:var(--primary-600)}
+  .i-livre1{fill:#1F5B45} .i-livre2{fill:#2E8B66} .i-livre3{fill:#B9D8C6}
+
+  /* Alignements : la question occupe toute la largeur, niveau + réglages partagent une ligne */
+  .controls #form > .field.grow{flex-basis:100%}
+  .searchbar{width:100%}
+  .controls form > details.avance{align-self:flex-end;margin:0 0 12px}
+  .controls form > details.avance[open]{align-self:flex-start;margin:28px 0 0}
+  .nicheC-titre{flex-wrap:nowrap;min-width:0}
+  .nicheC-titre strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .fiche{margin-top:28px}
+  .fiche .verdictslot{margin-top:20px}
+  .fiche .dl{margin-top:22px}
+  .fiche .histbox,.fiche .prixbox,.fiche .sugbox,.fiche .nmbox{margin-top:14px}
+  .prixbox strong{font-family:var(--sans)}
+  .progress{margin-top:20px}
+  .results{margin-top:32px}
+
+  @media (max-width:860px){
+    .nav{min-height:0;position:static;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:2px;
+      padding:8px 10px;border-radius:16px;overflow-x:auto}
+    .nav-sec,.nav-pied{display:none}
+    .marque{width:auto;padding:0 10px 0 2px;flex:none}
+    .marque h1{font-size:18px}
+    .nav-item{padding:8px 10px;flex:none}
+    .nav-item.actif{box-shadow:none}
+    .topbar{margin-top:4px}
+  }
+  @media (max-width:420px){ .marque h1{display:none} }
+  @media (max-width:640px){
+    .nicheC-titre{flex-wrap:wrap;row-gap:4px}
+    .nicheC-titre strong{white-space:normal}
+    .nav-item{padding:8px 8px;gap:7px}
+  }
+  /* Menus secondaires (rayon, format) : largeur bornée, pour que question + menu + bouton
+     tiennent sur une ligne et que la ligne 2 reste « niveau + réglages ». */
+  .controls form > .field:not(.grow):not(:has(.presets)){flex:0 1 240px;min-width:0}
+  .controls form > .field select{width:100%;min-width:0}
 </style>
 </head>
 <body>
@@ -603,15 +990,22 @@
 </div>
 
 <div class="wrap">
-  <header>
-    <div class="logo" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg>
-    </div>
-    <div>
+  <div class="app">
+  <aside class="nav" id="nav" hidden>
+    <div class="marque">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19V6a2 2 0 0 1 2-2h9l5 5v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="11.5" cy="13" r="3"/><path d="m16 17.5-2.3-2.3"/></svg></span>
       <h1>IA-Niches</h1>
-      <p>Explorateur de niches KDP — l'IA propose, Amazon valide (demande, concurrence, BSR réel)</p>
     </div>
+    <span class="nav-sec">Chercher</span>
+    <button type="button" class="nav-item actif" data-vue="explorer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Explorer</button>
+    <span class="nav-sec">Suivre</span>
+    <button type="button" class="nav-item" data-vue="analyses"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Analyses</button>
+    <button type="button" class="nav-item" data-vue="compte"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Compte</button>
+    <div class="nav-pied"><span class="nav-pied-titre">Ce mois-ci</span><span id="nav-usage"></span></div>
+  </aside>
+  <div class="app-main">
+  <header class="topbar">
     <div class="usage-bar" id="usage-bar" hidden></div>
     <div class="compte-bar" id="compte-bar" hidden>
       <button type="button" id="compte-email" aria-haspopup="true" aria-expanded="false"></button>
@@ -619,20 +1013,25 @@
     </div>
   </header>
 
-  <div class="app">
-  <aside class="nav" id="nav" hidden>
-    <button type="button" class="nav-item actif" data-vue="explorer">Explorer</button>
-    <button type="button" class="nav-item" data-vue="analyses">Analyses</button>
-    <button type="button" class="nav-item" data-vue="compte">Compte</button>
-    <div class="nav-pied"><span id="nav-usage"></span></div>
-  </aside>
-  <div class="app-main">
-
   <section id="vue-explorer">
   <section class="hero">
-    <h2>Trouvez votre prochaine niche KDP</h2>
-    <p>Explorez Amazon et identifiez les rayons où la demande existe et où la place reste
-      prenable. <button type="button" class="hero-aide" id="hero-aide">Comment ça marche ?</button></p>
+    <div class="hero-texte">
+      <span class="hero-tag">🔎 Recherche de niches KDP · Amazon.fr</span>
+      <h2>Trouvez votre prochaine niche KDP</h2>
+      <p>Explorez Amazon et identifiez les rayons où la demande existe et où la place reste
+        prenable.</p>
+      <button type="button" class="hero-aide" id="hero-aide">💡 Comment ça marche ? <span aria-hidden="true">→</span></button>
+    </div>
+    <svg class="hero-illu" viewBox="0 0 220 170" aria-hidden="true">
+      <ellipse cx="112" cy="150" rx="92" ry="14" class="i-ombre"/>
+      <rect x="44" y="112" width="140" height="30" rx="5" class="i-livre1"/><rect x="44" y="122" width="140" height="6" class="i-tranche"/>
+      <rect x="54" y="84" width="124" height="30" rx="5" class="i-livre2"/><rect x="54" y="94" width="124" height="6" class="i-tranche"/>
+      <rect x="40" y="56" width="132" height="30" rx="5" class="i-livre3"/><rect x="40" y="66" width="132" height="6" class="i-tranche"/>
+      <circle cx="150" cy="38" r="22" class="i-loupe-verre"/><circle cx="150" cy="38" r="22" class="i-loupe"/>
+      <path d="m166 54 14 14" class="i-loupe" stroke-width="8"/>
+      <path d="m141 38 6 6 12-13" class="i-coche"/>
+      <circle cx="30" cy="40" r="5" class="i-point"/><circle cx="200" cy="96" r="4" class="i-point"/><circle cx="96" cy="26" r="3" class="i-point"/>
+    </svg>
   </section>
 
 
@@ -648,10 +1047,18 @@
       <form id="form">
         <div class="field grow">
           <label for="seed">Quelle thématique voulez-vous explorer ?</label>
-          <input type="text" id="seed" placeholder="sommeil, anxiété, jardinage, organisation…" autocomplete="off" />
+          <div class="searchbar">
+            <svg class="searchbar-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="text" id="seed" placeholder="sommeil, anxiété, jardinage, organisation…" autocomplete="off" />
+            <button class="run" id="run" type="submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              <span id="run-label">Trouver les niches</span>
+            </button>
+          </div>
           <!-- Un champ vide devant quelqu'un qui découvre l'outil est un mur : les
                suggestions montrent la FORME attendue, elles ne sont pas décoratives. Le
                champ reste libre, et vide il lance le mode « à partir de rien ». -->
+          <span class="sugg-titre">Suggestions</span>
           <div class="suggestions" id="suggestions-nf">
             <button type="button" data-theme="sommeil">Sommeil</button>
             <button type="button" data-theme="développement personnel">Développement personnel</button>
@@ -679,18 +1086,14 @@
         <!-- Le chiffre exact reste accessible : les presets simplifient le cas courant,
              ils ne retirent pas la main a qui teste des volumes precis. -->
         <details class="avance">
-          <summary>Réglages avancés</summary>
+          <summary>⚙️ Réglages avancés</summary>
           <div class="field">
             <label for="search">Niches à analyser<span class="champ-aide" title="Une dizaine d'idées sont toujours proposées par l'IA. Ce réglage fixe combien d'entre elles seront réellement confrontées à Amazon : c'est lui qui pèse sur la durée du run.">?</span></label>
             <input type="number" id="search" value="6" min="1" max="20" />
           </div>
         </details>
-        <button class="run" id="run" type="submit">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
-          <span id="run-label">Trouver les niches</span>
-        </button>
       </form>
-      <p class="hint">Le niveau fixe combien de rayons sont réellement ouverts et comparés
+      <p class="hint hint-nf">Le niveau fixe combien de rayons sont réellement ouverts et comparés
         sur Amazon. Le tri en amont est gratuit : en élargir le vivier change quels rayons
         sont testés, jamais leur note de demande.</p>
     </div>
@@ -721,6 +1124,13 @@
       <p class="rnote">Le score résume la demande mesurée et la place restante. Il trie, il
         ne juge pas : deux niches vertes ne sont pas classées l'une devant l'autre par
         qualité.</p>
+      <div class="bilan" id="bilan-nf" aria-live="polite"></div>
+      <div class="filtres" id="filtres-nf" role="radiogroup" aria-label="Filtrer par verdict">
+        <button type="button" role="radio" aria-checked="true" data-f="tout">Toutes <span data-n="tout"></span></button>
+        <button type="button" role="radio" aria-checked="false" data-f="g">🟢 Prioritaires <span data-n="g"></span></button>
+        <button type="button" role="radio" aria-checked="false" data-f="a">🟡 Intéressantes <span data-n="a"></span></button>
+        <button type="button" role="radio" aria-checked="false" data-f="r">🔴 Faibles <span data-n="r"></span></button>
+      </div>
       <div id="cartes-nf" class="nicheC-liste"></div>
       <div class="tablewrap" hidden>
         <table>
@@ -768,7 +1178,7 @@
           </div>
         </div>
         <details class="avance">
-          <summary>Réglages avancés</summary>
+          <summary>⚙️ Réglages avancés</summary>
           <div class="field">
             <label for="fic-n">Trios</label>
             <input type="number" id="fic-n" value="5" min="3" max="11" />
@@ -855,7 +1265,7 @@
           <span id="run-lc-label">Lancer le scout low-content</span>
         </button>
         <details class="avance">
-          <summary>Réglages avancés</summary>
+          <summary>⚙️ Réglages avancés</summary>
           <div class="field">
             <label for="lc-search">Niches à analyser</label>
             <input type="number" id="lc-search" value="6" min="1" max="20" />
@@ -892,7 +1302,7 @@
   </section>
 
   <section id="vue-analyses" hidden>
-  <section class="panel hist">
+  <section id="historique" class="panel hist">
     <div class="hist-tete">
       <h2>Mes analyses</h2>
       <button type="button" id="hist-rafraichir" class="btn-act">Rafraîchir</button>
@@ -1311,20 +1721,47 @@ function blocPrix(r){
 function carteNicheTete(r){
   const nm = nonMesuree(r);
   const g = nm ? 'n' : grade(r.global_score);
-  const kpi = (libelle, valeur) =>
-    '<span class="nicheC-kpi"><i>' + libelle + '</i><b>' + valeur + '</b></span>';
-  return '<span class="nicheC-note">'
-      + '<span class="pill ' + g + '">' + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
-      + '<span class="verdict ' + g + '">' + (nm ? 'Non mesurée' : verdict(r.global_score))
-      + '</span></span>'
-    + '<span class="nicheC-id"><strong>' + esc(r.niche) + '</strong>'
+  const emo = {g:'🟢', a:'🟡', r:'🔴', n:'⚪'}[g];
+  // Anneau : 2*pi*26 = 163,4. Le trait est rempli a la proportion du score sur 10.
+  const part = nm ? 0 : Math.max(0, Math.min(1, (r.global_score || 0) / 10));
+  const anneau = '<span class="anneau anneau-' + g + '" style="--p:' + part.toFixed(3) + '">'
+    + '<svg viewBox="0 0 60 60" aria-hidden="true"><circle class="anneau-fond" cx="30" cy="30" r="26"/>'
+    + '<circle class="anneau-val" cx="30" cy="30" r="26"/></svg>'
+    + '<span class="anneau-txt"><b>' + (nm ? '—' : fmtDec(r.global_score, 1)) + '</b><i>/10</i></span></span>';
+  // Pastilles : AUCUN seuil maison. Notes /10 -> seuils du verdict (7,5 / 6) ; BSR -> 10 000
+  // (preuve de vente du scoring) ; concurrents -> 30 / 50 (ceux de pourquoiNiche).
+  const pNote = v => v == null ? '' : (v >= 7.5 ? 'g' : v >= 6 ? 'a' : 'r');
+  const pBsr = v => v == null ? '' : (v < 10000 ? 'g' : 'a');
+  const pConc = v => v == null ? '' : (v > 50 ? 'r' : v > 30 ? 'a' : 'g');
+  const kpi = (libelle, valeur, ton) =>
+    '<span class="nicheC-kpi"><i>' + libelle + '</i><b>'
+    + (ton ? '<span class="pt pt-' + ton + '" aria-hidden="true"></span>' : '') + valeur + '</b></span>';
+  return '<span class="nicheC-note">' + anneau + '</span>'
+    + '<span class="nicheC-id"><span class="nicheC-titre"><strong>' + esc(r.niche) + '</strong>'
+      + '<span class="verdict-pill ' + g + '">' + emo + ' '
+      + (nm ? 'Non mesurée' : verdict(r.global_score)) + '</span></span>'
       + '<span class="cat">' + esc(r.categorie || '') + '</span></span>'
     + '<span class="nicheC-kpis">'
-      + kpi('Demande', nm ? '—' : fmtDec(r.demande, 1))
-      + kpi('Accessibilité', nm ? '—' : fmtDec(r.penetration, 1))
-      + kpi('BSR meilleur', fmt(r.bsr_best))
-      + kpi('Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles))
-    + '</span><span class="nicheC-chev">›</span>';
+      + kpi('Demande', nm ? '—' : fmtDec(r.demande, 1), nm ? '' : pNote(r.demande))
+      + kpi('Accessibilité', nm ? '—' : fmtDec(r.penetration, 1), nm ? '' : pNote(r.penetration))
+      + kpi('BSR meilleur', fmt(r.bsr_best), pBsr(r.bsr_best))
+      + kpi('Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles), nm ? '' : pConc(r.n_concurrents_cibles))
+    + '</span><span class="nicheC-chev" aria-hidden="true">'
+    + '<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
+}
+
+// Bilan au-dessus de la liste : combien de niches par verdict, et le meilleur BSR lu. PUR.
+// Des COMPTES, pas un classement : « 3 prioritaires » dit ce que la mesure a vu, il ne
+// promet pas qu'une prioritaire vaut mieux qu'une autre.
+function bilanNiches(rows){
+  const b = {total:0, g:0, a:0, r:0, n:0, bsr:null};
+  (rows || []).forEach(r => {
+    b.total++;
+    const g = nonMesuree(r) ? 'n' : grade(r.global_score);
+    b[g]++;
+    if(r.bsr_best != null && (b.bsr == null || r.bsr_best < b.bsr)) b.bsr = r.bsr_best;
+  });
+  return b;
 }
 
 // Tri PUR. Jamais « par potentiel » : mesure sur 95 niches, le score ne departage pas une
@@ -1393,25 +1830,34 @@ function pourquoiNiche(r){
 function ficheNiche(r){
   const nm = nonMesuree(r);
   const g = nm ? 'n' : grade(r.global_score);
-  const tuile = (libelle, valeur) =>
-    '<div class="fiche-kpi"><i>' + libelle + '</i><b>' + valeur + '</b></div>';
+  const emo = {g:'🟢', a:'🟡', r:'🔴', n:'⚪'}[g];
+  const part = nm ? 0 : Math.max(0, Math.min(1, (r.global_score || 0) / 10));
+  const pNote = v => v == null ? '' : (v >= 7.5 ? 'g' : v >= 6 ? 'a' : 'r');
+  const tuile = (ico, libelle, valeur, ton) =>
+    '<div class="fiche-kpi"><i><span class="fk-ico" aria-hidden="true">' + ico + '</span>' + libelle + '</i><b>'
+    + (ton ? '<span class="pt pt-' + ton + '" aria-hidden="true"></span>' : '') + valeur + '</b></div>';
+  const icoTon = {bon:'✓', neutre:'!', alerte:'⚠'};
   const carte = c =>
-    '<div class="pq pq-' + c.ton + '"><strong>' + esc(c.titre) + '</strong>'
+    '<div class="pq pq-' + c.ton + '"><span class="pq-ico" aria-hidden="true">' + (icoTon[c.ton] || '•')
+    + '</span><strong>' + esc(c.titre) + '</strong>'
     + '<p>' + esc(c.texte) + '</p></div>';
   return '<button type="button" class="fiche-retour" id="fiche-retour">‹ Retour aux résultats</button>'
     + '<div class="fiche-tete">'
-      + '<div><h2>' + esc(r.niche) + '</h2>'
+      + '<span class="anneau anneau-xl anneau-' + g + '" style="--p:' + part.toFixed(3) + '">'
+      + '<svg viewBox="0 0 60 60" aria-hidden="true"><circle class="anneau-fond" cx="30" cy="30" r="26"/>'
+      + '<circle class="anneau-val" cx="30" cy="30" r="26"/></svg>'
+      + '<span class="anneau-txt"><b>' + (nm ? '—' : fmtDec(r.global_score, 1)) + '</b><i>/10</i></span></span>'
+      + '<div class="fiche-id"><span class="verdict-pill ' + g + '">' + emo + ' '
+      + (nm ? 'Non mesurée' : verdict(r.global_score)) + '</span>'
+      + '<h2>' + esc(r.niche) + '</h2>'
       + '<p class="cat">' + esc(r.categorie || '') + '</p></div>'
-      + '<span class="nicheC-note"><span class="pill ' + g + '">'
-      + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
-      + '<span class="verdict ' + g + '">' + (nm ? 'Non mesurée' : verdict(r.global_score))
-      + '</span></span>'
     + '</div>'
     + '<div class="fiche-kpis">'
-      + tuile('Demande', nm ? '—' : fmtDec(r.demande, 1))
-      + tuile('Accessibilité', nm ? '—' : fmtDec(r.penetration, 1))
-      + tuile('BSR meilleur', fmt(r.bsr_best))
-      + tuile('Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles))
+      + tuile('📈', 'Demande', nm ? '—' : fmtDec(r.demande, 1), nm ? '' : pNote(r.demande))
+      + tuile('🚪', 'Accessibilité', nm ? '—' : fmtDec(r.penetration, 1), nm ? '' : pNote(r.penetration))
+      + tuile('🏆', 'BSR meilleur', fmt(r.bsr_best), r.bsr_best == null ? '' : (r.bsr_best < 10000 ? 'g' : 'a'))
+      + tuile('📚', 'Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles),
+              nm ? '' : (r.n_concurrents_cibles > 50 ? 'r' : r.n_concurrents_cibles > 30 ? 'a' : 'g'))
     + '</div>'
     + '<h3 class="fiche-h">Pourquoi cette niche ?</h3>'
     + '<div class="pq-liste">' + pourquoiNiche(r).map(carte).join('') + '</div>';
@@ -1419,15 +1865,38 @@ function ficheNiche(r){
 
 let LIGNES_NF = [], THEMATIQUE_NF = '';
 
+let FILTRE_NF = 'tout';
+
 function render(rows){
   LIGNES_NF = rows || [];
   rcount.textContent = LIGNES_NF.length
     ? `${LIGNES_NF.length} niche(s) analysée(s)` : 'aucune niche validée';
   $('#rtitre').textContent = THEMATIQUE_NF
     ? `Niches analysées pour « ${THEMATIQUE_NF} »` : 'Niches analysées';
-  dessinerCartesNf();
+  const b = bilanNiches(LIGNES_NF);
+  const tuile = (cls, val, lib) =>
+    '<div class="bilan-tuile ' + cls + '"><b>' + val + '</b><span>' + lib + '</span></div>';
+  $('#bilan-nf').innerHTML =
+      tuile('t-g', b.g, '🟢 prioritaire' + (b.g > 1 ? 's' : ''))
+    + tuile('t-a', b.a, '🟡 intéressante' + (b.a > 1 ? 's' : ''))
+    + tuile('t-r', b.r + b.n, '🔴 faible' + (b.r + b.n > 1 ? 's' : '') + (b.n ? ' ou non mesurée' + (b.n > 1 ? 's' : '') : ''))
+    + tuile('t-bsr', fmt(b.bsr), '🏆 meilleur BSR lu');
+  document.querySelectorAll('#filtres-nf [data-n]').forEach(s => {
+    const k = s.dataset.n;
+    s.textContent = k === 'tout' ? b.total : (k === 'r' ? b.r + b.n : b[k]);
+  });
+  choisirFiltreNf('tout');
   empty.style.display='none'; results.classList.add('on');
 }
+
+function choisirFiltreNf(f){
+  FILTRE_NF = f;
+  document.querySelectorAll('#filtres-nf [data-f]').forEach(btn =>
+    btn.setAttribute('aria-checked', String(btn.dataset.f === f)));
+  dessinerCartesNf();
+}
+document.querySelectorAll('#filtres-nf [data-f]').forEach(btn =>
+  btn.addEventListener('click', () => choisirFiltreNf(btn.dataset.f)));
 
 // Le DOM est reconstruit a chaque tri : les cartes portent des ecouteurs et un etat
 // « depliee », et reordonner des noeuds vivants ferait diverger l'ordre affiche de l'ordre
@@ -1436,14 +1905,26 @@ function render(rows){
 function dessinerCartesNf(){
   const hote = $('#cartes-nf');
   hote.innerHTML = '';
-  trierNiches(LIGNES_NF, $('#tri-nf').value).forEach(r => {
+  const garde = r => {
+    if(FILTRE_NF === 'tout') return true;
+    const g = nonMesuree(r) ? 'n' : grade(r.global_score);
+    return FILTRE_NF === 'r' ? (g === 'r' || g === 'n') : g === FILTRE_NF;
+  };
+  const liste = trierNiches(LIGNES_NF, $('#tri-nf').value).filter(garde);
+  liste.forEach((r, i) => {
     const carte = document.createElement('article');
     carte.className = 'nicheC';
+    carte.style.setProperty('--i', i);
     carte.innerHTML = '<button type="button" class="nicheC-tete">'
       + carteNicheTete(r) + '</button>';
     carte.querySelector('.nicheC-tete').addEventListener('click', () => ouvrirFiche(r));
     hote.appendChild(carte);
   });
+  if(!liste.length && LIGNES_NF.length)
+    hote.innerHTML = '<p class="filtre-vide">Aucune niche dans ce verdict. '
+      + '<button type="button" class="lien" id="filtre-reset">Tout afficher</button></p>';
+  const reset = $('#filtre-reset');
+  if(reset) reset.addEventListener('click', () => choisirFiltreNf('tout'));
 }
 
 // La fiche REMPLACE la liste au lieu de se deplier dedans : c'est l'ecran ou l'on decide
@@ -2008,12 +2489,21 @@ async function chargerHistorique(){
   });
 }
 
+// Assignee dans la fermeture de l'authentification (elle lit l'adresse de session), mais
+// declaree ICI : la reouverture d'une analyse en a besoin, et une fonction enfermee dans une
+// portee que le reste du fichier ne voit pas est une fonction qu'on finit par dupliquer.
+let montrerVue = () => {};
+
 function rouvrirAnalyse(id){
   const job = HISTORIQUE.find(j => j.id === id);
   if(!job) return;
   const vue = {scout: VUE_NF, fiction: VUE_FIC, lowcontent: VUE_LC}[job.type];
   const onglet = {scout: 'nf', fiction: 'fic', lowcontent: 'lc'}[job.type];
   if(!vue || !onglet) return;
+  // D'ABORD revenir la ou les resultats s'affichent : rendre dans une section masquee
+  // donnait un bouton qui agit sans que rien ne change -- pire qu'un bouton inerte, on le
+  // reclique et on finit par croire l'analyse perdue.
+  montrerVue('explorer');
   switchTab(onglet);
   vue.viderEtapes();
   (job.progression || []).forEach(m => vue.etape(m));
@@ -2337,7 +2827,7 @@ function chargerUsage(){
     el.hidden = false;
     el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s)`;
     const pied = $('#nav-usage');
-    if(pied) pied.innerHTML = `<strong>${fmt(u.n_analyses)}</strong> analyse(s)<br>ce mois-ci`;
+    if(pied) pied.innerHTML = `<strong>${fmt(u.n_analyses)}</strong><span>analyse(s) lancée(s)</span>`;
   }).catch(()=>{});
 }
 
@@ -2435,7 +2925,7 @@ function chargerUsage(){
   // ce sont trois façons d'analyser, pas trois produits.
   const VUES_NAV = ['explorer', 'analyses', 'compte'];
 
-  function montrerVue(cle){
+  montrerVue = function(cle){
     VUES_NAV.forEach(v => {
       const section = $('#vue-' + v);
       if(section) section.hidden = v !== cle;
@@ -2450,7 +2940,7 @@ function chargerUsage(){
       $('#compte-reglages').innerHTML = menuCompteHtml();
       brancherReglagesCompte();
     }
-  }
+  };
 
   document.querySelectorAll('.nav-item').forEach(b =>
     b.addEventListener('click', () => montrerVue(b.dataset.vue)));

@@ -62,3 +62,18 @@ def test_un_seul_id_par_element(html):
     ids = re.findall(r'\sid="([^"]+)"', html)
     doublons = {i for i in ids if ids.count(i) > 1}
     assert not doublons, f"ids dupliqués : {sorted(doublons)}"
+
+
+def test_rouvrir_une_analyse_RAMENE_dans_explorer(html):
+    """Signalé par Baptiste : « le bouton n'est pas cliquable ». Il l'était — il rendait le
+    résultat dans la vue Explorer pendant que l'utilisateur restait sur Analyses. Rien ne
+    bougeait à l'écran, donc le bouton paraissait mort.
+
+    Un bouton qui agit sans que rien ne change est pire qu'un bouton inerte : on le reclique,
+    et on finit par croire que l'analyse est perdue."""
+    debut = html.index("function rouvrirAnalyse(")
+    corps = html[debut:html.index("\n}", debut)]
+    assert "montrerVue('explorer')" in corps, \
+        "rouvrir doit d'abord ramener dans la vue qui affiche les résultats"
+    assert corps.index("montrerVue('explorer')") < corps.index("vue.resultat("), \
+        "et AVANT de rendre, sinon le rendu part dans une section masquée"
