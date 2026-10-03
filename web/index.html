@@ -1494,6 +1494,73 @@
   .fiche-retour span{font-size:16px;line-height:1;transition:transform .2s var(--ease)}
   .fiche-retour:hover{background:var(--brand-soft);border-color:var(--secondary);transform:translateY(-1px)}
   .fiche-retour:hover span{transform:translateX(-3px)}
+
+  /* Fiction : livres du rayon et reprise de MON trio, comme la non-fiction */
+  .ctab .auteur{display:block;margin-top:1px;font-size:12px;font-weight:400;color:var(--text-muted)}
+  .ctab th:last-child,.ctab td:last-child{text-align:center}
+  .trio-cov{display:inline-block;min-width:36px;padding:2px 8px;border-radius:999px;font-size:12.5px;font-weight:700;
+    font-variant-numeric:tabular-nums}
+  .trio-cov-plein{background:var(--red-bg);color:var(--low-ink)}
+  .trio-cov-part{background:var(--amber-bg);color:var(--maybe-ink)}
+  .trio-cov-zero{background:var(--green-bg);color:var(--go-ink)}
+  .fic-card details.pli{margin-top:10px}
+  .fic-card details.pli > :not(summary){padding:0 18px}
+  .fic-card details.pli > :not(summary):last-child{padding-bottom:16px}
+  .fic-card details.pli > summary + *{margin-top:12px}
+
+  /* Mes analyses : supprimer, avec confirmation sur place */
+  .hist-ligne{grid-template-columns:96px 140px minmax(0,1fr) auto auto auto}
+  .btn-suppr{font:inherit;font-size:15px;line-height:1;background:var(--surface);border:1.5px solid var(--border);
+    border-radius:10px;padding:8px 10px;cursor:pointer;opacity:.75;transition:all .15s var(--ease)}
+  .btn-suppr:hover{opacity:1;background:var(--red-bg);border-color:#E6AFA3;transform:translateY(-1px)}
+  .btn-suppr:focus-visible{outline:2px solid var(--red);outline-offset:2px;opacity:1}
+  .suppr-confirm{grid-column:auto;display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;
+    font-size:13px;color:var(--low-ink);font-weight:600}
+  .suppr-confirm button{font:inherit;font-size:13px;font-weight:600;border-radius:10px;padding:7px 12px;cursor:pointer}
+  .btn-suppr-oui{background:var(--low-ink);color:#fff;border:none}
+  .btn-suppr-oui:hover{background:#8C2415}
+  .btn-suppr-non{background:var(--surface);color:var(--heading);border:1.5px solid var(--line-control)}
+  .btn-suppr-non:hover{background:var(--muted)}
+  .suppr-err{font-size:12.5px;color:var(--low-ink)}
+  @media (max-width:700px){
+    .btn-suppr,.suppr-confirm{grid-column:1/-1;justify-self:end}
+  }
+
+  /* ── Low-content : « Toutes les mesures » en lignes lisibles (une phrase sous chaque valeur) ── */
+  .lc-detail .lc-mesures{display:flex;flex-direction:column;gap:0;padding:0 0 4px}
+  .lc-detail .lc-m{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 14px;padding:12px 0;
+    border-bottom:1px dashed var(--border)}
+  .lc-detail .lc-m:last-child{border-bottom:none}
+  .lc-detail .lc-m .k{grid-column:1;grid-row:1;font-size:14px;font-weight:600;color:var(--heading)}
+  .lc-detail .lc-m .v{grid-column:2;grid-row:1;font-size:15px;text-align:right;white-space:nowrap}
+  .lc-detail .lc-m .v.mut{font-size:13px}
+  .lc-detail .lc-m .note{grid-column:1 / -1;grid-row:2;font-size:12.5px;line-height:1.45;color:var(--text-muted)}
+
+  /* ── Facteur décisif : une accroche, des points, le reste se déplie ── */
+  .vraison .vfacteur{font-size:13.5px;color:var(--ink-soft);margin:0}
+  .vraison .vf-titre{margin:0 0 6px;font-size:13px;color:var(--text-muted)}
+  .vraison .vf-accroche{margin:0 0 8px;font-size:15px;font-weight:600;line-height:1.4;color:var(--heading)}
+  .vraison .vf-points{margin:0 0 6px;padding-left:20px;font-size:13.5px;line-height:1.5;color:var(--ink-soft)}
+  .vraison .vf-points li{margin:5px 0}
+  .vraison .vf-note{margin:8px 0 0;font-size:12.5px;color:var(--text-muted)}
+
+  /* ── Arrêter une analyse ── */
+  .prog-arret{margin:0 0 12px}
+  .btn-arreter{font:inherit;font-size:13px;font-weight:600;color:var(--low-ink);background:var(--surface);
+    border:1.5px solid #E6AFA3;border-radius:10px;padding:8px 14px;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .15s var(--ease)}
+  .btn-arreter:hover{background:var(--red-bg);border-color:var(--red);transform:translateY(-1px)}
+  .btn-arreter:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+  .arret-confirm{justify-content:flex-start}
+  .btn-arret-oui{background:var(--low-ink);color:#fff;border:none}
+  .btn-arret-oui:hover{background:#8C2415}
+  .btn-arret-non{background:var(--surface);color:var(--heading);border:1.5px solid var(--line-control)}
+  .btn-arret-non:hover{background:var(--muted)}
+  .hist-ligne{grid-template-columns:96px 140px minmax(0,1fr) auto auto auto}
+  .hist-ligne .arret-confirm{grid-column:1 / -1;justify-self:end}
+  .errbox.info{background:var(--muted);color:var(--ink-soft);border-color:var(--border)}
+  .errbox.info.on::before{content:"⏹️ "}
+  @media (max-width:700px){.btn-arreter{grid-column:1 / -1;justify-self:end}}
 </style>
 </head>
 <body>
@@ -1651,6 +1718,7 @@
       <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><span class="prog-pct" aria-hidden="true">0 %</span><i>Vous pouvez fermer cette page : elle continue sans vous.</i></div>
       <p class="prog-phase" aria-live="polite">Démarrage…</p>
       <div class="bar" role="progressbar" aria-label="Avancement de l'analyse" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <div class="prog-arret"><button type="button" class="btn-arreter btn-arreter-prog" id="arreter-nf">⏹️ Arrêter l’analyse</button></div>
       <ul class="prog-alertes" aria-live="polite"></ul>
       <details class="prog-detail"><summary>Voir le détail</summary>
         <ul class="steps" id="steps" aria-live="off" aria-label="Progression du scout"></ul></details>
@@ -1777,6 +1845,7 @@
       <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><span class="prog-pct" aria-hidden="true">0 %</span><i>Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
       <p class="prog-phase" aria-live="polite">Démarrage…</p>
       <div class="bar" role="progressbar" aria-label="Avancement de l'analyse" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <div class="prog-arret"><button type="button" class="btn-arreter btn-arreter-prog" id="arreter-fic">⏹️ Arrêter l’analyse</button></div>
       <ul class="prog-alertes" aria-live="polite"></ul>
       <details class="prog-detail"><summary>Voir le détail</summary>
         <ul class="steps" id="steps-fic" aria-live="off" aria-label="Progression du scout fiction"></ul></details>
@@ -1838,6 +1907,7 @@
       <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><span class="prog-pct" aria-hidden="true">0 %</span><i>Compter 3 à 9 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
       <p class="prog-phase" aria-live="polite">Démarrage…</p>
       <div class="bar" role="progressbar" aria-label="Avancement de l'analyse" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <div class="prog-arret"><button type="button" class="btn-arreter btn-arreter-prog" id="arreter-lc">⏹️ Arrêter l’analyse</button></div>
       <ul class="prog-alertes" aria-live="polite"></ul>
       <details class="prog-detail"><summary>Voir le détail</summary>
         <ul class="steps" id="steps-lc" aria-live="off" aria-label="Progression du scout low-content"></ul></details>
@@ -1987,6 +2057,8 @@ function niveau3Inverse(v){
   return ['peu couvert','g'];
 }
 
+// NB : les lignes « servie(s) par le cache » n'arrivent plus au client (progression_publique) :
+// aucun jalon n'en depend, l'avancement saute simplement au jalon suivant.
 // ── Avancement : un pourcentage et UNE phrase, le journal detaille se replie ──────────────
 // Les moteurs n'emettent que des messages texte (progress(msg)) : l'avancement est donc
 // ESTIME a partir de JALONS reconnus dans ces messages, jamais mesure. Il ne recule pas,
@@ -2014,8 +2086,6 @@ const PROG_JALONS = {
     [/\[(\d+)\/(\d+)\]/, m => [10 + (Number(m[1]) - 1) / Number(m[2]) * 22,
       'Analyse des rayons (' + m[1] + '/' + m[2] + ')…']],
     [/Enrichissement de/, () => [36, 'Lecture des fiches livres (la plus longue étape)…']],
-    [/fiche\(s\) servie\(s\) par le cache/, () => [40, 'Fiches livres en cache']],
-    [/déjà classée/, () => [62, 'Quatrièmes de couverture en cache']],
     [/Classification de/, () => [66, 'Lecture des quatrièmes de couverture…']],
     [/Sonde autocomplete/, (m, c) => [82 + Math.min(1, c.sondes / Math.max(1, c.total)) * 15,
       'Dernières vérifications…']],
@@ -2030,7 +2100,6 @@ const PROG_JALONS = {
     [/niche\(s\) avec demande confirmée/, () => [28, 'Demande vérifiée']],
     [/\[(\d+)\/(\d+)\]/, m => [28 + (Number(m[1]) - 1) / Number(m[2]) * 40,
       'Analyse de la concurrence (' + m[1] + '/' + m[2] + ')…']],
-    [/servie\(s\) par le cache/, () => [70, 'Recherches prêtes']],
     [/Enrichissement de/, () => [74, 'Lecture des fiches livres…']],
     [/Classement de \d+ livre/, () => [90, 'Dernières vérifications…']],
     [/Scout low-content terminé/, () => [100, 'Terminé']],
@@ -2118,7 +2187,7 @@ function verdictSlot(r){
 // identifiants : « B0C3K9 » ne dit rien a un auteur sur ce qu'il devrait battre.
 // Un BSR inconnu s'affiche « non mesure » et JAMAIS 0 : zero est le MEILLEUR classement
 // possible, l'afficher pour une donnee absente inverserait completement la lecture (5.10).
-function blocConcurrents(r){
+function blocConcurrents(r, tousReleves){
   const livres = (r && r.top_books) || [];
   if(!livres.length)
     return '<p class="dl">Top livres concurrents</p><p class="mut">Aucun concurrent '
@@ -2143,7 +2212,7 @@ function blocConcurrents(r){
     + '<td class="n">' + (b.price==null ? '<span class="nm">—</span>' : fmtEur(b.price)) + '</td>'
     + '<td class="n">' + (b.rating==null ? '<span class="nm">—</span>' : b.rating) + '</td>'
     + '<td class="n">' + (b.reviews_count==null ? '<span class="nm">—</span>' : fmt(b.reviews_count)) + '</td>'
-    + '<td class="n">' + (b.bsr==null ? (i >= BSR_RELEVES ? horsTop : nm) : fmt(b.bsr)) + '</td></tr>').join('');
+    + '<td class="n">' + (b.bsr==null ? (!tousReleves && i >= BSR_RELEVES ? horsTop : nm) : fmt(b.bsr)) + '</td></tr>').join('');
   return '<p class="dl">📚 Top livres concurrents (organiques)</p>'
     + '<p class="ctab-sens">🏆 BSR : plus il est <strong>bas</strong>, mieux le livre se vend. '
     + 'Sous 10 000, la preuve de vente est solide.</p>'
@@ -2231,18 +2300,38 @@ function verdictBlock(r){
         +(x.risque?'<em>⚠️ '+esc(x.risque)+'</em>':'')+'</div>').join('')
       +'</details>' : '';
 
+  // Le facteur decisif est un PAVE ecrit par le modele (parfois 900 caracteres) : on en tire une
+  // phrase d'accroche et des points courts, le reste se deplie. La note du code sur les angles
+  // ecartes passe a part. Les tirets cadratins du modele deviennent des virgules.
+  const nette = t => String(t || '').replace(/\s+[—–]\s+/g, ', ').trim();
+  let facteurHtml = '';
+  {
+    const morceaux = nette(v.facteur_decisif).split(/(?<=[.!?])\s+(?=[A-ZÀ-ÝÉ«])|\s*;\s+/)
+      .map(x => x.trim()).filter(Boolean);
+    const note = morceaux.length && /^\d+ angle\(s\) écarté/.test(morceaux[0]) ? morceaux.shift() : '';
+    const accroche = morceaux.shift() || '';
+    const points = morceaux;
+    const li = x => '<li>' + esc(x) + '</li>';
+    facteurHtml = '<div class="vfacteur"><p class="vf-titre">🧭 <strong>Facteur décisif</strong></p>'
+      + (accroche ? '<p class="vf-accroche">' + esc(accroche) + '</p>' : '')
+      + (points.length ? '<ul class="vf-points">' + points.slice(0, 3).map(li).join('') + '</ul>' : '')
+      + (points.length > 3 ? '<details class="va-pli"><summary>Voir le reste du raisonnement</summary><ul class="vf-points">'
+          + points.slice(3).map(li).join('') + '</ul></details>' : '')
+      + (note ? '<p class="vf-note">' + esc(note) + '</p>' : '')
+      + '</div>';
+  }
   return `<div class="vbox">
       ${angleHtml}
       <div class="vactions">
         <button type="button" class="btn-act btn-pdf">📄 Télécharger le Dossier (PDF)</button>
-        ${lc ? '' : '<button type="button" class="btn-act btn-kdp">🏷️ Mots-clés KDP</button>'}
+        <button type="button" class="btn-act btn-kdp">🏷️ Mots-clés KDP</button>
       </div>
       <div class="kdpslot"></div>
       <div class="vraison">
         <div class="vhead">
           <span class="vconf">Confiance ${conf}/10</span>${jauge}
         </div>
-        <p class="vfacteur"><strong>🧭 Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
+        ${facteurHtml}
         ${stratHtml}${autresHtml}
       </div>
     </div>`;
@@ -2251,6 +2340,31 @@ function verdictBlock(r){
 // Verdict a la demande. Un seul appel, sur LA niche que l'auteur a choisie -- c'est tout
 // le sens du gate de cout : /api/verdict impute n_analyses=0 parce qu'il complete une
 // analyse deja comptee, mais il exige quand meme une marge sous le plafond.
+// Cle de la niche dans le resultat d'un travail : son nom (non-fiction) ou sa requete Amazon
+// (low-content, ou `niche` est un objet). C'est ce que le SERVEUR compare pour ranger le
+// resultat paye a la bonne place (jobs.annoter_resultat).
+function cleNiche(r){
+  const n = r && r.niche;
+  return n && typeof n === 'object' ? (n.requete_amazon || n.niche || '') : (n || '');
+}
+
+// L'analyse editoriale et les mots-cles sont des appels PAYANTS a la piece. Avec `?job=`, le
+// serveur range ce qu'il vient de produire dans le travail affiche : rouvrir l'analyse plus
+// tard, ou recharger, ne le fait plus disparaitre ni ne propose de le repayer. Sans travail
+// connu (jamais le cas depuis l'interface), l'appel reste sans etat.
+function urlConservee(base, jobId, r){
+  return jobId
+    ? base + '?job=' + encodeURIComponent(jobId) + '&cle=' + encodeURIComponent(cleNiche(r))
+    : base;
+}
+
+// Le serveur dit s'il a pu garder le resultat. Un echec n'annule pas la reponse (elle est
+// payee) mais l'auteur doit le savoir : sinon il croirait pouvoir la retrouver.
+function noteNonConservee(){
+  return '<p class="kdpnote">⚠️ Cette analyse n’a pas pu être enregistrée : elle disparaîtra si vous '
+    + 'rouvrez ou rechargez la page. Téléchargez le dossier avant de partir.</p>';
+}
+
 async function loadVerdict(r, det, btn){
   // aria-busy plutot qu'un simple changement de libelle : le texte seul est un signal
   // VISUEL, et ces dix secondes d'attente sont precisement le moment ou l'utilisateur
@@ -2258,7 +2372,7 @@ async function loadVerdict(r, det, btn){
   btn.disabled = true; btn.setAttribute('aria-busy', 'true');
   btn.textContent = 'Analyse en cours\u2026';
   try{
-    const rep = await fetch('/api/verdict', {method:'POST',
+    const rep = await fetch(urlConservee('/api/verdict', VUE_NF.jobId, r), {method:'POST',
       headers:{'Content-Type':'application/json'}, body: JSON.stringify(r)});
     if(!rep.ok){
       // 429 = plafond mensuel. Le dire comme une LIMITE, jamais comme une panne : rien
@@ -2268,9 +2382,12 @@ async function loadVerdict(r, det, btn){
         ? 'Limite d\'analyses atteinte pour ce mois-ci. Rien n\'a ete lance.'
         : (d.detail || 'Analyse indisponible.'));
     }
-    r.verdict = await rep.json();
+    const v = await rep.json();
+    const conserve = v._conserve;
+    delete v._cout; delete v._conserve;
+    r.verdict = v;
     const slot = det.querySelector('.verdictslot');
-    slot.innerHTML = verdictSlot(r);
+    slot.innerHTML = verdictSlot(r) + (conserve === false ? noteNonConservee() : '');
     brancherActions(r, det);          // le bloc vient d'etre remplace : re-brancher
     const vb = slot.querySelector('.vbox');   // l'analyse arrive sous le bouton : on y amene l'ecran
     if(vb && vb.scrollIntoView) vb.scrollIntoView({behavior:'smooth', block:'nearest'});
@@ -2296,6 +2413,11 @@ function brancherActions(r, det){
   if(kdpBtn) kdpBtn.addEventListener('click', ev=>{
     ev.stopPropagation(); loadKdp(r, det.querySelector('.kdpslot'), kdpBtn);
   });
+  // Mots-cles deja generes pour cette niche (analyse rouverte) : ils sont la, sans rien repayer.
+  const kdpSlot = det.querySelector('.kdpslot');
+  if(kdpSlot && r.mots_cles && !kdpSlot.innerHTML){
+    kdpSlot.innerHTML = kdpBlock(r.mots_cles); brancherCopie(kdpSlot);
+  }
 }
 
 // ── Les 7 mots-clés backend KDP ────────────────────────────────────────────────────
@@ -2303,23 +2425,41 @@ function brancherActions(r, det){
 // longueur consommée (limite dure de 50 caractères) et le statut de vérification, parce
 // que le point du module est justement qu'on ne devine pas le volume — on vérifie
 // gratuitement qu'Amazon complète l'expression.
-async function loadKdp(niche, slot, btn){
+// Les boutons « Copier » d'un bloc de mots-cles. A part : le bloc est rendu a DEUX endroits
+// (apres l'appel, et a la reouverture d'une analyse), deux branchements divergeraient.
+function brancherCopie(slot){
+  slot.querySelectorAll('.btn-copy').forEach(b=>{
+    b.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      const libelle = b.textContent;
+      navigator.clipboard.writeText(b.dataset.kw).then(()=>{
+        b.textContent='✓ Copié'; setTimeout(()=>{b.textContent=libelle;}, 1400);
+      });
+    });
+  });
+}
+
+async function loadKdp(niche, slot, btn, vue){
+  vue = vue || VUE_NF;
+  const lc = !!(niche.niche && typeof niche.niche === 'object');
+  // Deja genere (et conserve dans le travail) : on le reaffiche, on ne le repaie pas.
+  if(niche.mots_cles){
+    slot.innerHTML = kdpBlock(niche.mots_cles); brancherCopie(slot); return;
+  }
   btn.disabled = true; btn.textContent = 'Recherche en cours…';
   slot.innerHTML = '';
   try{
-    const r = await fetch('/api/kdp-keywords', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify(niche)});
+    // `type` est OBLIGATOIRE en low-content : sans lui le serveur valide une ScoredNiche non-fiction.
+    const r = await fetch(urlConservee('/api/kdp-keywords', vue.jobId, niche), {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(lc ? {type: 'lowcontent', ...niche} : niche)});
     if(!r.ok) throw new Error('HTTP ' + r.status);
-    slot.innerHTML = kdpBlock(await r.json());
-    slot.querySelectorAll('.btn-copy').forEach(b=>{
-      b.addEventListener('click', ev=>{
-        ev.stopPropagation();
-        const libelle = b.textContent;
-        navigator.clipboard.writeText(b.dataset.kw).then(()=>{
-          b.textContent='✓ Copié'; setTimeout(()=>{b.textContent=libelle;}, 1400);
-        });
-      });
-    });
+    const mots = await r.json();
+    const conserve = mots._conserve;
+    delete mots._cout; delete mots._conserve;
+    niche.mots_cles = mots;
+    slot.innerHTML = kdpBlock(mots) + (conserve === false ? noteNonConservee() : '');
+    brancherCopie(slot);
     btn.textContent = '🏷️ Mots-clés KDP';
   }catch(e){
     slot.innerHTML = `<p class="kdpnote">Les mots-clés n'ont pas pu être générés (${esc(String(e.message||e))}).</p>`;
@@ -2863,7 +3003,8 @@ function mesure(cle, valeur, opts){
     : '<span class="v">' + valeur + '</span>';
   const note = o.note ? '<span class="note">' + o.note + '</span>' : '';
   const bad = (!inconnu && o.bad) ? ' v-bad' : '';
-  return '<div class="lc-m' + bad + '"><span class="k">' + esc(cle) + '</span>' + v + note + '</div>';
+  const ico = o.ico ? '<span aria-hidden="true">' + o.ico + '</span> ' : '';
+  return '<div class="lc-m' + bad + '"><span class="k">' + ico + esc(cle) + '</span>' + v + note + '</div>';
 }
 
 function carteLowContent(r){
@@ -2881,17 +3022,18 @@ function carteLowContent(r){
     badges.push('<span class="lc-badge" title="Proposee par l\'IA : la demande n\'est pas confirmee">demande non confirmée</span>');
 
   // part indie : "non mesuree" et JAMAIS 0 %. Zero pour cent se lirait "rayon tenu par
-  // des editeurs installes", donc "n\'y va pas" -- une conclusion, la ou il n\'y a
-  // qu\'une absence de lecture (5.10).
+  // des editeurs installes", donc "n'y va pas" -- une conclusion, la ou il n'y a
+  // qu'une absence de lecture (5.10). Les editeurs non identifies se disent a cote du chiffre.
+  const nInc = r.n_editeur_inconnu || 0;
   const indie = mesure('Part indie',
     r.part_indie == null ? null : fmtPct(r.part_indie),
-    {note: r.n_editeur_inconnu
-      ? r.n_editeur_inconnu + ' éditeur(s) illisible(s), exclus du calcul'
-      : 'part des livres du top publiés via KDP'});
+    {ico: '🙋', note: 'Livres du top publiés en autoédition (KDP). Plus c’est haut, plus un auteur seul a sa chance.'
+      + (nInc ? ' ' + nInc + ' éditeur' + (nInc > 1 ? 's' : '') + ' non identifié' + (nInc > 1 ? 's' : '')
+                + ', non compté' + (nInc > 1 ? 's' : '') + '.' : '')});
 
   const nv = r.n_variantes_quasi_identiques;
   const variantes = mesure('Variantes', nv == null ? null : nv,
-    {bad: nv >= 6, note: 'élevé = mauvais : même intérieur, plusieurs couvertures'});
+    {ico: '🔁', bad: nv >= 6, note: 'Plus c’est élevé, pire c’est : même intérieur vendu sous plusieurs couvertures.'});
 
   // Le prix médian est celui que voit le CLIENT, TVA comprise. KDP applique le seuil de
   // 9,99 € et calcule la redevance sur le prix catalogue HORS TVA (tableau de bord KDP,
@@ -2902,44 +3044,43 @@ function carteLowContent(r){
   const ht = r.prix_catalogue_ht;
   const ancien = r.prix_median != null && ht == null;
   const tva = r.taux_tva_suppose == null ? ''
-    : ', TVA ' + (Math.round(r.taux_tva_suppose * 1000) / 10).toLocaleString('fr-FR') + ' % supposée';
+    : ' (TVA ' + (Math.round(r.taux_tva_suppose * 1000) / 10).toLocaleString('fr-FR') + ' % supposée)';
   const prix = mesure('Prix médian',
     r.prix_median == null ? null : fmtEur(r.prix_median),
-    {bad: r.prix_median != null && r.prix_sous_seuil_60pct,
+    {ico: '💰', bad: r.prix_median != null && r.prix_sous_seuil_60pct,
      note: r.prix_median == null
-       ? 'aucun prix lisible : taux de redevance inconnu'
+       ? 'Aucun prix lisible sur Amazon : redevance inconnue.'
        : ancien
          ? (r.prix_sous_seuil_60pct
-            ? 'affiché sous 9,99 € : sous le seuil hors TVA quel que soit le taux, redevance 50 %'
-            : 'affiché au client ; prix hors TVA non calculé : taux de redevance à recalculer')
-         : 'affiché au client · prix catalogue KDP ' + fmtEur(ht) + ' HT' + tva + ' · '
+            ? 'Prix affiché sous 9,99 € : sous le seuil hors TVA, KDP verse 50 %.'
+            : 'Prix affiché sur Amazon. Le calcul hors TVA manque : relancez l’analyse.')
+         : 'Prix affiché sur Amazon, TVA incluse. À saisir dans KDP : ' + fmtEur(ht) + ' HT' + tva + '. '
            + (r.prix_sous_seuil_60pct
-              ? 'sous le seuil de 9,99 € HT : redevance 50 % au lieu de 60 %'
-              : 'au moins 9,99 € HT : redevance 60 %')});
+              ? 'Sous 9,99 € HT : KDP verse 50 % au lieu de 60 %.'
+              : 'Au moins 9,99 € HT : KDP verse 60 %.')});
 
   // Le format de coupe DÉCIDE du coût d'impression (2,48 € au lieu de 2,05 € sous 110
   // pages en grand format) : une redevance sans son format se lit comme un fait.
   const fc = r.format_coupe;
-  const formatTxt = fc === 'grand' ? 'grand format'
-    : fc === 'standard' ? 'format standard'
-    : 'format de coupe non déterminé : barème standard supposé';
+  const formatTxt = fc === 'grand' ? 'calculé pour le grand format'
+    : fc === 'standard' ? 'calculé pour un format standard'
+    : 'format non déterminé, calculé pour un format standard';
   const red = ancien
     ? mesure('Redevance estimée', 'à recalculer',
-        {note: 'calculée sur le prix affiché TVA comprise, avant le calcul hors TVA : relancez l\'analyse'})
+        {ico: '💶', note: 'Calculée avant le calcul hors TVA : relancez l’analyse.'})
     : mesure('Redevance estimée',
         r.redevance_estimee == null ? null : fmtEur(r.redevance_estimee),
-        {bad: r.redevance_estimee != null && r.redevance_estimee < 2,
-         note: 'par vente, coût d\'impression déduit · ' + formatTxt
-           + (r.n_format_lus ? ' (' + r.n_format_lus + ' fiche(s) mesurée(s))' : '')
-           + ' · encre noire supposée'});
+        {ico: '💶', bad: r.redevance_estimee != null && r.redevance_estimee < 2,
+         note: 'Ce que vous touchez par vente, impression déduite : ' + formatTxt + ', encre noire.'});
 
   const trad = mesure('Éditeurs installés',
     r.part_editeurs_traditionnels == null ? null : fmtPct(r.part_editeurs_traditionnels),
-    {bad: r.part_editeurs_traditionnels != null && r.part_editeurs_traditionnels > 0.5,
-     note: 'Hachette, Larousse, Exacompta…'});
+    {ico: '🏛️', bad: r.part_editeurs_traditionnels != null && r.part_editeurs_traditionnels > 0.5,
+     note: 'Livres du top publiés par de grands éditeurs (Hachette, Larousse, Exacompta…).'});
 
   const bsr = mesure('BSR meilleur', r.bsr_best == null ? null : fmt(r.bsr_best),
-    {note: r.bsr_top_avg == null ? '' : 'moyenne ' + fmt(r.bsr_top_avg)});
+    {ico: '🏆', note: 'Plus le nombre est bas, mieux ça se vend.'
+      + (r.bsr_top_avg == null ? '' : ' Moyenne du top : ' + fmt(r.bsr_top_avg) + '.')});
 
   const alerte = nm
     ? '<p class="lc-nm"><strong>Concurrence non mesurée.</strong> La recherche Amazon n\'a '
@@ -2963,7 +3104,8 @@ function carteLowContent(r){
           ancien ? 'à recalculer' : (r.redevance_estimee == null ? null : fmtEur(r.redevance_estimee)),
           !ancien && r.redevance_estimee != null && r.redevance_estimee < 0)
     + cle('🙋', 'Part indie', r.part_indie == null ? null : fmtPct(r.part_indie), false,
-          r.n_editeur_inconnu ? r.n_editeur_inconnu + ' éditeur(s) illisible(s)' : '');
+          r.n_editeur_inconnu ? r.n_editeur_inconnu + ' éditeur' + (r.n_editeur_inconnu > 1 ? 's' : '')
+            + ' non identifié' + (r.n_editeur_inconnu > 1 ? 's' : '') : '');
 
   // Deux sortes de lignes visibles. Un FAIT (bareme KDP, arithmetique) alerte : ⚠️. Un seuil
   // d'HYPOTHESE (redevance sous 2 €, editeurs > 50 %, non calibres) informe sans alarmer :
@@ -3003,6 +3145,13 @@ function carteLowContent(r){
     + flags
     + '<details class="lc-detail"><summary>📊 Toutes les mesures</summary>'
     + '<div class="lc-mesures">' + indie + variantes + prix + red + trad + bsr + '</div></details>'
+    // Les livres qui occupent le rayon, avec leur classement : jusqu'ici ils n'existaient que dans
+    // le dossier PDF. En low-content le BSR vient de la fiche de CHAQUE livre : un vide veut dire
+    // « non mesure », pas « jamais demande » comme en non-fiction.
+    + ((r.top_books || []).length
+        ? '<details class="avance pli lc-livres"><summary>📚 Les livres qui occupent le rayon ('
+          + r.top_books.length + ')</summary>' + blocConcurrents(r, true) + '</details>'
+        : '')
     + '<div class="verdictslot" aria-live="polite">' + verdictSlot(r) + '</div>'
     + '</article>';
 }
@@ -3096,6 +3245,15 @@ function brancherActionsLc(r, carte){
   });
   const pdfBtn = carte.querySelector('.btn-pdf');
   if(pdfBtn) pdfBtn.addEventListener('click', ev => { ev.stopPropagation(); downloadPdf(r); });
+  const kdpBtn = carte.querySelector('.btn-kdp');
+  if(kdpBtn) kdpBtn.addEventListener('click', ev => {
+    ev.stopPropagation(); loadKdp(r, carte.querySelector('.kdpslot'), kdpBtn, VUE_LC);
+  });
+  // Mots-cles deja generes pour ce rayon (analyse rouverte) : ils sont la, sans rien repayer.
+  const kdpSlot = carte.querySelector('.kdpslot');
+  if(kdpSlot && r.mots_cles && !kdpSlot.innerHTML){
+    kdpSlot.innerHTML = kdpBlock(r.mots_cles); brancherCopie(kdpSlot);
+  }
 }
 
 async function loadVerdictLc(r, carte, btn){
@@ -3104,7 +3262,7 @@ async function loadVerdictLc(r, carte, btn){
   try{
     // `type` est OBLIGATOIRE : sans lui, le serveur valide le corps comme une ScoredNiche
     // non-fiction et rend une 400.
-    const rep = await fetch('/api/verdict', {method:'POST',
+    const rep = await fetch(urlConservee('/api/verdict', VUE_LC.jobId, r), {method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({type: 'lowcontent', ...r})});
     if(!rep.ok){
@@ -3113,8 +3271,11 @@ async function loadVerdictLc(r, carte, btn){
         ? 'Limite d\'analyses atteinte pour ce mois-ci. Rien n\'a ete lance.'
         : (d.detail || 'Analyse indisponible.'));
     }
-    r.verdict = await rep.json();
-    carte.querySelector('.verdictslot').innerHTML = verdictSlot(r);
+    const v = await rep.json();
+    const conserve = v._conserve;
+    delete v._cout; delete v._conserve;
+    r.verdict = v;
+    carte.querySelector('.verdictslot').innerHTML = verdictSlot(r) + (conserve === false ? noteNonConservee() : '');
     brancherActionsLc(r, carte);
   }catch(e){
     btn.disabled = false; btn.removeAttribute('aria-busy');
@@ -3135,10 +3296,11 @@ const VUE_LC = {
     const ic=runLcBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ esLc=e; },
+  arreter(){ if(esLc) esLc.close(); },
   viderEtapes(){ stepsLc.innerHTML=''; viderProg(progressLc); },
   etape(m){ addStepTo(stepsLc, m); majProg(progressLc, 'lowcontent', m); },
   resultat(d){ renderLc(d); },
-  erreur(m){ errboxLc.textContent='Erreur : '+m; errboxLc.classList.add('on'); },
+  erreur(m, neutre){ errboxLc.textContent=(neutre ? '' : 'Erreur : ')+m; errboxLc.classList.add('on'); errboxLc.classList.toggle('info', !!neutre); },
   apres(){
     progressLc.classList.remove('on');
     runLcBtn.disabled=false; runLcLabel.textContent='Trouver les niches';
@@ -3205,6 +3367,7 @@ async function lancerTravail(type, params, vue){
 }
 
 function suivreTravail(id, vue){
+  vue.jobId = id;      // le travail AFFICHE : c'est la que se rangent verdict et mots-cles
   const es = new EventSource('/api/jobs/' + encodeURIComponent(id) + '/stream');
   vue.flux(es);
   // Le flux rejoue TOUTE la progression à chaque raccrochage : on repart d'une liste vide
@@ -3272,9 +3435,7 @@ function menuCompteHtml(){
     + '<form id="form-cloture" autocomplete="off">'
     + '<h4 class="danger">Clôturer mon compte</h4>'
     + '<p><strong>Irréversible.</strong> Sont effacés : votre compte, vos analyses passées et '
-    + 'leurs résultats, votre consommation et votre historique de niches. Reste en place : le '
-    + 'cache des rayons Amazon, partagé entre tous les comptes, qui ne contient aucune donnée '
-    + 'personnelle.</p>'
+    + 'leurs résultats, votre consommation et votre historique de niches.</p>'
     + '<div class="cpt-champs">'
     + '<input type="password" id="cloture-mdp" placeholder="Votre mot de passe" required>'
     + '<button type="submit" class="btn-act danger">Clôturer définitivement</button></div>'
@@ -3300,6 +3461,22 @@ function fmtDate(ts){
 // PURE : appelee telle quelle par les tests (§2.10). Un run sans resultat n'est jamais
 // proposable -- l'ouvrir afficherait un ecran vide qui se lirait « rien trouve », c'est-a-dire
 // une absence de mesure presentee comme un verdict (regle 3).
+// « Explorer » ramene au panneau CLASSIQUE (formulaire + etat vide), pas aux resultats de la
+// derniere recherche : ils restent atteignables dans « Mes analyses ». Une analyse EN COURS
+// reste, elle, affichee -- la cacher ferait croire qu'elle est perdue. Seul le clic dans la
+// barre reinitialise : rouvrir une analyse passe par montrerVue() et doit, lui, afficher.
+function reinitialiserExplorer(){
+  const fiche = $('#fiche');
+  fiche.hidden = true; fiche.innerHTML = '';
+  [[progress, results, empty], [progressFic, resultsFic, emptyFic], [progressLc, resultsLc, emptyLc]]
+    .forEach(([enCours, resultats, vide]) => {
+      if(enCours.classList.contains('on')) return;
+      resultats.classList.remove('on');
+      vide.style.display = 'block';
+    });
+  window.scrollTo(0, 0);
+}
+
 function ligneAnalyse(job){
   const p = job.params || {};
   const sujet = p.seed || p.graine || p.format_cle || p.sous_genre || 'sans thématique';
@@ -3308,6 +3485,10 @@ function ligneAnalyse(job){
   const etat = ouvrable ? n + ' niche(s)'
     : job.statut === 'echec' ? 'échec : ' + (job.erreur || 'cause non enregistrée')
     : job.statut === 'en_cours' ? 'en cours…'
+    // Terminee SANS niche : ni « en attente » (elle est finie) ni « marche mort » (rien n'est
+    // mesure) -- une analyse qui ne trouve rien le dit, sans rien conclure.
+    : job.statut === 'termine' ? 'aucune niche trouvée'
+    : job.statut === 'annule' ? 'arrêtée'
     : 'en attente';
   return '<div class="hist-ligne">'
     + '<span class="quand">' + esc(fmtDate(job.cree_le)) + '</span>'
@@ -3319,6 +3500,16 @@ function ligneAnalyse(job){
     + (ouvrable
         ? '<button type="button" class="btn-act hist-ouvrir" data-id="' + esc(job.id)
           + '">Rouvrir</button>'
+        : '')
+    // Pas finie : on peut l'ARRETER (elle bug, ou tourne dans le vide). Finie ou arretee : on peut la
+    // SUPPRIMER. Jamais l'inverse -- supprimer une analyse en cours ferait ecrire son thread dans le vide.
+    + (job.statut === 'en_cours' || job.statut === 'en_attente'
+        ? '<button type="button" class="btn-arreter" data-arreter="' + esc(job.id)
+          + '" aria-label="Arrêter cette analyse" title="Arrêter cette analyse">⏹️ Arrêter</button>'
+        : '')
+    + (job.statut === 'termine' || job.statut === 'echec' || job.statut === 'annule'
+        ? '<button type="button" class="btn-suppr" data-suppr="' + esc(job.id)
+          + '" aria-label="Supprimer cette analyse" title="Supprimer cette analyse">🗑️</button>'
         : '')
     + '</div>';
 }
@@ -3344,6 +3535,87 @@ async function chargerHistorique(){
   histListe.querySelectorAll('.hist-ouvrir').forEach(b => {
     b.addEventListener('click', () => rouvrirAnalyse(b.dataset.id));
   });
+  histListe.querySelectorAll('.btn-suppr').forEach(b => {
+    b.addEventListener('click', () => demanderSuppression(b));
+  });
+  histListe.querySelectorAll('.btn-arreter').forEach(b => {
+    b.addEventListener('click', () => demanderArret(b, () => chargerHistorique()));
+  });
+}
+
+// Arreter une analyse : elle bug, ou elle tourne dans le vide. Confirmation SUR PLACE, comme la
+// suppression, et on DIT ce que ca coute : arreter ne rembourse rien, l'analyse reste comptee dans
+// la consommation du mois (sinon « lancer puis arreter » serait gratuit). Le bouton d'origine est
+// remis par « Continuer ».
+function demanderArret(btn, apres){
+  const zone = document.createElement('span');
+  zone.className = 'suppr-confirm arret-confirm';
+  zone.setAttribute('role', 'group');
+  zone.setAttribute('aria-label', 'Confirmer l’arrêt');
+  zone.innerHTML = '<span>Arrêter cette analyse ? Elle restera comptée dans vos analyses du mois.</span>'
+    + '<button type="button" class="btn-arret-oui">Oui, arrêter</button>'
+    + '<button type="button" class="btn-arret-non">Continuer</button>';
+  btn.replaceWith(zone);
+  zone.querySelector('.btn-arret-non').addEventListener('click', () => zone.replaceWith(btn));
+  zone.querySelector('.btn-arret-oui').addEventListener('click', async () => {
+    const id = btn.dataset.arreter || null;
+    const vue = id ? [VUE_NF, VUE_FIC, VUE_LC].find(v => v.jobId === id) : (btn._vue || null);
+    const jobId = id || (vue && vue.jobId);
+    const res = await arreterAnalyse(jobId, vue);
+    if(res.ok){ if(apres) apres(); else zone.replaceWith(btn); return; }
+    zone.innerHTML = '<span class="suppr-err">' + esc(res.detail) + '</span>';
+  });
+  zone.querySelector('.btn-arret-non').focus();      // la sortie sure est le choix par defaut
+}
+
+async function arreterAnalyse(jobId, vue){
+  if(!jobId) return {ok: false, detail: 'Aucune analyse à arrêter.'};
+  const rep = await fetch('/api/jobs/' + encodeURIComponent(jobId) + '/annuler', {method: 'POST'}).catch(() => null);
+  if(rep && rep.status === 204){
+    // Si l'analyse arretee est celle AFFICHEE : on coupe le flux et on rend la main (formulaire).
+    if(vue){
+      vue.arreter();
+      try{ localStorage.removeItem(vue.cle); }catch(e){}
+      vue.erreur('Analyse arrêtée. Elle reste comptée dans vos analyses du mois.', true);
+      vue.apres();
+    }
+    return {ok: true};
+  }
+  const d = rep ? await rep.json().catch(() => ({})) : {};
+  return {ok: false, detail: d.detail || 'L’arrêt n’a pas pu être demandé pour le moment.'};
+}
+
+// Supprimer est IRREVERSIBLE : on demande confirmation SUR PLACE, dans la ligne, plutot que par
+// une boite de dialogue du navigateur. Le bouton est remplace par « Supprimer ? Oui / Annuler » ;
+// Annuler remet le bouton d'origine.
+function demanderSuppression(btn){
+  const id = btn.dataset.suppr;
+  const zone = document.createElement('span');
+  zone.className = 'suppr-confirm';
+  zone.setAttribute('role', 'group');
+  zone.setAttribute('aria-label', 'Confirmer la suppression');
+  zone.innerHTML = '<span>Supprimer cette analyse ?</span>'
+    + '<button type="button" class="btn-suppr-oui">Oui, supprimer</button>'
+    + '<button type="button" class="btn-suppr-non">Annuler</button>';
+  btn.replaceWith(zone);
+  zone.querySelector('.btn-suppr-non').addEventListener('click', () => zone.replaceWith(btn));
+  zone.querySelector('.btn-suppr-oui').addEventListener('click', () => supprimerAnalyse(id, zone));
+  zone.querySelector('.btn-suppr-non').focus();      // la sortie sure est le choix par defaut
+}
+
+async function supprimerAnalyse(id, zone){
+  const rep = await fetch('/api/jobs/' + encodeURIComponent(id), {method: 'DELETE'}).catch(() => null);
+  if(rep && rep.status === 204){
+    // Si l'analyse supprimee est celle AFFICHEE dans Explorer, on la retire aussi de l'ecran :
+    // sinon on y lirait des resultats qui n'existent plus nulle part.
+    [VUE_NF, VUE_FIC, VUE_LC].forEach(v => {
+      if(v.jobId === id){ v.jobId = null; reinitialiserExplorer(); }
+    });
+    chargerHistorique();
+    return;
+  }
+  const d = rep ? await rep.json().catch(() => ({})) : {};
+  zone.innerHTML = '<span class="suppr-err">' + esc(d.detail || 'Suppression impossible pour le moment.') + '</span>';
 }
 
 // Assignee dans la fermeture de l'authentification (elle lit l'adresse de session), mais
@@ -3364,6 +3636,7 @@ function rouvrirAnalyse(id){
   switchTab(onglet);
   vue.viderEtapes();
   (job.progression || []).forEach(m => vue.etape(m));
+  vue.jobId = job.id;
   if(job.type === 'scout') fermerFiche();
   if(job.type === 'scout') THEMATIQUE_NF = (job.params && (job.params.seed || job.params.thematique)) || '';
   vue.resultat(job.resultat);
@@ -3513,6 +3786,55 @@ function verdictBlockFic(v){
 // francais : un auteur lit « cosy mystery », jamais le tiret bas.
 const libCle = x => String(x == null ? '' : x).replace(/_/g, ' ');
 
+// Couverture de MON trio par un livre : combien des tropes que je vise il porte deja. C'est la
+// brique de la saturation (fiction_scoring.saturation_trio en est la moyenne sur le rayon) :
+// la montrer livre par livre dit QUI occupe deja la place.
+function couvertureTrio(tropesTrio, tropesLivre){
+  const trio = tropesTrio || [];
+  if(!trio.length) return null;
+  const livre = new Set(tropesLivre || []);
+  return {n: trio.filter(t => livre.has(t)).length, sur: trio.length};
+}
+
+// Les livres du rayon d'un trio, avec de quoi les juger : prix, note, avis, classement, et la
+// part de MON trio qu'ils reprennent deja. PUR. Un classement absent se dit « non mesuré »
+// (jamais 0, qui serait le meilleur rang) ; un titre gratuit a son propre classement et sort du
+// calcul (piege 5.6) : on l'écrit « gratuit », on ne le compare pas.
+function blocLivresFic(r){
+  const n = r.niche || {};
+  const livres = r.books || [];
+  if(!livres.length)
+    return '<p class="mut">Aucun livre du rayon n’a pu être lu : ce n’est pas un rayon vide, '
+         + 'c’est une donnée absente.</p>';
+  const classes = {};
+  (r.classifications || []).forEach(c => { classes[c.asin] = c; });
+  const lignes = livres.map((b, i) => {
+    const c = classes[b.asin];
+    const cov = c && c.est_roman !== false ? couvertureTrio(n.tropes, c.tropes) : null;
+    const serie = (b.serie_total > 1) || b.series_hint;
+    const trio = c && c.est_roman === false ? '<span class="nm">hors roman</span>'
+      : cov ? '<span class="trio-cov trio-cov-' + (cov.n === cov.sur ? 'plein' : cov.n ? 'part' : 'zero') + '">'
+              + cov.n + '/' + cov.sur + '</span>'
+      : '<span class="nm">\u2014</span>';
+    const bsr = b.bsr_gratuit ? '<span class="nm">gratuit</span>'
+      : b.bsr == null ? '<span class="nm">non mesuré</span>' : fmt(b.bsr);
+    return '<tr><td class="rang">' + (i + 1) + '</td>'
+      + '<td><a href="https://www.amazon.fr/dp/' + esc(b.asin) + '" target="_blank" rel="noopener">'
+      + esc(b.title || b.asin) + '</a>'
+      + (b.author ? '<span class="auteur">' + esc(b.author) + (serie ? ' · série' : '') + '</span>'
+                  : (serie ? '<span class="auteur">série</span>' : '')) + '</td>'
+      + '<td class="n">' + (b.price == null ? '<span class="nm">\u2014</span>' : fmtEur(b.price)) + '</td>'
+      + '<td class="n">' + (b.rating == null ? '<span class="nm">\u2014</span>' : b.rating) + '</td>'
+      + '<td class="n">' + (b.reviews_count == null ? '<span class="nm">\u2014</span>' : fmt(b.reviews_count)) + '</td>'
+      + '<td class="n">' + bsr + '</td>'
+      + '<td class="n">' + trio + '</td></tr>';
+  }).join('');
+  return '<p class="ctab-sens">🏆 Classement des ventes : plus le nombre est <strong>bas</strong>, mieux le livre se vend. '
+    + '🎭 « Votre trio » : combien de vos tropes ce livre porte déjà.</p>'
+    + '<table class="ctab"><thead><tr><th></th><th>Titre</th><th>💰 Prix</th><th>⭐ Note</th>'
+    + '<th>💬 Avis</th><th>🏆 Rang</th><th>🎭 Votre trio</th></tr></thead><tbody>' + lignes + '</tbody></table>';
+}
+
 function renderFic(rows){
   gridFic.innerHTML='';
   rcountFic.textContent = rows.length ? `${rows.length} trio(s) analysé(s) en profondeur` : 'aucun trio';
@@ -3533,12 +3855,13 @@ function renderFic(rows){
       : `<span class="mval">${fmtDec(r.autocomplete_score,1)} <span class="mut">(${acLabel})</span></span>`;
     const [pmin,pmed,pmax] = (r.price_band && r.price_band.length===3) ? r.price_band : [null,null,null];
     // Les reserves du verdict (rayon incomplet, sous-genre fantome, non classes) restent
-    // VISIBLES : une mise en garde repliee ne previent personne (§10). Le reste du texte
-    // du verdict se deplie.
+    // VISIBLES : une mise en garde repliee ne previent personne (§10). Le reste du texte du
+    // verdict (« pepite — depth=0.77, openness=0.93… ») est du jargon de moteur : il n'est plus
+    // affiche, ses chiffres sont deja dans les quatre tuiles.
     const phrases = (r.verdict||'').split(/(?<=\.)\s+/).filter(Boolean);
     const avert = phrases.filter(p=>WARN_RE.test(p))
       .map(p=>`<p class="fic-warn">${ICON_WARN}<span>${esc(p)}</span></p>`).join('');
-    const pasAvert = phrases.filter(p=>!WARN_RE.test(p));
+    const nLivres = (r.books || []).length;
     const card=document.createElement('div'); card.className='panel fic-card';
     card.style.setProperty('--i', i);
     card.innerHTML=`
@@ -3558,13 +3881,14 @@ function renderFic(rows){
         <div class="fic-cle"><span class="fic-cle-k">🚪 Ouverture${glossBtn('Ouverture')}</span><b>${fmtDec(r.openness_score)}</b><span class="verdict ${openGrade}">${esc(openLabel)}</span></div>
         <div class="fic-cle"><span class="fic-cle-k">💰 Prix médian</span><b>${fmtEur(pmed)}</b><span class="mut">${pmin==null?'':fmtEur(pmin)+' – '+fmtEur(pmax)}</span></div>
       </div>
-      <details class="fic-detail"><summary>📊 Voir le détail</summary>
-        <p class="fic-sat-note">Saturation : les livres du rayon reprennent déjà, en moyenne, ${Math.round((r.saturation_trio||0)*100)} % de votre trio. Plus c’est élevé, moins il reste de place.</p>
+      <details class="avance pli fic-livres"><summary>📚 Les livres qui occupent le rayon${nLivres ? ' (' + nLivres + ')' : ''}</summary>
+        ${blocLivresFic(r)}</details>
+      <details class="avance pli fic-detail"><summary>🔍 Le rayon en détail</summary>
+        <p class="fic-sat-note">🔥 Saturation : les livres du rayon reprennent déjà, en moyenne, ${Math.round((r.saturation_trio||0)*100)} % de votre trio. Plus c’est élevé, moins il reste de place.</p>
         <div class="fic-metrics">
-          <div class="metric"><span class="mlabel">Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
-          <div class="metric"><span class="mlabel">Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
+          <div class="metric"><span class="mlabel">📚 Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
+          <div class="metric"><span class="mlabel">🎯 Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
         </div>
-        ${pasAvert.length ? `<p class="vrow">${esc(pasAvert.join(' '))}</p>` : ''}
         <div class="histslot"></div>
       </details>`;
     // L'historique fiction etait ECRIT a chaque run (_consigner_fiction) et JAMAIS lu :
@@ -3621,10 +3945,11 @@ const VUE_NF = {
     const ic=runBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ es=e; },
+  arreter(){ if(es) es.close(); },
   viderEtapes(){ steps.innerHTML=''; viderProg(progress); },
   etape(m){ addStep(m); majProg(progress, 'scout', m); },
   resultat(d){ render(d); },
-  erreur(m){ errbox.textContent='Erreur : '+m; errbox.classList.add('on'); },
+  erreur(m, neutre){ errbox.textContent=(neutre ? '' : 'Erreur : ')+m; errbox.classList.add('on'); errbox.classList.toggle('info', !!neutre); },
   apres(){
     progress.classList.remove('on');
     runBtn.disabled=false; runLabel.textContent='Trouver les niches';
@@ -3644,10 +3969,11 @@ const VUE_FIC = {
     const ic=runFicBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ esFic=e; },
+  arreter(){ if(esFic) esFic.close(); },
   viderEtapes(){ stepsFic.innerHTML=''; viderProg(progressFic); },
   etape(m){ addStepFic(m); majProg(progressFic, 'fiction', m); },
   resultat(d){ renderFic(d); },
-  erreur(m){ errboxFic.textContent='Erreur : '+m; errboxFic.classList.add('on'); },
+  erreur(m, neutre){ errboxFic.textContent=(neutre ? '' : 'Erreur : ')+m; errboxFic.classList.add('on'); errboxFic.classList.toggle('info', !!neutre); },
   apres(){
     progressFic.classList.remove('on');
     runFicBtn.disabled=false; runFicLabel.textContent='Trouver les trios';
@@ -3655,6 +3981,15 @@ const VUE_FIC = {
     if(!gridFic.children.length && !errboxFic.classList.contains('on')) emptyFic.style.display='block';
   },
 };
+
+// Le bouton « Arreter l'analyse » de chaque panneau de progression : il agit sur LE TRAVAIL AFFICHE
+// (vue.jobId, suivi au lancement et a la reprise), jamais sur un autre.
+[['#arreter-nf', VUE_NF], ['#arreter-fic', VUE_FIC], ['#arreter-lc', VUE_LC]].forEach(([sel, vue]) => {
+  const b = $(sel);
+  if(!b) return;
+  b._vue = vue;
+  b.addEventListener('click', () => demanderArret(b));
+});
 
 // ================= Glossaire (Task U1) =================
 // Bulle UNIQUE partagée par tous les boutons « ? », en position:fixed (jamais rognée par
@@ -3859,7 +4194,10 @@ function chargerUsage(){
   };
 
   document.querySelectorAll('.nav-item').forEach(b =>
-    b.addEventListener('click', () => montrerVue(b.dataset.vue)));
+    b.addEventListener('click', () => {
+      if(b.dataset.vue === 'explorer') reinitialiserExplorer();
+      montrerVue(b.dataset.vue);
+    }));
   $('#btn-deconnexion-2').addEventListener('click', async () => {
     await fetch('/api/auth/deconnexion', {method:'POST'}).catch(()=>{});
     location.reload();
@@ -4086,7 +4424,7 @@ const AIDE = {
       rien rapporter : c'est le piège le plus coûteux du low-content, et il ne se voit sur
       aucun compteur de concurrence.</p>
       <p><strong>Faisabilité.</strong> Un carnet quadrillé et un cahier d'activités illustré
-      ne se produisent pas dans le même monde. L'effort est annoncé, pas deviné.</p>
+      ne se produisent pas dans le même monde. L'effort de production est indiqué pour chaque format.</p>
 
       <h3>Les deux signaux de pénétration propres au rayon</h3>
       <p><strong>Part indie.</strong> Douze références peuvent toutes venir d'Exacompta ou

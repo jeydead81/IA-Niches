@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-STATUTS = ("en_attente", "en_cours", "termine", "echec")
+STATUTS = ("en_attente", "en_cours", "termine", "echec", "annule")
 DEFAULT_MAX_PROGRESS = 200      # un run de 15 min log beaucoup : borne la table, pas la RAM seule
 
 
@@ -91,7 +91,7 @@ class JobStore:
 
     def start(self, job_id: str) -> None:
         with self._conn() as cx:
-            cx.execute("UPDATE jobs SET statut='en_cours', maj_le=? WHERE id=?",
+            cx.execute("UPDATE jobs SET statut='en_cours', maj_le=? WHERE id=? AND statut!='annule'",
                        (self.now(), job_id))
 
     def append_progress(self, job_id: str, msg: str) -> None:
@@ -110,16 +110,72 @@ class JobStore:
     def finish(self, job_id: str, resultat, cout: dict) -> None:
         with self._conn() as cx:
             cx.execute(
-                "UPDATE jobs SET statut='termine', resultat=?, cout=?, fini_le=? WHERE id=?",
+                "UPDATE jobs SET statut='termine', resultat=?, cout=?, fini_le=? "
+                "WHERE id=? AND statut!='annule'",
                 (json.dumps(resultat, ensure_ascii=False),
                  json.dumps(cout, ensure_ascii=False), self.now(), job_id),
             )
+
+    # Les SEULS champs qu'un appel payant « a la piece » peut ranger dans une niche d'un
+    # resultat. Une liste fermee : le client choisit la niche, jamais le nom du champ ecrit.
+    CHAMPS_ANNOTABLES = ("verdict", "mots_cles")
+
+    def annoter_resultat(self, job_id: str, user_id: str, cle: str, champ: str, valeur) -> bool:
+        """Range `valeur` sous `champ` dans la niche `cle` du resultat d'un travail TERMINE.
+
+        Pourquoi : l'analyse editoriale (~0,028 $) et les mots-cles KDP (~0,006 $) sont des
+        appels a la piece. Leur resultat n'existait que dans la page : rouvrir une analyse ou
+        recharger le faisait disparaitre, et le bouton proposait de le repayer.
+
+        `cle` est le nom de la niche (non-fiction) ou sa requete Amazon (low-content). Rend
+        False -- sans lever -- quand il n'y a rien a annoter : travail inconnu, d'un AUTRE
+        utilisateur (connaitre un identifiant ne donne aucun droit d'ecriture), sans resultat,
+        ou niche absente. BEGIN IMMEDIATE : lire puis reecrire tout le resultat sans le verrou
+        perdrait l'annotation d'un appel concurrent (verdict et mots-cles se demandent a
+        quelques secondes d'intervalle)."""
+        if champ not in self.CHAMPS_ANNOTABLES:
+            return False
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                row = cx.execute("SELECT user_id, resultat FROM jobs WHERE id=?",
+                                 (job_id,)).fetchone()
+                if row is None or row[0] != user_id or row[1] is None:
+                    cx.execute("ROLLBACK")
+                    return False
+                resultat = json.loads(row[1])
+                cible = None
+                if isinstance(resultat, list):
+                    for entree in resultat:
+                        if isinstance(entree, dict) and self._est_la_niche(entree, cle):
+                            cible = entree
+                            break
+                if cible is None:
+                    cx.execute("ROLLBACK")
+                    return False
+                cible[champ] = valeur
+                cx.execute("UPDATE jobs SET resultat=? WHERE id=?",
+                           (json.dumps(resultat, ensure_ascii=False), job_id))
+                cx.execute("COMMIT")
+                return True
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
+
+    @staticmethod
+    def _est_la_niche(entree: dict, cle: str) -> bool:
+        niche = entree.get("niche")
+        if isinstance(niche, dict):                  # low-content : requete Amazon d'abord
+            return cle in (niche.get("requete_amazon"), niche.get("niche"))
+        return niche == cle                          # non-fiction : le nom de la niche
 
     def fail(self, job_id: str, erreur: str, cout: dict | None = None) -> None:
         """L'argent dépensé avant l'échec reste imputé — sinon on facture dans le vide."""
         with self._conn() as cx:
             cx.execute(
-                "UPDATE jobs SET statut='echec', erreur=?, cout=?, fini_le=? WHERE id=?",
+                "UPDATE jobs SET statut='echec', erreur=?, cout=?, fini_le=? "
+                "WHERE id=? AND statut!='annule'",
                 (erreur, json.dumps(cout, ensure_ascii=False) if cout is not None else None,
                  self.now(), job_id),
             )
@@ -184,6 +240,78 @@ class JobStore:
                 "WHERE statut='en_cours' AND COALESCE(maj_le, cree_le) < ? "
                 "ORDER BY cree_le ASC", (limite,)).fetchall()
         return [self._row_to_job(r) for r in rows]
+
+    MESSAGE_ANNULE = "Arrêtée à votre demande."
+
+    def annuler(self, job_id: str, user_id: str) -> str:
+        """Arrete UNE analyse de l'utilisateur : « annule », « deja_fini » ou « introuvable ».
+
+        IMMEDIAT cote donnees : le statut passe a « annule » tout de suite, l'utilisateur voit son
+        analyse arretee et peut la supprimer ou en relancer une. Le thread, lui, s'arrete a son
+        prochain point de controle (cf. annulation.py) ; `finish`, `fail` et `start` ne font
+        jamais revenir un travail annule a un autre etat.
+
+        « introuvable » couvre aussi le travail d'un AUTRE compte (on ne confirme pas qu'un
+        identifiant existe). BEGIN IMMEDIATE : un `finish` concurrent ne doit pas passer entre
+        la lecture du statut et son ecriture."""
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                row = cx.execute("SELECT user_id, statut FROM jobs WHERE id=?", (job_id,)).fetchone()
+                if row is None or row[0] != user_id:
+                    cx.execute("ROLLBACK")
+                    return "introuvable"
+                if row[1] not in ("en_attente", "en_cours"):
+                    cx.execute("ROLLBACK")
+                    return "deja_fini"
+                cx.execute("UPDATE jobs SET statut='annule', erreur=?, fini_le=?, maj_le=? WHERE id=?",
+                           (self.MESSAGE_ANNULE, self.now(), self.now(), job_id))
+                cx.execute("COMMIT")
+                return "annule"
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
+
+    def est_annule(self, job_id: str) -> bool:
+        with self._conn() as cx:
+            row = cx.execute("SELECT statut FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return bool(row) and row[0] == "annule"
+
+    def enregistrer_cout_annule(self, job_id: str, cout: dict) -> None:
+        """Le cout deja engage d'une analyse arretee : il reste sur le travail, comme pour un
+        echec (l'argent parti est compte)."""
+        with self._conn() as cx:
+            cx.execute("UPDATE jobs SET cout=? WHERE id=? AND statut='annule'",
+                       (json.dumps(cout, ensure_ascii=False), job_id))
+
+    def supprimer(self, job_id: str, user_id: str) -> str:
+        """Supprime UNE analyse de l'utilisateur : « supprime », « introuvable » ou « en_cours ».
+
+        « introuvable » couvre aussi le travail d'un AUTRE compte : distinguer les deux
+        confirmerait qu'un identifiant existe. Une analyse pas finie (en attente ou en cours)
+        ne se supprime pas : son thread ecrirait ensuite dans une ligne disparue, et
+        l'usage reserve ne serait jamais solde proprement.
+
+        Ne touche NI a la consommation (usage.db : supprimer de l'ecran ne rembourse rien et ne
+        doit pas liberer d'unite de plafond), NI a l'historique d'evolution des niches."""
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                row = cx.execute("SELECT user_id, statut FROM jobs WHERE id=?", (job_id,)).fetchone()
+                if row is None or row[0] != user_id:
+                    cx.execute("ROLLBACK")
+                    return "introuvable"
+                if row[1] in ("en_attente", "en_cours"):
+                    cx.execute("ROLLBACK")
+                    return "en_cours"
+                cx.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+                cx.execute("COMMIT")
+                return "supprime"
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
 
     # ── lecture ──
     def supprimer_utilisateur(self, user_id: str) -> int:

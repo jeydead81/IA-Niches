@@ -110,7 +110,7 @@ def test_le_dossier_de_passation_couvre_TOUS_les_endpoints_reels():
     # un document) : on compare la FORME de la route, pas le nom de sa variable.
     norm = lambda c: re.sub(r"\{[^}]+\}", "{}", c)
     src = (Path(__file__).resolve().parent.parent / "web" / "server.py").read_text("utf-8")
-    reels = {(m, norm(c)) for m, c in re.findall(r'@app\.(get|post)\("([^"]+)"', src)}
+    reels = {(m, norm(c)) for m, c in re.findall(r'@app\.(get|post|delete)\("([^"]+)"', src)}
     documentes = {(m.split()[0].lower(), norm(m.split()[1])) for m, _ in ENDPOINTS}
     assert reels == documentes, f"manquants : {reels - documentes} ; en trop : {documentes - reels}"
 

@@ -213,22 +213,20 @@ def _niches_lisibles(entree, progress, anomalies: list | None = None) -> list[di
             brut = json.loads(brut)
         except ValueError:
             anomalies.append("texte JSON invalide")
-            progress("  ⚠ réponse du modèle illisible (niches : texte JSON invalide) — "
-                     "ignorée, jamais devinée.")
+            progress("  ⚠ Réponse de l'IA illisible : elle a été ignorée.")
             return []
     if brut is None:
         anomalies.append("niches absentes")
         return []
     if not isinstance(brut, list):
         anomalies.append(type(brut).__name__)
-        progress(f"  ⚠ réponse du modèle illisible (niches : {type(brut).__name__} au lieu "
-                 f"d'une liste) — ignorée, jamais devinée.")
+        progress("  ⚠ Réponse de l'IA illisible : elle a été ignorée.")
         return []
     objets = [d for d in brut if isinstance(d, dict)]
     if len(objets) < len(brut):
         anomalies.append("entrées hors schéma")
-        progress(f"  ⚠ {len(brut) - len(objets)} entrée(s) du modèle illisible(s) (forme "
-                 f"hors schéma) — ignorée(s), jamais devinée(s).")
+        progress(f"  ⚠ {len(brut) - len(objets)} entrée(s) de la réponse de l'IA illisible(s) : "
+                 f"ignorée(s).")
     return objets
 
 

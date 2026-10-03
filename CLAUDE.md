@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-03** (1 440 tests sur 114 fichiers, 49 modules, 34
+> Comptages revérifiés le **2026-10-03** (1 578 tests sur 118 fichiers, 49 modules, 34
 > variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -63,7 +63,7 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
 mais rien n'est déployé) : FastAPI (`web/server.py`, **1 171 lignes,
-20 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-02) + un unique
+22 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-03) + un unique
 `web/index.html` de **125 534 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
 page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
 page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
@@ -379,7 +379,7 @@ plafond entier — ce qui se lit comme une arnaque, pas comme une protection. **
 relever sans relever le plafond** : `tests/test_devis.py` tient les deux ensemble, ainsi
 que les `max` des champs HTML et les presets.
 
-### 2.6 Endpoints (`web/server.py`) — **20**
+### 2.6 Endpoints (`web/server.py`) — **22**
 
 **`GET /api/scout` et `GET /api/fiction` N'EXISTENT PLUS** (commit `5257323`). Deux chemins pour
 le même travail, dont un seul exercé, divergent — c'est arrivé aux contraintes de composition,
@@ -405,11 +405,13 @@ l'exiger).
 | POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
 | GET | `/api/jobs/{id}` | oui | État complet : statut, progression, résultat, coût, erreur, dates. **404 — et non 403 — quand le job appartient à quelqu'un d'autre** : distinguer les deux confirmerait que l'identifiant existe |
 | GET | `/api/jobs` | oui | Liste de l'utilisateur de la session, plus récents d'abord. `limit` (20). **Aucun paramètre `user_id`** |
+| POST | `/api/jobs/{id}/annuler` | oui | **Arrête UNE analyse** de la session (2026-10-03 : elle bug ou tourne dans le vide). IMMÉDIAT côté données (statut `annule`), COOPÉRATIF côté thread : on ne tue pas un thread, `annulation.verifier()` lève `Annulation` — une **`BaseException`**, jamais une `Exception` (les `except Exception` « un échec ne coule jamais le run » l'avaleraient ; les moteurs relèvent déjà les `BaseException` en imputant le pire cas) — à chaque message de progression, avant une phase payante (`CostTracker.verifier`) et à chaque cycle d'attente du fournisseur (`search_providers`). Contrôle propre à chaque FIL (`threading.local`), lu en base au plus une fois par demi-seconde. **L'argent déjà engagé reste imputé et l'unité de plafond reste PRISE** : arrêter ne rembourse rien, sinon « lancer puis arrêter » serait gratuit (même règle qu'un échec). Aucune notification. `finish`/`fail`/`start` ne font JAMAIS revenir un travail `annule` à un autre état (le thread peut finir après). 404 — jamais 403 — pour le travail d'un autre compte ; 409 si déjà finie ; `origine_sure`. Marche aussi en `JOBS_MODE=worker` |
+| DELETE | `/api/jobs/{id}` | oui | **Supprime UNE analyse** de la session (« Mes analyses », 2026-10-03). **404** — jamais 403 — pour le travail d'un autre compte ; **409** pour une analyse pas finie (son thread écrirait dans le vide) ; 204 sinon ; `origine_sure`. Supprime le travail (étapes, résultat, verdicts et mots-clés rangés dedans) et **RIEN d'autre** : ni `usage.db` (supprimer de l'écran ne rembourse rien et ne libère aucune unité de plafond, sinon « supprimer puis relancer » contournerait le plafond mensuel), ni l'historique d'évolution des niches (`history.db`, série partagée par toutes les analyses d'une même niche) |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
 | GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_analyses, cout_usd}`. Le backend rend toujours le coût ; **l'UI n'affiche que le nombre d'analyses** (§5.27) |
-| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** (la `ScoredNiche` entière dans le body ; body invalide → 400). Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) |
+| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
-| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` |
+| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
 
 ### 2.7 Gardes de sécurité (revue adversariale, commits `d443ba8` + `8d37ab8`)
@@ -577,7 +579,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1440 tests** sur **114 fichiers** `tests/test_*.py`, **1440 passés, 0 ignoré, 0 échec,
+**1578 tests** sur **118 fichiers** `tests/test_*.py`, **1578 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1407,6 +1409,9 @@ Section critique. Chacun a coûté un bug réel.
     l'outil, justement pour qu'un correctif de lecture s'applique sans rien repayer.
     **Corollaire de lecture** : après un correctif de parseur, la ligne « N/M fiche(s)
     servie(s) par le cache » est l'alerte, pas une bonne nouvelle.
+    **Depuis le 2026-10-03 cette ligne n'atteint plus l'utilisateur** (décision de Baptiste : il n'a pas à savoir
+    qu'un cache existe) : `progression_publique.py` la retire à la LECTURE d'un travail et du flux SSE, le brut
+    reste dans `jobs.db` et dans la CLI. **Pour ce diagnostic, lire `jobs.db` ou lancer la CLI, pas l'écran.**
 
 39. **Le prix d'Amazon est TTC, le prix catalogue KDP est HORS TVA — et le grand format a sa
     propre grille.** La formule comparait le prix affiché au seuil de 9,99 € et calculait la
@@ -1463,7 +1468,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1440 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1578 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

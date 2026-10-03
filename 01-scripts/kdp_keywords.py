@@ -126,8 +126,8 @@ CANDIDATS_INPUT_SCHEMA = {
 
 # Motif du rejet porté par `rejetes` quand la réponse ne se lit pas : le seul canal que le
 # dossier et l'écran affichent déjà, sans changer le modèle `MotsClesKDP`.
-MOTIF_ILLISIBLE = ("réponse du modèle illisible : les candidats ne sont pas une liste — "
-                   "ignorés, jamais découpés ni devinés")
+MOTIF_ILLISIBLE = ("réponse de l'IA illisible : les candidats ne forment pas une liste, "
+                   "ils ont été ignorés")
 
 
 def _json_si_texte(v):

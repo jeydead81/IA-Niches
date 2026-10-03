@@ -151,7 +151,7 @@ def test_les_variantes_n_alarment_PAS_sur_la_carte_mais_restent_lisibles_a_l_env
     html = appeler("carteLowContent", _lc(n_variantes_quasi_identiques=9), dependances=_LC)
     assert "9 variantes" not in _avant_detail(html)
     detail = html[html.index('<details class="lc-detail"'):]
-    assert "élevé = mauvais" in detail and "v-bad" in detail
+    assert "élevé, pire c’est" in detail and "v-bad" in detail
 
 
 def test_un_seuil_d_HYPOTHESE_informe_sans_alarmer_un_FAIT_de_bareme_alerte():
@@ -206,7 +206,7 @@ def test_une_part_indie_PARTIELLE_garde_sa_reserve_dans_la_zone_visible():
     d'éditeurs illisibles reste à côté du chiffre (lowcontent_scoring._part)."""
     visible = _avant_detail(appeler("carteLowContent", _lc(part_indie=1.0, n_editeur_inconnu=9),
                                     dependances=_LC))
-    assert "9 éditeur(s) illisible(s)" in visible
+    assert "9 éditeurs non identifiés" in visible
 
 
 def test_une_redevance_faible_est_dite_en_TEXTE_pas_seulement_en_couleur():
@@ -266,14 +266,14 @@ def test_le_pourquoi_et_l_analyse_strategique_sont_repliables_mais_PRESENTS():
         assert texte in html, f"contenu disparu : {texte}"
 
 
-def test_les_mots_cles_ne_sont_offerts_qu_en_non_fiction():
-    """`/api/kdp-keywords` ne valide que la forme non-fiction : en low-content le bouton
-    rendait une 400, donc un bouton mort (§5.26)."""
+def test_les_mots_cles_sont_offerts_en_non_fiction_ET_en_low_content():
+    """Le dossier PDF les portait déjà pour le low-content, la page non (Baptiste, 2026-10-03) :
+    `/api/kdp-keywords` accepte désormais `type: lowcontent` (tests/test_conservation_analyses)."""
     nf = appeler("verdictBlock", {"niche": "n", "verdict": _verdict()}, dependances=_VB)
     lc = appeler("verdictBlock", {"niche": {"niche": "registre"}, "verdict": _verdict()},
                  dependances=_VB)
     assert "btn-kdp" in nf and "btn-pdf" in nf
-    assert "btn-kdp" not in lc and "btn-pdf" in lc
+    assert "btn-kdp" in lc and "btn-pdf" in lc
 
 
 def test_un_format_norme_SANS_source_le_dit_en_toutes_lettres():
@@ -656,14 +656,12 @@ def test_les_jalons_cherchent_des_phrases_que_les_moteurs_emettent_vraiment():
                             "niches avec demande confirmée", "Concurrence Amazon",
                             "Récupération des BSR", "Verdict éditorial", "Scout terminé"],
         "fiction_master.py": ["Génération de", "trios générés", "SERP «", "Enrichissement de",
-                              "déjà classée", "Classification de", "Sonde autocomplete",
+                              "Classification de", "Sonde autocomplete",
                               "Scout fiction terminé"],
-        "fiction_serp_provider.py": ["servie(s) par le cache"],
         "lowcontent_master.py": ["Lecture de ce qu'Amazon complète", "réelle(s) retenue(s)",
                                  "Classement des requêtes par l'IA", "proposée(s)",
                                  "Confrontation des propositions", "niche(s) avec demande confirmée",
-                                 "Concurrence Amazon", "recherche(s) Amazon servie(s) par le ",
-                                 "Enrichissement de", "Classement de", "Scout low-content terminé"],
+                                 "Concurrence Amazon", "Enrichissement de", "Classement de", "Scout low-content terminé"],
     }
     for fichier, fragments in attendus.items():
         src = lu(fichier)
@@ -681,3 +679,394 @@ def test_le_retour_aux_resultats_est_un_bouton_visible():
     regle = regle[:regle.index("}") + 1]
     assert "border:1.5px solid" in regle and "cursor:pointer" in regle
     assert ".fiche-retour:hover" in css
+
+
+# ── L'analyse payée est gardée (Baptiste, 2026-10-03) ───────────────────────────────────────
+# Côté serveur : tests/test_conservation_analyses.py. Ici, le câblage de l'interface.
+
+def test_la_cle_d_une_niche_est_son_nom_ou_sa_requete_low_content():
+    assert appeler("cleNiche", {"niche": "tarot"}, dependances=()) == "tarot"
+    assert appeler("cleNiche", {"niche": {"niche": "Registre", "requete_amazon": "registre obligatoire"}},
+                   dependances=()) == "registre obligatoire"
+    assert appeler("cleNiche", {}, dependances=()) == ""
+
+
+def test_l_url_porte_le_travail_et_la_niche_quand_on_les_connait():
+    url = appeler("urlConservee", "/api/verdict", "abc123", {"niche": "tarot de marseille"},
+                  dependances=("cleNiche",))
+    assert url == "/api/verdict?job=abc123&cle=tarot%20de%20marseille"
+
+
+def test_sans_travail_connu_l_appel_reste_sans_etat():
+    assert appeler("urlConservee", "/api/verdict", None, {"niche": "t"},
+                   dependances=("cleNiche",)) == "/api/verdict"
+
+
+def test_les_trois_appels_payants_passent_par_l_url_conservee():
+    html = _html()
+    assert "urlConservee('/api/verdict', VUE_NF.jobId, r)" in html
+    assert "urlConservee('/api/verdict', VUE_LC.jobId, r)" in html
+    assert "urlConservee('/api/kdp-keywords', vue.jobId, niche)" in html
+
+
+def test_le_travail_affiche_est_suivi_au_lancement_a_la_reprise_et_a_la_reouverture():
+    html = _html()
+    assert "vue.jobId = id;" in html                       # suivreTravail : lancement ET reprise
+    debut = html.index("function rouvrirAnalyse(")
+    assert "vue.jobId = job.id;" in html[debut:html.index("\n}", debut)]
+
+
+def test_une_analyse_non_conservee_le_dit_a_l_auteur():
+    html = appeler("noteNonConservee", dependances=())
+    assert "n’a pas pu être enregistrée" in html and "Téléchargez le dossier" in html
+    src = _html()
+    assert src.count("conserve === false ? noteNonConservee()") >= 3
+
+
+def test_des_mots_cles_deja_generes_se_reaffichent_sans_repayer():
+    src = _html()
+    debut = src.index("async function loadKdp(")
+    corps = src[debut:src.index("\n}\n", debut)]
+    assert corps.index("niche.mots_cles") < corps.index("fetch("), \
+        "le test « déjà généré » doit PRÉCÉDER l'appel payant"
+    assert "r.mots_cles && !kdpSlot.innerHTML" in src      # réaffichés à la réouverture
+
+
+# ── « Explorer » ramène au panneau classique ─────────────────────────────────────────────────
+
+def test_explorer_remet_le_panneau_classique_mais_laisse_une_analyse_en_cours():
+    src = _html()
+    debut = src.index("function reinitialiserExplorer(")
+    corps = src[debut:src.index("\n}\n", debut)]
+    assert "if(enCours.classList.contains('on')) return;" in corps, \
+        "une analyse EN COURS ne se cache pas : elle semblerait perdue"
+    assert "resultats.classList.remove('on')" in corps and "vide.style.display = 'block'" in corps
+    assert "fiche.hidden = true" in corps
+
+
+def test_seul_le_clic_dans_la_barre_reinitialise_pas_l_ouverture_d_une_analyse():
+    """`rouvrirAnalyse` passe par montrerVue() et DOIT afficher ses résultats : si la
+    réinitialisation vivait dans montrerVue, rouvrir une analyse l'effacerait aussitôt."""
+    src = _html()
+    debut = src.index("montrerVue = function(cle){")
+    assert "reinitialiserExplorer" not in src[debut:src.index("\n  };", debut)]
+    assert "if(b.dataset.vue === 'explorer') reinitialiserExplorer();" in src
+
+
+def test_aucun_texte_de_l_interface_ne_parle_du_cache():
+    """Décision de Baptiste (2026-10-03) : l'utilisateur n'a pas à savoir qu'un cache existe.
+    Les messages des moteurs sont filtrés côté serveur (progression_publique) ; ici, ce que
+    l'interface écrit elle-même, libellés de phase compris. Exception à trancher avec lui : le
+    texte de clôture de compte, qui dit ce qui reste après l'effacement."""
+    import re
+    html = _html()
+    html = re.sub(r"<style>.*?</style>", "", html, flags=re.S)
+    html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    lignes = [l.strip() for l in html.split("\n")]
+    code = [l for l in lignes if not l.startswith("//")]
+    fautives = [l for l in code
+                if re.search(r"(en|le|du|mis en) cache", l, re.I)
+                and "localStorage" not in l and "Cache-Control" not in l
+                and "partagé entre tous les comptes" not in l and "cache des rayons" not in l]
+    assert not fautives, fautives
+
+
+# ── Fiction : approfondir une niche comme en non-fiction (Baptiste, 2026-10-03) ─────────────
+#
+# La carte fiction ne montrait que quatre chiffres et un texte de moteur (« pepite — depth=0.77,
+# openness=0.93… »). Le rapport porte pourtant les livres du rayon et leurs tropes classés.
+
+_LIVRES_DEPS = ("esc", "fmt", "fmtEur", "couvertureTrio")
+
+
+def _rapport_fic(**kw):
+    base = {"niche": {"sous_genre": "cosy_mystery", "tropes": ["a", "b", "c"], "decor": "d"},
+            "books": [
+                {"asin": "B1", "title": "Premier", "author": "Dupont", "price": 4.99, "rating": 4.4,
+                 "reviews_count": 120, "bsr": 8500, "serie_total": 5},
+                {"asin": "B2", "title": "Second", "bsr": None},
+                {"asin": "B3", "title": "Gratuit", "bsr": 12, "bsr_gratuit": True},
+                {"asin": "B4", "title": "Un jeu", "bsr": 900}],
+            "classifications": [{"asin": "B1", "tropes": ["a", "b", "c"], "est_roman": True},
+                                {"asin": "B2", "tropes": ["a"], "est_roman": True},
+                                {"asin": "B4", "tropes": [], "est_roman": False}]}
+    base.update(kw)
+    return base
+
+
+def test_couvertureTrio_compte_les_tropes_du_trio_que_le_livre_porte_deja():
+    assert appeler_json("couvertureTrio", ["a", "b", "c"], ["a", "c", "x"], dependances=()) == {"n": 2, "sur": 3}
+    assert appeler_json("couvertureTrio", [], ["a"], dependances=()) is None
+    assert appeler_json("couvertureTrio", ["a"], None, dependances=()) == {"n": 0, "sur": 1}
+
+
+def test_les_livres_du_rayon_montrent_prix_note_avis_rang_et_reprise_du_trio():
+    html = appeler("blocLivresFic", _rapport_fic(), dependances=_LIVRES_DEPS)
+    assert "Premier" in html and "Dupont" in html and "4,99" in html and "8" in html and "120" in html
+    assert "3/3" in html and "trio-cov-plein" in html, "un livre qui reprend tout le trio saute aux yeux"
+    assert "1/3" in html and "trio-cov-part" in html
+    assert "https://www.amazon.fr/dp/B1" in html
+
+
+def test_un_rang_absent_n_est_jamais_zero_et_un_titre_gratuit_n_est_pas_compare():
+    html = appeler("blocLivresFic", _rapport_fic(), dependances=_LIVRES_DEPS)
+    assert "non mesuré" in html and ">0<" not in html
+    assert "gratuit" in html, "le classement gratuit est dit, jamais comparé aux ventes payantes"
+
+
+def test_un_non_roman_est_dit_hors_roman_et_sans_reprise_de_trio():
+    html = appeler("blocLivresFic", _rapport_fic(), dependances=_LIVRES_DEPS)
+    ligne = html[html.index("Un jeu"):]
+    assert "hors roman" in ligne.split("</tr>")[0]
+
+
+def test_un_rayon_sans_livre_lu_dit_donnee_absente_pas_rayon_vide():
+    html = appeler("blocLivresFic", _rapport_fic(books=[]), dependances=_LIVRES_DEPS)
+    assert "donnée absente" in html and "rayon vide" in html
+
+
+def test_la_serie_est_signalee_sur_le_livre():
+    html = appeler("blocLivresFic", _rapport_fic(), dependances=_LIVRES_DEPS)
+    assert "Dupont · série" in html
+
+
+def test_le_jargon_du_verdict_moteur_n_est_plus_affiche_sur_la_carte_fiction():
+    """« pepite — depth=0.77, openness=0.93, saturation_trio=0.33 » : du chinois pour un
+    utilisateur. Les réserves (rayon incomplet, alertes) restent visibles ; le reste est parti."""
+    src = _html()
+    debut = src.index("function renderFic(rows){")
+    corps = src[debut:src.index("\nformFic.addEventListener('submit'", debut)]
+    assert "pasAvert" not in corps
+    assert "WARN_RE.test(p)" in corps and "fic-warn" in corps
+
+
+def test_la_carte_fiction_a_ses_deux_volets_comme_la_non_fiction():
+    src = _html()
+    debut = src.index("function renderFic(rows){")
+    corps = src[debut:src.index("\nformFic.addEventListener('submit'", debut)]
+    assert "Les livres qui occupent le rayon" in corps and "Le rayon en détail" in corps
+    assert "blocLivresFic(r)" in corps
+
+
+# ── Supprimer une analyse (Baptiste, 2026-10-03) ─────────────────────────────────────────────
+# Côté serveur : tests/test_suppression_analyses.py.
+
+_LIGNE = ("esc", "TYPE_LABEL", "TYPE_EMO", "fmtDate")
+
+
+def _job(**kw):
+    base = {"id": "j1", "type": "scout", "statut": "termine", "params": {"seed": "sommeil"},
+            "resultat": [{"niche": "a"}], "cree_le": 1790000000.0, "erreur": None}
+    base.update(kw)
+    return base
+
+
+def test_une_analyse_terminee_ou_en_echec_peut_etre_supprimee():
+    for statut, resultat in (("termine", [{"niche": "a"}]), ("echec", None)):
+        html = appeler("ligneAnalyse", _job(statut=statut, resultat=resultat,
+                                            erreur="boom" if statut == "echec" else None),
+                       dependances=_LIGNE)
+        assert 'data-suppr="j1"' in html and "Supprimer cette analyse" in html
+
+
+def test_une_analyse_pas_finie_ne_propose_pas_de_suppression():
+    """Son thread écrirait ensuite dans une ligne disparue : le serveur la refuse (409), et
+    l'interface ne la propose même pas."""
+    for statut in ("en_cours", "en_attente"):
+        html = appeler("ligneAnalyse", _job(statut=statut, resultat=None), dependances=_LIGNE)
+        assert "data-suppr" not in html
+
+
+def test_la_suppression_demande_confirmation_sur_place_et_annuler_est_le_choix_par_defaut():
+    src = _html()
+    debut = src.index("function demanderSuppression(")
+    corps = src[debut:src.index("\n}\n", debut)]
+    assert "Supprimer cette analyse ?" in corps and "btn-suppr-oui" in corps and "btn-suppr-non" in corps
+    assert "btn-suppr-non').focus()" in corps, "la sortie sûre est le choix par défaut"
+
+
+def test_supprimer_l_analyse_affichee_la_retire_aussi_de_l_ecran():
+    """Sinon on lirait dans Explorer des résultats qui n'existent plus nulle part."""
+    src = _html()
+    debut = src.index("async function supprimerAnalyse(")
+    corps = src[debut:src.index("\n}\n", debut)]
+    assert "'DELETE'" in corps and "reinitialiserExplorer()" in corps and "chargerHistorique()" in corps
+    assert "204" in corps
+
+
+# ── Low-content : texte lisible, livres du rayon, facteur décisif (Baptiste, 2026-10-03) ──────
+
+def test_les_notes_de_la_carte_low_content_sont_en_francais_courant():
+    """Capture de Baptiste : « c'est pavé et illisible ». Plus de « affiché au client · prix
+    catalogue KDP… · barème standard supposé · encre noire supposée » : une phrase par mesure."""
+    html = appeler("carteLowContent", _lc(prix_median=26.22, prix_catalogue_ht=21.85,
+                                           prix_sous_seuil_60pct=False, format_coupe=None,
+                                           n_format_lus=0, part_indie=None, n_editeur_inconnu=6,
+                                           redevance_estimee=None), dependances=_LC)
+    detail = html[html.index('<details class="lc-detail"'):]
+    for jargon in ("barème standard supposé", "affiché au client", "prix catalogue KDP", " · "):
+        assert jargon not in detail, f"jargon resté dans le détail : {jargon}"
+    assert "À saisir dans KDP : 21,85 € HT" in detail and "KDP verse 60 %" in detail
+    assert "6 éditeurs non identifiés" in detail
+    assert "Hachette, Larousse, Exacompta" in detail
+
+
+def test_chaque_mesure_du_detail_porte_une_icone_et_une_seule_note():
+    html = appeler("carteLowContent", _lc(), dependances=_LC)
+    detail = html[html.index('<details class="lc-detail"'):html.index("</details>")]
+    mesures = detail.count('<div class="lc-m">') + detail.count('<div class="lc-m v-bad">')
+    assert mesures == 6 and detail.count('class="note"') == 6
+    for ico in ("🙋", "🔁", "💰", "💶", "🏛️", "🏆"):
+        assert ico in detail
+
+
+def test_la_page_low_content_montre_les_livres_du_rayon_avec_leur_BSR():
+    """Ils n'existaient que dans le dossier PDF."""
+    livres = [{"asin": "A1", "title": "Registre unique", "price": 14.9, "rating": 4.2,
+               "reviews_count": 55, "bsr": 8210, "url": "https://www.amazon.fr/dp/A1"},
+              {"asin": "A2", "title": "Sans rang", "bsr": None, "url": "u2"},
+              {"asin": "A3", "title": "Troisième", "bsr": 100, "url": "u3"},
+              {"asin": "A4", "title": "Quatrième", "bsr": None, "url": "u4"}]
+    html = appeler("carteLowContent", _lc(top_books=livres),
+                   dependances=_LC + ("blocConcurrents",))
+    assert "Les livres qui occupent le rayon (4)" in html and "Registre unique" in html
+    volet = html[html.index('class="avance pli lc-livres"'):]
+    assert "hors top 3" not in volet, "en low-content le BSR est lu pour chaque livre"
+    assert volet.count("non mesure") >= 2
+
+
+def test_une_carte_sans_livre_n_a_pas_de_volet_vide():
+    html = appeler("carteLowContent", _lc(top_books=[]), dependances=_LC + ("blocConcurrents",))
+    assert "lc-livres" not in html
+
+
+def test_le_facteur_decisif_n_est_plus_un_pave():
+    """Capture de Baptiste : un paragraphe de 900 caractères. Une accroche, des points courts,
+    le reste se déplie ; la note du code sur les angles écartés passe à part."""
+    pave = ("1 angle(s) écarté(s) car illisible(s). Le rayon est dominé par des papetiers installés "
+            "(Clairefontaine, Le Dauphin) — des marques à l'historique d'avis solide. La part indie "
+            "n'est pas mesurée faute d'éditeur lisible. Un registre d'appel est un format normé "
+            "scolaire. S'ajoute une demande très faible. Publier ici sans texte réglementaire "
+            "expose à des avis 1 étoile ; la norme reste à vérifier.")
+    v = _verdict()
+    v["facteur_decisif"] = pave
+    html = appeler("verdictBlock", {"niche": "n", "verdict": v}, dependances=_VB)
+    f = html[html.index('class="vfacteur"'):]
+    assert 'class="vf-accroche"' in f and 'class="vf-points"' in f
+    assert f.index("vf-accroche") < f.index("vf-points")
+    assert "Voir le reste du raisonnement" in f, "plus de trois points : le reste se déplie"
+    assert 'class="vf-note"' in f and "écarté(s) car illisible(s)" in f
+    assert " — " not in f, "les tirets cadratins du modèle deviennent des virgules"
+    assert "Clairefontaine, Le Dauphin), des marques" in f
+
+
+def test_un_facteur_court_reste_court_et_un_facteur_vide_ne_casse_rien():
+    v = _verdict()
+    v["facteur_decisif"] = "Demande prouvée."
+    html = appeler("verdictBlock", {"niche": "n", "verdict": v}, dependances=_VB)
+    assert "Demande prouvée." in html and "Voir le reste" not in html
+    v["facteur_decisif"] = ""
+    html = appeler("verdictBlock", {"niche": "n", "verdict": v}, dependances=_VB)
+    assert "undefined" not in html and "vf-accroche" not in html
+
+
+def test_plus_aucun_texte_visible_ne_dit_jamais_devine():
+    """« ça sonne IA à plein nez » (Baptiste, 2026-10-03) : ni dans l'interface, ni dans les
+    messages que les moteurs envoient à l'écran."""
+    from pathlib import Path
+    racine = Path(__file__).resolve().parent.parent
+    ui = _html()
+    assert "pas deviné" not in ui and "jamais deviné" not in ui
+    visibles = {"lowcontent_verdict.py": "facteur = (f", "lowcontent_ideator.py": "progress(",
+                "fiction_classifier.py": "progress(", "kdp_keywords.py": "MOTIF_ILLISIBLE"}
+    for fichier, marque in visibles.items():
+        src = (racine / "01-scripts" / fichier).read_text(encoding="utf-8").split("\n")
+        for i, ligne in enumerate(src):
+            if marque in ligne:
+                bloc = "\n".join(src[i:i + 4])
+                assert "deviné" not in bloc and "devinée" not in bloc and "devinés" not in bloc, (fichier, bloc)
+
+
+def test_la_cloture_de_compte_ne_parle_plus_du_cache():
+    """Décision de Baptiste : l'utilisateur n'a pas à savoir qu'un cache existe."""
+    html = appeler("menuCompteHtml", dependances=())
+    assert "cache" not in html.lower()
+    assert "Irréversible" in html and "analyses" in html.lower()
+
+
+def test_une_analyse_terminee_sans_niche_ne_se_dit_ni_en_attente_ni_marche_mort():
+    """« en attente » était affiché pour une analyse FINIE sans résultat : elle donnait
+    l'impression de tourner dans le vide (et on la croyait bloquée). Elle le dit : rien trouvé."""
+    job = {"id": "j", "type": "fiction", "statut": "termine", "params": {"sous_genre": "cosy_mystery"},
+           "resultat": [], "cree_le": 1790000000.0, "erreur": None}
+    html = appeler("ligneAnalyse", job, dependances=("esc", "TYPE_LABEL", "TYPE_EMO", "fmtDate"))
+    assert "aucune niche trouvée" in html and "en attente" not in html
+    assert "data-id" not in html, "rien à rouvrir"
+    assert 'data-suppr="j"' in html, "mais on peut la supprimer"
+
+
+# ── Arrêter une analyse (Baptiste, 2026-10-03) ──────────────────────────────────────────────
+# Côté serveur : tests/test_annulation.py. Ici, le câblage de l'interface.
+
+def test_une_analyse_pas_finie_propose_ARRETER_pas_supprimer():
+    """Elle bug ou tourne dans le vide : on peut l'arrêter. Pas la supprimer (son thread
+    écrirait ensuite dans le vide) : c'est l'arrêt qui rend la suppression possible."""
+    for statut in ("en_cours", "en_attente"):
+        html = appeler("ligneAnalyse", _job(statut=statut, resultat=None), dependances=_LIGNE)
+        assert 'data-arreter="j1"' in html and "data-suppr" not in html
+
+
+def test_une_analyse_arretee_se_dit_arretee_et_se_supprime():
+    html = appeler("ligneAnalyse", _job(statut="annule", resultat=None), dependances=_LIGNE)
+    assert "arrêtée" in html and 'data-suppr="j1"' in html and "data-arreter" not in html
+    assert "data-id" not in html, "rien à rouvrir"
+
+
+def test_une_analyse_finie_ne_propose_pas_d_arret():
+    for statut, resultat in (("termine", [{"niche": "a"}]), ("echec", None)):
+        html = appeler("ligneAnalyse", _job(statut=statut, resultat=resultat, erreur="x"), dependances=_LIGNE)
+        assert "data-arreter" not in html
+
+
+def test_chaque_panneau_de_progression_a_son_bouton_arreter():
+    html = _html()
+    for ident, bouton in (("progress", "arreter-nf"), ("progress-fic", "arreter-fic"), ("progress-lc", "arreter-lc")):
+        debut = html.index(f'id="{ident}"')
+        panneau = html[debut:html.index("</details>", debut)]
+        assert f'id="{bouton}"' in panneau and "Arrêter l’analyse" in panneau
+
+
+def test_l_arret_demande_confirmation_et_dit_que_l_analyse_reste_comptee():
+    """Arrêter ne rembourse rien (sinon « lancer puis arrêter » serait gratuit) : on le dit AVANT,
+    et « Continuer » est le choix par défaut."""
+    src = _html()
+    debut = src.index("function demanderArret(")
+    corps = src[debut:src.index("\n}\n", debut)]
+    assert "Elle restera comptée dans vos analyses du mois" in corps
+    assert "btn-arret-oui" in corps and "btn-arret-non" in corps
+    assert "btn-arret-non').focus()" in corps, "la sortie sûre est le choix par défaut"
+
+
+def test_arreter_coupe_le_flux_rend_la_main_et_ne_cible_que_le_travail_affiche():
+    src = _html()
+    debut = src.index("async function arreterAnalyse(")
+    corps = src[debut:src.index("\n}\n", debut)]
+    assert "/annuler" in corps and "'POST'" in corps and "204" in corps
+    assert "vue.arreter()" in corps and "vue.apres()" in corps
+    assert "localStorage.removeItem(vue.cle)" in corps, "sinon un rechargement raccrocherait le travail arrêté"
+    assert "Elle reste comptée dans vos analyses du mois" in corps
+    # chaque vue sait couper SON flux
+    assert src.count("arreter(){ if(es") == 3
+
+
+def test_le_bouton_du_panneau_agit_sur_la_vue_et_son_travail_pas_sur_un_autre():
+    src = _html()
+    assert "[['#arreter-nf', VUE_NF], ['#arreter-fic', VUE_FIC], ['#arreter-lc', VUE_LC]]" in src
+    assert "b._vue = vue;" in src
+
+
+def test_le_message_d_arret_est_neutre_pas_une_erreur():
+    src = _html()
+    assert src.count("erreur(m, neutre)") == 3
+    css = src[:src.index("</style>")]
+    assert ".errbox.info" in css

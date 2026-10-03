@@ -15,6 +15,7 @@ import warnings
 import requests
 from dotenv import load_dotenv
 
+from annulation import verifier as verifier_annulation
 from marketplace import ACTIF
 from models import BsrInfo, SearchItem, SearchResult
 
@@ -230,6 +231,7 @@ class DataForSEOProvider:
         tid = task.get("id")
         for _ in range(max_polls):
             time.sleep(poll_interval)
+            verifier_annulation()      # point d'arret : ici une analyse « tourne dans le vide »
             reponse = get_json(f"{_BASE}/task_get/advanced/{tid}")
             t = (reponse.get("tasks") or [{}])[0]
             if t.get("status_code") == 20000 and t.get("result"):
@@ -335,6 +337,7 @@ class DataForSEOProvider:
             if not pending:
                 break
             time.sleep(poll_interval)
+            verifier_annulation()      # idem : un arret ne doit pas attendre la fin du lot
             for tid in list(pending):
                 try:
                     r = (get_json(f"{_ASIN_BASE}/task_get/advanced/{tid}")

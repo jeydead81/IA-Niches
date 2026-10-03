@@ -52,6 +52,9 @@ from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
 from categories import suggerer_categories  # noqa: E402
 from jobs import JobStore, recuperer_orphelins  # noqa: E402
+from progression_publique import liste_publique, texte_public  # noqa: E402
+from annulation import Annulation, controle_du_travail  # noqa: E402
+import annulation as _annulation  # noqa: E402
 from usage import PlafondAtteint, UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
 from auth import (EmailDejaPris, EmailInvalide, IdentifiantsInvalides,  # noqa: E402
@@ -914,35 +917,62 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         # est fini, la place doit être rendue.
         statut = "echec"
         with _creneaux():
-            job_store.start(job_id)
+            job_store.start(job_id)           # sans effet sur un travail deja annule
             cost = CostTracker()
+            if job_store.est_annule(job_id):
+                # Arrete pendant l'attente d'un creneau : rien n'a tourne, rien n'est depense.
+                # La reservation est soldee a zero, l'unite de plafond reste prise.
+                UsageMeter(_USAGE_DB).solder(ligne_usage, 0.0)
+                statut = "annule"
+            else:
+                # Point de controle PROPRE A CE FIL : l'arret demande par l'utilisateur est lu en
+                # base (au plus une fois par seconde) a chaque message de progression, avant
+                # chaque phase payante et a chaque cycle d'attente du fournisseur.
+                _annulation.installer(controle_du_travail(job_store, job_id))
 
-            def progress(msg: str) -> None:
-                job_store.append_progress(job_id, msg)
+                def progress(msg: str) -> None:
+                    _annulation.verifier()
+                    job_store.append_progress(job_id, msg)
 
-            try:
-                resultat = runner(params, progress, cost, user_id)
-                b = cost.breakdown()
-                # L'usage est imputé AVANT de marquer le job terminé. L'ordre inverse ouvrait
-                # une course : un client qui interroge dès qu'il voit « termine » lisait un
-                # compteur pas encore à jour, donc un total périmé juste après son run — et
-                # deux runs lancés coup sur coup pouvaient passer sous un plafond déjà atteint.
-                # « Terminé » doit impliquer « compté ».
-                # SOLDE la reservation : la place a deja ete prise a la creation.
-                # Imputer une seconde ligne consommerait DEUX unites par run.
-                UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
-                job_store.finish(job_id, resultat, b)
-                statut = "termine"
-            except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
-                b = cost.breakdown()
-                # L'argent parti reste compte, et la place reste prise : un echec ne
-                # rembourse pas une unite de plafond, sinon un run qui echoue en boucle
-                # serait gratuit.
-                UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
-                job_store.fail(job_id, _erreur_publique(e), cout=b)
+                try:
+                    resultat = runner(params, progress, cost, user_id)
+                    b = cost.breakdown()
+                    # L'usage est imputé AVANT de marquer le job terminé. L'ordre inverse ouvrait
+                    # une course : un client qui interroge dès qu'il voit « termine » lisait un
+                    # compteur pas encore à jour, donc un total périmé juste après son run — et
+                    # deux runs lancés coup sur coup pouvaient passer sous un plafond déjà atteint.
+                    # « Terminé » doit impliquer « compté ».
+                    # SOLDE la reservation : la place a deja ete prise a la creation.
+                    # Imputer une seconde ligne consommerait DEUX unites par run.
+                    UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
+                    if job_store.est_annule(job_id):
+                        # Arrete JUSTE avant la fin : le resultat est jete, le cout reste compte.
+                        job_store.enregistrer_cout_annule(job_id, b)
+                        statut = "annule"
+                    else:
+                        job_store.finish(job_id, resultat, b)
+                        statut = "termine"
+                except Annulation:
+                    # BaseException : arrivee d'un point de controle. L'argent deja engage reste
+                    # impute et l'unite de plafond reste prise -- arreter ne rembourse rien, sinon
+                    # « lancer puis arreter » serait gratuit.
+                    b = cost.breakdown()
+                    UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
+                    job_store.enregistrer_cout_annule(job_id, b)
+                    statut = "annule"
+                except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
+                    b = cost.breakdown()
+                    # L'argent parti reste compte, et la place reste prise : un echec ne
+                    # rembourse pas une unite de plafond, sinon un run qui echoue en boucle
+                    # serait gratuit.
+                    UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
+                    job_store.fail(job_id, _erreur_publique(e), cout=b)
+                finally:
+                    _annulation.retirer()
 
         # Hors du créneau. Ne lève jamais : le run est payé, compté et en base.
-        _notifier(user_id, type_, statut, job_id)
+        if statut != "annule":          # l'auteur l'a arretee lui-meme : rien a lui annoncer
+            _notifier(user_id, type_, statut, job_id)
 
     if _mode_jobs() == "worker":
         # Empile SEULEMENT. Sans ce garde, serveur ET worker executeraient le meme job :
@@ -955,6 +985,16 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     return {"id": job_id}
 
 
+def _job_public(job) -> dict:
+    """Le travail tel qu'un CLIENT peut le lire : la progression sans les mentions du
+    mecanisme de mutualisation (cache, dedup) -- cf. progression_publique. Le brut reste en
+    base, pour le diagnostic."""
+    d = job.model_dump()
+    d["progression"] = liste_publique(job.progression)
+    d["erreur"] = texte_public(job.erreur)       # meme frontiere : jamais le nom du fournisseur
+    return d
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
     """404 — et non 403 — quand le job appartient à quelqu'un d'autre : distinguer les
@@ -962,12 +1002,48 @@ def get_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
     job = JobStore(_JOBS_DB).get(job_id)
     if job is None or job.user_id != user_id:
         raise HTTPException(status_code=404, detail="job inconnu")
-    return job.model_dump()
+    return _job_public(job)
+
+
+@app.post("/api/jobs/{job_id}/annuler", status_code=204)
+def annuler_job(job_id: str, request: Request, user_id: str = Depends(utilisateur_courant)):
+    """Arrete UNE analyse de la session (« il faut pouvoir arreter une analyse qui bug ou tourne
+    dans le vide »). IMMEDIAT cote donnees ; le thread s'arrete a son prochain point de controle
+    (annulation.py). L'argent deja engage reste impute et l'unite de plafond reste prise.
+
+    404 -- jamais 403 -- pour le travail d'un autre compte ; 409 si l'analyse est deja finie ;
+    `origine_sure` comme tout ce qui modifie des donnees."""
+    origine_sure(request)
+    issue = JobStore(_JOBS_DB).annuler(job_id, user_id)
+    if issue == "introuvable":
+        raise HTTPException(status_code=404, detail="job inconnu")
+    if issue == "deja_fini":
+        raise HTTPException(status_code=409, detail="Cette analyse est déjà terminée.")
+    return Response(status_code=204)
+
+
+@app.delete("/api/jobs/{job_id}", status_code=204)
+def supprimer_job(job_id: str, request: Request, user_id: str = Depends(utilisateur_courant)):
+    """Supprime UNE analyse de l'utilisateur de la session (« Mes analyses »).
+
+    404 -- et non 403 -- pour le travail d'un autre compte : distinguer les deux confirmerait
+    que l'identifiant existe. 409 pour une analyse pas finie (cf. JobStore.supprimer). La
+    consommation (usage.db) et l'historique d'evolution des niches ne sont PAS touches :
+    supprimer de l'ecran ne rembourse rien et ne libere aucune unite de plafond.
+    `origine_sure` comme tout ce qui modifie des donnees : le cookie seul ne suffit pas."""
+    origine_sure(request)
+    issue = JobStore(_JOBS_DB).supprimer(job_id, user_id)
+    if issue == "introuvable":
+        raise HTTPException(status_code=404, detail="job inconnu")
+    if issue == "en_cours":
+        raise HTTPException(status_code=409,
+                            detail="Cette analyse est encore en cours : attendez la fin pour la supprimer.")
+    return Response(status_code=204)
 
 
 @app.get("/api/jobs")
 def list_jobs(limit: int = 20, user_id: str = Depends(utilisateur_courant)):
-    return [j.model_dump() for j in JobStore(_JOBS_DB).list_jobs(user_id=user_id, limit=limit)]
+    return [_job_public(j) for j in JobStore(_JOBS_DB).list_jobs(user_id=user_id, limit=limit)]
 
 
 @app.get("/api/usage")
@@ -999,16 +1075,23 @@ def stream_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
                 yield _sse("error", "job inconnu")
                 yield _sse("done", {})
                 return
-            for msg in job.progression[envoyes:]:
+            # Filtre AVANT de compter : `envoyes` indexe la liste PUBLIQUE, sinon une ligne
+            # retiree decalerait tout ce qui suit (et rejouerait ou sauterait des messages).
+            publique = liste_publique(job.progression)
+            for msg in publique[envoyes:]:
                 yield _sse("progress", msg)
-            envoyes = len(job.progression)
+            envoyes = len(publique)
             if job.statut == "termine":
                 yield _sse("result", job.resultat)
                 yield _sse("cost", job.cout)
                 yield _sse("done", {})
                 return
+            if job.statut == "annule":
+                yield _sse("error", "Analyse arrêtée à votre demande.")
+                yield _sse("done", {})
+                return
             if job.statut == "echec":
-                yield _sse("error", job.erreur)
+                yield _sse("error", texte_public(job.erreur))
                 yield _sse("done", {})
                 return
             time.sleep(0.3)
@@ -1025,6 +1108,28 @@ def _content_disposition(name: str) -> str:
     ascii_name = ascii_name[:40] or "niche"
     utf8 = quote((base[:60] or "niche") + ".pdf")
     return f"attachment; filename=\"{ascii_name}.pdf\"; filename*=UTF-8''{utf8}"
+
+
+def _conserver_dans_travail(request: Request, user_id: str, champ: str, valeur: dict) -> bool | None:
+    """Range un resultat PAYE a la piece (verdict, mots-cles) dans le travail qui l'a vu naitre.
+
+    Sans `?job=`, rend None et ne fait rien : le comportement d'origine, sans etat, est
+    strictement inchange. Avec, le SERVEUR ecrit ce qu'il vient de produire (jamais ce que
+    la page dirait) et seulement dans un travail de la session : `user_id` vient du cookie.
+
+    Un echec d'ecriture ne fait JAMAIS echouer la reponse : elle a ete facturee des le retour
+    du modele, la perdre serait pire que ne pas l'avoir gardee. On rend False, que la page
+    peut dire.
+    """
+    job_id = (request.query_params.get("job") or "").strip()
+    if not job_id:
+        return None
+    cle = (request.query_params.get("cle") or "")[:300]
+    try:
+        return JobStore(_JOBS_DB).annoter_resultat(job_id, user_id, cle, champ, valeur)
+    except Exception as e:  # noqa: BLE001 — voir docstring
+        _LOG.warning("resultat non conserve (%s) : %s", champ, type(e).__name__)
+        return False
 
 
 @app.post("/api/verdict")
@@ -1062,7 +1167,11 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
         # Soldé même quand la lecture lève : les jetons sont facturés dès la réponse, et
         # une réservation laissée à 0 $ effaçait la dépense d'usage.db (§5.29).
         UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
-    return {**verdict.model_dump(), "_cout": cost.breakdown()}
+    reponse = {**verdict.model_dump(), "_cout": cost.breakdown()}
+    conserve = _conserver_dans_travail(request, user_id, "verdict", verdict.model_dump())
+    if conserve is not None:
+        reponse["_conserve"] = conserve
+    return reponse
 
 
 @app.get("/api/history")
@@ -1085,21 +1194,34 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
 
     Les candidats sont confirmés gratuitement par l'autocomplete Amazon : le coût imputé
     ne couvre que l'appel LLM, la vérification ne coûte rien."""
+    body = await _corps_json(request)
+    # Meme dispatch que /api/verdict : `type` absent = non-fiction (compat). En low-content la
+    # requete, la categorie et les satellites vivent sur `scored.niche` (LowContentNiche) : c'est
+    # elle qui part au generateur, comme pour le dossier -- le LowContentScored entier leve avant
+    # l'appel.
+    type_ = (body.pop("type", None) or "scout").strip().lower()
+    if type_ not in ("scout", "lowcontent"):
+        raise HTTPException(status_code=400, detail=f"type de mots-clés inconnu : « {type_} »")
     try:
-        scored = ScoredNiche.model_validate(await request.json())
+        scored = (LowContentScored if type_ == "lowcontent" else ScoredNiche).model_validate(body)
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
     _verifier_plafond(user_id)
     ligne = _reserver_appel(user_id, "kdp_keywords")          # même raisonnement que /api/verdict
     cost = CostTracker()
     try:
-        mots = generer_mots_cles(scored, titre=scored.niche,
+        mots = generer_mots_cles(scored.niche if type_ == "lowcontent" else scored,
+                                 titre=(scored.niche.niche if type_ == "lowcontent" else scored.niche),
                                  on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     except Exception as e:  # noqa: BLE001 — même raisonnement que /api/verdict
         raise HTTPException(status_code=502, detail=_erreur_publique(e)) from None
     finally:
         UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
-    return {**mots.model_dump(), "_cout": cost.breakdown()}
+    reponse = {**mots.model_dump(), "_cout": cost.breakdown()}
+    conserve = _conserver_dans_travail(request, user_id, "mots_cles", mots.model_dump())
+    if conserve is not None:
+        reponse["_conserve"] = conserve
+    return reponse
 
 
 @app.post("/api/dossier")

@@ -159,6 +159,11 @@ ENDPOINTS = [
     ("GET  /api/jobs/{id}", "Statut, progression, résultat, coût."),
     ("GET  /api/jobs/{id}/stream", "Progression en SSE, reconnectable."),
     ("GET  /api/jobs", "Liste par utilisateur."),
+    ("POST /api/jobs/{id}/annuler", "Arrête une analyse (elle bug ou tourne dans le vide). Immédiat "
+                                    "côté données, coopératif côté fil d'exécution ; le coût déjà "
+                                    "engagé et l'unité de plafond restent comptés."),
+    ("DELETE /api/jobs/{id}", "Supprime une analyse terminée, en échec ou arrêtée. Ne touche ni à "
+                              "la consommation ni à l'historique d'évolution des niches."),
     ("GET  /api/usage", "Consommation du mois glissant."),
     ("POST /api/verdict", "Analyse éditoriale d'UNE niche, à la demande (0,028 $)."),
     ("GET  /api/history", "Passages sur une niche + lecture de son évolution. Une niche "

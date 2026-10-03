@@ -310,7 +310,7 @@ def generate_lowcontent_verdict(s: LowContentScored, model: str | None = None,
     facteur = _texte(d.get("facteur_decisif"))
     if n_illisibles:
         # Dit à l'écran : un verdict amputé d'un angle ne doit pas se lire comme complet.
-        facteur = (f"{n_illisibles} angle(s) illisible(s) écarté(s), jamais deviné(s) ; "
+        facteur = (f"{n_illisibles} angle(s) écarté(s) car illisible(s). "
                    + facteur).strip()
 
     # ── LA garde des formats normés ──

@@ -264,7 +264,7 @@ def _classify_lot(lot: list[EnrichedBook], sous_genre_cle: str, version: str, mo
     illisibles -= asins_vus
     if illisibles and progress:
         progress(f"⚠ {len(illisibles)}/{len(lot)} livres à la réponse illisible (champ hors "
-                 f"schéma), écartés sans être devinés : {sorted(illisibles)}")
+                 f"schéma), écartés : {sorted(illisibles)}")
     manquants = asins_lot - asins_vus - illisibles
     if manquants and progress:
         progress(f"⚠ {len(manquants)}/{len(lot)} livres du lot absents de la réponse : "

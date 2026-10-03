@@ -48,6 +48,8 @@ from cost_tracker import CostTracker  # noqa: E402
 # de la porter : `worker` importe `server`, donc `server` ne peut pas importer `worker`,
 # et la recopier des deux côtés aurait créé deux implémentations qui divergent.
 from jobs import ORPHELIN_APRES_S, JobStore, recuperer_orphelins  # noqa: E402,F401
+import annulation  # noqa: E402
+from annulation import Annulation, controle_du_travail  # noqa: E402
 
 # Alias de module : les tests les remplacent pour exercer la boucle sans moteur réel.
 _RUNNERS = server._JOB_RUNNERS
@@ -96,6 +98,7 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
     cost = CostTracker()
 
     def progress(msg: str) -> None:
+        annulation.verifier()          # arret demande par l'utilisateur : meme point de controle
         store.append_progress(job.id, msg)
 
     if runner is None:
@@ -107,15 +110,28 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
         return True
 
     journal(f"[worker] job {job.id} ({job.type}) démarré")
+    annulation.installer(controle_du_travail(store, job.id))
     try:
         resultat = runner(job.params, progress, cost, job.user_id)
         b = cost.breakdown()
         # La place a ete prise a la CREATION du job (reservation atomique cote
         # serveur) : ici on n'inscrit que le cout, sans recompter l'analyse.
         _imputer(job.user_id, job.type, b["usd"], 0)
-        store.finish(job.id, resultat, b)
-        server._notifier(job.user_id, job.type, "termine", job.id, journal=journal)
-        journal(f"[worker] job {job.id} terminé ({b['dataforseo_calls']} recherches)")
+        if store.est_annule(job.id):
+            # Arrete JUSTE avant la fin : le resultat est jete, le cout reste compte.
+            store.enregistrer_cout_annule(job.id, b)
+            journal(f"[worker] job {job.id} arrêté par l'utilisateur")
+        else:
+            store.finish(job.id, resultat, b)
+            server._notifier(job.user_id, job.type, "termine", job.id, journal=journal)
+            journal(f"[worker] job {job.id} terminé ({b['dataforseo_calls']} recherches)")
+    except Annulation:
+        # BaseException : l'utilisateur a arrete cette analyse. L'argent deja engage reste impute ;
+        # aucune notification (il l'a arretee lui-meme).
+        b = cost.breakdown()
+        _imputer(job.user_id, job.type, b["usd"], 0)
+        store.enregistrer_cout_annule(job.id, b)
+        journal(f"[worker] job {job.id} arrêté par l'utilisateur")
     except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
         b = cost.breakdown()
         _imputer(job.user_id, job.type, b["usd"], 0)
@@ -125,6 +141,8 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
         store.fail(job.id, server._erreur_publique(e), cout=b)
         server._notifier(job.user_id, job.type, "echec", job.id, journal=journal)
         journal(f"[worker] job {job.id} en échec")
+    finally:
+        annulation.retirer()
     return True
 
 

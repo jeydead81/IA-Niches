@@ -3,6 +3,7 @@ Remplace l'ancien credits_tracker (Scrapingdog, mort). Brique de facturation en 
 import os
 from datetime import date
 
+from annulation import verifier as verifier_annulation
 from search_providers import COST_PER_CALL_USD
 
 # Plafond de coût PAR RUN. Distinct de PLAFOND_ANALYSES_MENSUEL, qui compte des runs :
@@ -89,7 +90,11 @@ class CostTracker:
         pour découvrir qu'elle faisait franchir la ligne. Sans lui, le plafond n'est
         qu'un constat a posteriori et se dépasse toujours d'une phase. Il reste à 0 pour
         les postes dont le prix ne s'annonce pas (tokens LLM) : là, le plafond est un
-        constat, et le dépassement est borné par la taille d'un lot."""
+        constat, et le dépassement est borné par la taille d'un lot.
+
+        C'est aussi un POINT D'ARRÊT : avant une phase payante est le moment où arrêter une
+        analyse coûte le moins (annulation.py)."""
+        verifier_annulation()
         if self.plafond_usd is None:
             return
         if self.total_usd() + cout_prevu >= self.plafond_usd:
