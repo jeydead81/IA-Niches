@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>IA-Niches — Explorateur de niches KDP</title>
+<title>IA-Niches · Explorateur de niches KDP</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
@@ -1428,6 +1428,63 @@
   @media (max-width:420px){.auth-marque h1{font-size:30px}.auth-carte{padding:22px 18px 18px}}
   /* Pas de pastille d'aide sur l'ecran de connexion : l'aide parle des onglets, qui n'y sont pas. */
   .auth-ecran.on ~ .aide-btn{display:none}
+
+  /* ── Ce qui se déplie doit SE VOIR cliquable : une flèche, un survol, jamais un simple bandeau ── */
+  .avance > summary,.compo > summary,details.pli > summary,.lc-detail > summary,.fic-detail > summary,
+  details.sugbox > summary,details.rnote > summary,details.lc-groupe-note > summary{cursor:pointer}
+  .avance > summary::after,.compo > summary::after,details.pli > summary::after,.lc-detail > summary::after,
+  .fic-detail > summary::after,details.sugbox > summary::after,details.rnote > summary::after,
+  details.lc-groupe-note > summary::after{content:"›";display:inline-block;margin-left:8px;font-size:18px;line-height:1;
+    color:var(--text-muted);transition:transform .2s var(--ease)}
+  .avance[open] > summary::after,.compo[open] > summary::after,details.pli[open] > summary::after,
+  .lc-detail[open] > summary::after,.fic-detail[open] > summary::after,details.sugbox[open] > summary::after,
+  details.rnote[open] > summary::after,details.lc-groupe-note[open] > summary::after{transform:rotate(90deg)}
+  /* le chevron des volets pleine largeur se range a droite */
+  details.pli > summary,.lc-detail > summary,.fic-detail > summary,details.sugbox > summary{display:flex;align-items:center}
+  details.pli > summary::after,.lc-detail > summary::after,.fic-detail > summary::after,details.sugbox > summary::after{margin-left:auto}
+  details.sugbox > summary{flex-wrap:wrap}
+  details.pli > summary:hover{background:var(--bg)}
+  details.sugbox > summary:hover{background:rgba(255,255,255,.45);border-radius:14px}
+
+  /* Zone sensible : un BOUTON (bordure, flèche, survol), qui ouvre le formulaire dessous */
+  .cpt-danger{margin-top:20px;border:none;background:none}
+  .cpt-danger > summary{display:flex;align-items:center;gap:10px;padding:14px 18px;border:1.5px solid #E6AFA3;
+    border-radius:14px;background:var(--surface);color:var(--low-ink);font-size:14.5px;font-weight:700;cursor:pointer;
+    box-shadow:var(--shadow);transition:background .15s,border-color .15s,transform .15s var(--ease)}
+  .cpt-danger > summary::after{content:"›";margin-left:auto;font-size:24px;line-height:1;transition:transform .2s var(--ease)}
+  .cpt-danger > summary:hover{background:var(--red-bg);border-color:var(--red);transform:translateY(-1px)}
+  .cpt-danger > summary:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+  .cpt-danger[open] > summary::after{transform:rotate(90deg)}
+  .cpt-danger[open] > summary{border-bottom-left-radius:14px;border-bottom-right-radius:14px}
+  .cpt-danger > form{margin-top:10px;padding:16px 18px;border:1px solid #F1C7BF;border-radius:16px;background:#FFF8F6}
+  .rnote-lien{display:inline-flex;align-items:center;margin:2px 0 14px;font:inherit;font-size:13px;font-weight:500;
+    color:var(--text-muted);background:var(--muted);border:none;border-radius:999px;padding:5px 12px;cursor:pointer;
+    transition:background .15s,color .15s}
+  .rnote-lien:hover{color:var(--heading);background:var(--brand-soft)}
+
+  /* ── Avancement : un pourcentage, une phrase, le journal replié ── */
+  .progress{padding:22px 24px}
+  .progress-tete{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:2px 12px;margin:0 0 6px}
+  .progress-tete .progress-emo{grid-row:1}
+  .progress-tete b{font-size:17px}
+  .prog-pct{font-family:var(--serif);font-weight:500;font-size:34px;letter-spacing:-.02em;line-height:1;color:var(--primary);
+    font-variant-numeric:tabular-nums}
+  .progress-tete i{grid-column:2 / -1;grid-row:2;flex-basis:auto}
+  .prog-phase{margin:6px 0 12px;font-size:15px;font-weight:600;color:var(--heading)}
+  .progress .bar{height:10px;margin-bottom:14px;position:relative}
+  .progress .bar span{width:var(--pct,3%);margin-left:0;animation:brille 2s linear infinite;
+    transition:width .7s var(--ease);background-size:200% 100%;min-width:10px}
+  .prog-alertes{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+  .prog-alertes:empty{display:none}
+  .prog-alertes li{font-size:13px;line-height:1.4;background:var(--amber-bg);color:#78350F;border-radius:10px;padding:7px 12px}
+  .prog-detail > summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;font-size:13px;font-weight:600;
+    color:var(--text-muted);padding:6px 12px;border-radius:999px;background:var(--muted)}
+  .prog-detail > summary::-webkit-details-marker{display:none}
+  .prog-detail > summary::after{content:"›";margin-left:8px;font-size:18px;line-height:1;transition:transform .2s var(--ease)}
+  .prog-detail[open] > summary::after{transform:rotate(90deg)}
+  .prog-detail > summary:hover{color:var(--heading)}
+  .prog-detail .steps{margin-top:12px}
+  @media (max-width:520px){.prog-pct{font-size:28px}}
 </style>
 </head>
 <body>
@@ -1512,7 +1569,7 @@
        précède le champ de recherche le repousse sous la ligne de flottaison. -->
   <section class="hero">
     <h2>Trouvez votre prochaine niche KDP <span class="hero-emo" aria-hidden="true">🚀</span></h2>
-    <p>Où ça se vend, et où il reste de la place — sur Amazon.fr.</p>
+    <p>Où ça se vend, et où il reste de la place, sur Amazon.fr.</p>
     <button type="button" class="hero-aide" id="hero-aide">💡 Aide</button>
   </section>
 
@@ -1582,10 +1639,12 @@
     </div>
 
     <div class="panel progress" id="progress">
-      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><i>Vous pouvez fermer cette page : elle continue sans vous.</i></div>
-      <div class="bar"><span></span></div>
-      <ul class="steps" id="steps" aria-live="polite" aria-relevant="additions"
-          aria-label="Progression du scout"></ul>
+      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><span class="prog-pct" aria-hidden="true">0 %</span><i>Vous pouvez fermer cette page : elle continue sans vous.</i></div>
+      <p class="prog-phase" aria-live="polite">Démarrage…</p>
+      <div class="bar" role="progressbar" aria-label="Avancement de l'analyse" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <ul class="prog-alertes" aria-live="polite"></ul>
+      <details class="prog-detail"><summary>Voir le détail</summary>
+        <ul class="steps" id="steps" aria-live="off" aria-label="Progression du scout"></ul></details>
     </div>
 
     <div class="errbox" id="errbox" role="alert" aria-live="assertive"></div>
@@ -1603,12 +1662,9 @@
           </select>
         </label>
       </div>
-      <!-- Ce que le score est, et ce qu'il n'est pas : ecrit une fois, replie -- la mise en
-           garde reste, elle ne prend plus la place de la liste. -->
-      <details class="rnote"><summary>ℹ️ Comment lire le score</summary>
-        <p>Le score résume la demande mesurée et la place restante. Il trie, il
-        ne juge pas : deux niches vertes ne sont pas classées l'une devant l'autre par
-        qualité.</p></details>
+      <!-- Le texte « le score trie, il ne juge pas » vit dans l'aide (rubrique « bon resultat ») :
+           ici un simple lien, pour ceux qui ne l'auraient pas vue en haut de page. -->
+      <button type="button" class="rnote-lien" id="lien-aide-score">ℹ️ Comment lire le score</button>
       <div class="bilan" id="bilan-nf" aria-live="polite" role="group" aria-label="Filtrer par verdict"></div>
       <div class="filtres" id="filtres-nf" role="radiogroup" aria-label="Filtrer par verdict">
         <button type="button" role="radio" aria-checked="true" data-f="tout">Toutes <span data-n="tout"></span></button>
@@ -1709,10 +1765,12 @@
     </div>
 
     <div class="panel progress" id="progress-fic">
-      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><i>Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
-      <div class="bar"><span></span></div>
-      <ul class="steps" id="steps-fic" aria-live="polite" aria-relevant="additions"
-          aria-label="Progression du scout fiction"></ul>
+      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><span class="prog-pct" aria-hidden="true">0 %</span><i>Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
+      <p class="prog-phase" aria-live="polite">Démarrage…</p>
+      <div class="bar" role="progressbar" aria-label="Avancement de l'analyse" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <ul class="prog-alertes" aria-live="polite"></ul>
+      <details class="prog-detail"><summary>Voir le détail</summary>
+        <ul class="steps" id="steps-fic" aria-live="off" aria-label="Progression du scout fiction"></ul></details>
     </div>
 
     <div class="errbox" id="errbox-fic" role="alert" aria-live="assertive"></div>
@@ -1768,10 +1826,12 @@
     </div>
 
     <div class="panel progress" id="progress-lc">
-      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><i>Compter 3 à 9 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
-      <div class="bar"><span></span></div>
-      <ul class="steps" id="steps-lc" aria-live="polite" aria-relevant="additions"
-          aria-label="Progression du scout low-content"></ul>
+      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><span class="prog-pct" aria-hidden="true">0 %</span><i>Compter 3 à 9 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
+      <p class="prog-phase" aria-live="polite">Démarrage…</p>
+      <div class="bar" role="progressbar" aria-label="Avancement de l'analyse" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
+      <ul class="prog-alertes" aria-live="polite"></ul>
+      <details class="prog-detail"><summary>Voir le détail</summary>
+        <ul class="steps" id="steps-lc" aria-live="off" aria-label="Progression du scout low-content"></ul></details>
     </div>
 
     <div class="errbox" id="errbox-lc" role="alert" aria-live="assertive"></div>
@@ -1859,12 +1919,12 @@ const esc = t => String(t??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 // 2026-07-21-ux-lisibilite.md, tableau U1). Ne pas reformuler : rédigés pour un auteur
 // non technique, chaque changement de mot doit repasser par ce même plan.
 const GLOSSAIRE = {
-  'Part indie': `Part des livres du top publiés via KDP (« Independently published »). <strong>Élevée = rayon accessible</strong> à un auteur seul. Faible : le rayon est tenu par des éditeurs installés, qui ont des moyens que vous n'avez pas. Quand aucun éditeur n'a pu être lu, la carte affiche « non mesuré » — ce n'est pas zéro.`,
+  'Part indie': `Part des livres du top publiés via KDP (« Independently published »). <strong>Élevée = rayon accessible</strong> à un auteur seul. Faible : le rayon est tenu par des éditeurs installés, qui ont des moyens que vous n'avez pas. Quand aucun éditeur n'a pu être lu, la carte affiche « non mesuré » : ce n'est pas zéro.`,
   'Variantes': `Nombre de livres du top qui sont <strong>le même livre</strong> sous une autre couverture. Ce chiffre se lit à l'envers : <strong>élevé = mauvais</strong>. Au-delà de 6, le rayon est usiné par une ferme de variantes, et en publier une de plus n'y change rien. La sortie, c'est un intérieur différent.`,
-  'Seuil 9,99 €': `Sous 9,99 € de prix catalogue <strong>hors TVA</strong> — le prix que vous saisissez dans KDP —, Amazon vous verse <strong>50 %</strong> ; à partir de 9,99 € hors TVA, <strong>60 %</strong>. Les prix du rayon sont affichés TVA comprise : pour un carnet, un agenda ou un coloriage (TVA 20 %), le seuil tombe vers <strong>11,99 € affichés</strong>. Et le coût d'impression se déduit ensuite, plus cher en grand format. Un rayon très demandé à 6,99 € peut ne rien rapporter.`,
+  'Seuil 9,99 €': `Sous 9,99 € de prix catalogue <strong>hors TVA</strong> (le prix que vous saisissez dans KDP), Amazon vous verse <strong>50 %</strong> ; à partir de 9,99 € hors TVA, <strong>60 %</strong>. Les prix du rayon sont affichés TVA comprise : pour un carnet, un agenda ou un coloriage (TVA 20 %), le seuil tombe vers <strong>11,99 € affichés</strong>. Et le coût d'impression se déduit ensuite, plus cher en grand format. Un rayon très demandé à 6,99 € peut ne rien rapporter.`,
   'Redevance estimée': `Ce que vous touchez par vente au prix médian du rayon, coût d'impression déduit. <strong>Négative = vous perdez de l'argent</strong> à chaque exemplaire.`,
   'Éditeurs installés': `Hachette, Larousse, Exacompta, Quo Vadis, Clairefontaine… Invisibles dans un simple comptage de résultats, et pourtant décisifs : ils tiennent des rayons entiers de papeterie.`,
-  'Format normé': `Le contenu est imposé par une règle extérieure (Code du travail, HACCP, sécurité ERP). Facile à produire — mais la <strong>conformité</strong> est la différenciation : un registre incomplet prend des avis à une étoile. Le verdict doit citer sa source réglementaire.`,
+  'Format normé': `Le contenu est imposé par une règle extérieure (Code du travail, HACCP, sécurité ERP). Facile à produire, mais la <strong>conformité</strong> est la différenciation : un registre incomplet prend des avis à une étoile. Le verdict doit citer sa source réglementaire.`,
   'Hors taxonomie': `La requête ne rentre dans aucun format connu. Ce n'est pas un rejet : sa faisabilité n'est simplement pas évaluée, et le libellé observé servira à enrichir la liste des formats.`,
   'BSR': `Classement des ventes Amazon. Plus le nombre est <strong>petit</strong>, plus le livre se vend. Sous 10 000 : très bon. Au-delà de 100 000 : faible.`,
   'Rayon': `L'endroit d'Amazon où le livre est classé : la boutique Kindle ou les livres papier. Les classements des deux ne se comparent pas.`,
@@ -1918,6 +1978,100 @@ function niveau3Inverse(v){
   return ['peu couvert','g'];
 }
 
+// ── Avancement : un pourcentage et UNE phrase, le journal detaille se replie ──────────────
+// Les moteurs n'emettent que des messages texte (progress(msg)) : l'avancement est donc
+// ESTIME a partir de JALONS reconnus dans ces messages, jamais mesure. Il ne recule pas,
+// reste sous 100 tant que le moteur n'a pas dit « termine », et peut stagner pendant une file
+// d'attente chez Amazon (le lot de fiches livres prend ~250 s d'un seul bloc) -- d'ou la
+// phrase de phase, qui dit ce qu'on attend.
+//
+// Les avertissements (⚠) ne sont JAMAIS replies : une source tombee, une niche ecartee, un
+// rayon amputé se lisent a l'ecran sans rien deplier (transparence sur les echecs).
+const PROG_JALONS = {
+  scout: [
+    [/Génération de niches/, () => [5, 'Recherche d’idées de niches…']],
+    [/niches? proposées?/, () => [12, 'Idées trouvées']],
+    [/Validation de la demande/, () => [15, 'Vérification de la demande…']],
+    [/niches? avec demande confirmée/, () => [22, 'Demande vérifiée']],
+    [/\[(\d+)\/(\d+)\]/, m => [22 + (Number(m[1]) - 1) / Number(m[2]) * 63,
+      'Analyse de la concurrence (' + m[1] + '/' + m[2] + ')…']],
+    [/Récupération des BSR/, () => [88, 'Lecture des classements de vente…']],
+    [/Verdict éditorial/, () => [94, 'Dernières vérifications…']],
+    [/Scout terminé/, () => [100, 'Terminé']],
+  ],
+  fiction: [
+    [/Génération de \d+ trios/, () => [4, 'Recherche de trios…']],
+    [/trios générés/, () => [10, 'Trios trouvés']],
+    [/\[(\d+)\/(\d+)\]/, m => [10 + (Number(m[1]) - 1) / Number(m[2]) * 22,
+      'Analyse des rayons (' + m[1] + '/' + m[2] + ')…']],
+    [/Enrichissement de/, () => [36, 'Lecture des fiches livres (la plus longue étape)…']],
+    [/fiche\(s\) servie\(s\) par le cache/, () => [40, 'Fiches livres en cache']],
+    [/déjà classée/, () => [62, 'Quatrièmes de couverture en cache']],
+    [/Classification de/, () => [66, 'Lecture des quatrièmes de couverture…']],
+    [/Sonde autocomplete/, (m, c) => [82 + Math.min(1, c.sondes / Math.max(1, c.total)) * 15,
+      'Dernières vérifications…']],
+    [/Scout fiction terminé/, () => [100, 'Terminé']],
+  ],
+  lowcontent: [
+    [/Lecture de ce qu'Amazon complète/, () => [4, 'Lecture des requêtes réelles…']],
+    [/requête\(s\) réelle\(s\) retenue\(s\)/, () => [12, 'Requêtes trouvées']],
+    [/Classement des requêtes par l'IA/, () => [15, 'Tri des requêtes…']],
+    [/niche\(s\) proposée\(s\)/, () => [22, 'Niches repérées']],
+    [/Confrontation des propositions/, () => [24, 'Vérification de la demande…']],
+    [/niche\(s\) avec demande confirmée/, () => [28, 'Demande vérifiée']],
+    [/\[(\d+)\/(\d+)\]/, m => [28 + (Number(m[1]) - 1) / Number(m[2]) * 40,
+      'Analyse de la concurrence (' + m[1] + '/' + m[2] + ')…']],
+    [/servie\(s\) par le cache/, () => [70, 'Recherches prêtes']],
+    [/Enrichissement de/, () => [74, 'Lecture des fiches livres…']],
+    [/Classement de \d+ livre/, () => [90, 'Dernières vérifications…']],
+    [/Scout low-content terminé/, () => [100, 'Terminé']],
+  ],
+};
+
+// PURE : l'avancement estime a partir des messages recus jusqu'ici.
+function progressionEtat(type, messages){
+  const msgs = (messages || []).map(String);
+  const alertes = msgs.filter(m => m.indexOf('⚠') >= 0).map(m => m.trim());
+  const jalons = PROG_JALONS[type] || [];
+  const ctx = {total: 0, sondes: 0};
+  let pct = 0, phase = 'Démarrage…', fini = false;
+  msgs.filter(m => m.indexOf('⚠') < 0).forEach(m => {
+    const r = /\[(\d+)\/(\d+)\]/.exec(m);
+    if(r) ctx.total = Number(r[2]);
+    if(/Sonde autocomplete/.test(m)) ctx.sondes++;
+    for(const [re, f] of jalons){
+      const mm = re.exec(m);
+      if(!mm) continue;
+      const [v, p] = f(mm, ctx);
+      if(v > pct) pct = v;
+      phase = p;
+      if(v >= 100) fini = true;
+      break;
+    }
+  });
+  return {pct: fini ? 100 : Math.min(99, Math.round(pct)), phase, alertes};
+}
+
+function majProg(panneau, type, msg){
+  if(!panneau) return;
+  (panneau._msgs = panneau._msgs || []).push(msg);
+  rendreProg(panneau, progressionEtat(type, panneau._msgs));
+}
+function viderProg(panneau){
+  if(!panneau) return;
+  panneau._msgs = [];
+  rendreProg(panneau, {pct: 0, phase: 'Démarrage…', alertes: []});
+}
+function rendreProg(panneau, e){
+  panneau.style.setProperty('--pct', Math.max(3, e.pct) + '%');
+  const pct = panneau.querySelector('.prog-pct'), ph = panneau.querySelector('.prog-phase'),
+        al = panneau.querySelector('.prog-alertes'), bar = panneau.querySelector('.bar');
+  if(pct) pct.textContent = e.pct + ' %';
+  if(ph) ph.textContent = e.phase;
+  if(bar) bar.setAttribute('aria-valuenow', String(e.pct));
+  if(al) al.innerHTML = e.alertes.map(a => '<li>' + esc(a) + '</li>').join('');
+}
+
 function addStep(msg){
   document.querySelectorAll('.steps li.cur').forEach(li=>{li.classList.remove('cur');li.querySelector('.dot').innerHTML=ICON_CHECK;});
   const li=document.createElement('li'); li.className='cur';
@@ -1958,7 +2112,7 @@ function verdictSlot(r){
 function blocConcurrents(r){
   const livres = (r && r.top_books) || [];
   if(!livres.length)
-    return '<p class="dl">Top livres concurrents</p><p class="mut">— aucun concurrent '
+    return '<p class="dl">Top livres concurrents</p><p class="mut">Aucun concurrent '
          + 'connu : la recherche Amazon n’a rien rendu pour cette niche. Ce n’est pas '
          + 'un rayon vide, c’est une donnee absente.</p>';
   // Un BSR inconnu s'affiche « non mesure » et JAMAIS 0 : zero est le MEILLEUR classement
@@ -2038,7 +2192,7 @@ function verdictBlock(r){
     angleHtml=`
       <div class="vangle-bloc">
         <div class="va-tete">
-          <p class="vangle-src">✨ Angle proposé par l’IA — titre à écrire, pas un livre existant</p>
+          <p class="vangle-src">✨ Angle proposé par l’IA : titre à écrire, pas un livre existant</p>
           <span class="va-verdict va-${g}">${emo} ${esc(v.verdict)}</span>
         </div>
         <p class="vangle"><strong>${esc(a.titre)}</strong></p>
@@ -2193,18 +2347,18 @@ function kdpBlock(k){
   const panne = k.sonde_indisponible
     ? `<p class="kdpnote">⚠️ L'autocomplete Amazon n'a pas répondu : ces expressions
         n'ont pas pu être vérifiées. Elles restent utilisables, mais leur confirmation
-        est inconnue — ce n'est pas un « aucun ne marche ».</p>` : '';
+        est inconnue : ce n'est pas un « aucun ne marche ».</p>` : '';
 
   const av = (k.a_verifier || []).length
-    ? `<details class="kdpfold"><summary>🔍 ${k.a_verifier.length} expression(s) en réserve
-        — à vérifier à la main sur Amazon</summary><ul>${
+    ? `<details class="kdpfold"><summary>🔍 ${k.a_verifier.length} expression(s) en réserve,
+        à vérifier à la main sur Amazon</summary><ul>${
         k.a_verifier.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></details>` : '';
 
   // §10 : un mot-clé écarté en silence est une décision invisible.
   const rj = (k.rejetes || []).length
-    ? `<details class="kdpfold"><summary>🚫 ${k.rejetes.length} expression(s) écartée(s)
-        — et le motif de chacune</summary><ul>${
-        k.rejetes.map(x=>`<li><strong>${esc(x.mot)}</strong> — ${esc(x.motif)}</li>`).join('')
+    ? `<details class="kdpfold"><summary>🚫 ${k.rejetes.length} expression(s) écartée(s),
+        et le motif de chacune</summary><ul>${
+        k.rejetes.map(x=>`<li><strong>${esc(x.mot)}</strong> : ${esc(x.motif)}</li>`).join('')
       }</ul></details>` : '';
 
   // « Tout copier » : une expression par ligne, dans l'ordre des sept emplacements.
@@ -2297,7 +2451,7 @@ function blocSuggestions(r){
 
 function blocPrix(r){
   if(!r.n_prix_connus)
-    return `<p class="prixbox">💰 Prix du rayon : <strong>inconnu</strong> — Amazon n'a
+    return `<p class="prixbox">💰 Prix du rayon : <strong>inconnu</strong> : Amazon n'a
       renvoyé aucun prix pour cette niche. Ce n'est pas un rayon gratuit, c'est une donnée
       absente.</p>`;
   return `<p class="prixbox">💰 Prix du rayon : de <strong>${fmtEur(r.prix_min)}</strong>
@@ -2388,7 +2542,7 @@ function pourquoiNiche(r){
   if(nonMesuree(r)) return [{cle:'non_mesuree', ton:'alerte', titre:'Rayon non mesuré',
     court:'à relancer avant de conclure',
     texte:"La recherche Amazon n'a pas répondu pour cette niche. Les compteurs sont à zéro "
-        + "faute de mesure, pas parce que le rayon est vide — relancez avant de conclure."}];
+        + "faute de mesure, pas parce que le rayon est vide. Relancez avant de conclure."}];
   const cartes = [];
   if(r.bsr_best == null){
     cartes.push({cle:'demande', ton:'neutre', titre:'Preuve de vente absente',
@@ -2568,7 +2722,7 @@ function ouvrirFiche(r){
   const alerteNm = nm ? `<p class="nmbox"><strong>Concurrence non mesurée.</strong>
       La recherche Amazon n'a pas répondu pour cette niche : les compteurs de concurrents
       et de sponsorisés sont à zéro faute de mesure, pas parce que le rayon est vide.
-      Le score n'est pas exploitable — à relancer.</p>` : '';
+      Le score n'est pas exploitable : à relancer.</p>` : '';
   const fiche = $('#fiche');
   // Trois niveaux de lecture, et un seul visible d'emblee. L'ecran empilait huit blocs de
   // meme poids : « on soupire, c'est chiant » (Baptiste, 2026-10-02). Ce qui descend dans un
@@ -2586,7 +2740,7 @@ function ouvrirFiche(r){
     + '<details class="avance pli"><summary>📚 Les livres qui occupent le rayon'
       + (nConc ? ' (' + nConc + ')' : '') + '</summary>'
       + blocConcurrents(r) + '</details>'
-    + '<details class="avance pli"><summary>🔍 Le rayon en détail — prix, requêtes, mesures</summary>'
+    + '<details class="avance pli"><summary>🔍 Le rayon en détail : prix, requêtes, mesures</summary>'
       + blocPrix(r)
       + `<p class="dl">🔎 Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>`
       + '<p class="dl">📏 Mesures brutes</p><div class="chips">'
@@ -2781,7 +2935,7 @@ function carteLowContent(r){
   const alerte = nm
     ? '<p class="lc-nm"><strong>Concurrence non mesurée.</strong> La recherche Amazon n\'a '
       + 'pas répondu : les compteurs valent zéro faute de mesure, pas parce que le rayon '
-      + 'est vide. Score non exploitable — à relancer.</p>'
+      + 'est vide. Score non exploitable : à relancer.</p>'
     : '';
 
   // TROIS chiffres en gros -- ceux qui font decider d'ecrire ou non (le prix, ce qu'il
@@ -2830,7 +2984,7 @@ function carteLowContent(r){
         : ({'🟢': 'g', '🟡': 'a', '🔴': 'r'}[Array.from(r.priorite || '')[0]]
            || grade(r.global_score))) + '" title="Indice de vitalité du rayon, sur 10. Mesuré sur 95 '
     + 'rayons étiquetés : il sépare un rayon mort d’un rayon vivant, il ne départage '
-    + 'PAS une bonne niche d’une mauvaise — ce n’est pas une note de qualité.">'
+    + 'PAS une bonne niche d’une mauvaise : ce n’est pas une note de qualité.">'
     + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
     + '<h3>' + esc(n.niche || n.requete_amazon || '—') + '</h3></div>'
     + '<div class="lc-req">🔎 « ' + esc(n.requete_amazon || '') + ' »</div>'
@@ -2887,17 +3041,17 @@ function grouperLc(rows){
     else vivant.push(r);
   });
   return [
-    {cle: 'vivant', titre: 'Rayons vivants', emo: '🟢', court: "à examiner vous-même — l'ordre n'est pas un classement de qualité", rows: vivant,
+    {cle: 'vivant', titre: 'Rayons vivants', emo: '🟢', court: "à examiner vous-même : l'ordre n'est pas un classement de qualité", rows: vivant,
      note: "à examiner vous-même. L'ordre dans ce groupe n'est PAS un classement de "
          + "qualité : mesuré sur 95 rayons, le score ne départage pas une bonne niche "
          + "d'une mauvaise."},
     {cle: 'mort', titre: 'Signaux de rayon mort', emo: '🔴',
-     court: "à vérifier avant d'y passer du temps — ce n'est pas un rejet", rows: mort,
-     note: "à vérifier avant d'y passer du temps — ce n'est pas un rejet : sur les lots "
+     court: "à vérifier avant d'y passer du temps, ce n'est pas un rejet", rows: mort,
+     note: "à vérifier avant d'y passer du temps. Ce n'est pas un rejet : sur les lots "
          + "mesurés, environ un rayon sur trois de ce groupe était quand même une bonne "
          + "niche."},
     {cle: 'nonmesure', titre: 'Non mesurés', emo: '⚪',
-     court: "Amazon n'a pas répondu — à relancer", rows: nonmesure,
+     court: "Amazon n'a pas répondu : à relancer", rows: nonmesure,
      note: "la recherche Amazon n'a pas répondu : ce n'est pas un rayon vide, c'est une "
          + "absence de mesure. À relancer."},
   ].filter(g => g.rows.length);
@@ -2965,15 +3119,15 @@ const VUE_LC = {
   cle: 'ia-niches-job-lowcontent',
   avant(){
     if(esLc) esLc.close();
-    stepsLc.innerHTML=''; gridLc.innerHTML=''; resultsLc.classList.remove('on');
+    stepsLc.innerHTML=''; viderProg(progressLc); gridLc.innerHTML=''; resultsLc.classList.remove('on');
     errboxLc.classList.remove('on'); errboxLc.textContent='';
     emptyLc.style.display='none'; progressLc.classList.add('on');
     runLcBtn.disabled=true; runLcLabel.textContent='Analyse en cours…';
     const ic=runLcBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ esLc=e; },
-  viderEtapes(){ stepsLc.innerHTML=''; },
-  etape(m){ addStepTo(stepsLc, m); },
+  viderEtapes(){ stepsLc.innerHTML=''; viderProg(progressLc); },
+  etape(m){ addStepTo(stepsLc, m); majProg(progressLc, 'lowcontent', m); },
   resultat(d){ renderLc(d); },
   erreur(m){ errboxLc.textContent='Erreur : '+m; errboxLc.classList.add('on'); },
   apres(){
@@ -3143,7 +3297,7 @@ function ligneAnalyse(job){
   const n = Array.isArray(job.resultat) ? job.resultat.length : 0;
   const ouvrable = job.statut === 'termine' && n > 0;
   const etat = ouvrable ? n + ' niche(s)'
-    : job.statut === 'echec' ? 'échec — ' + (job.erreur || 'cause non enregistrée')
+    : job.statut === 'echec' ? 'échec : ' + (job.erreur || 'cause non enregistrée')
     : job.statut === 'en_cours' ? 'en cours…'
     : 'en attente';
   return '<div class="hist-ligne">'
@@ -3450,7 +3604,7 @@ const VUE_NF = {
   cle: 'ia-niches-job-scout',
   avant(){
     if(es) es.close();
-    steps.innerHTML=''; $('#cartes-nf').innerHTML=''; results.classList.remove('on');
+    steps.innerHTML=''; viderProg(progress); $('#cartes-nf').innerHTML=''; results.classList.remove('on');
   fermerFiche();
     errbox.classList.remove('on'); errbox.textContent='';
     empty.style.display='none'; progress.classList.add('on');
@@ -3458,8 +3612,8 @@ const VUE_NF = {
     const ic=runBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ es=e; },
-  viderEtapes(){ steps.innerHTML=''; },
-  etape(m){ addStep(m); },
+  viderEtapes(){ steps.innerHTML=''; viderProg(progress); },
+  etape(m){ addStep(m); majProg(progress, 'scout', m); },
   resultat(d){ render(d); },
   erreur(m){ errbox.textContent='Erreur : '+m; errbox.classList.add('on'); },
   apres(){
@@ -3474,15 +3628,15 @@ const VUE_FIC = {
   cle: 'ia-niches-job-fiction',
   avant(){
     if(esFic) esFic.close();
-    stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
+    stepsFic.innerHTML=''; viderProg(progressFic); gridFic.innerHTML=''; resultsFic.classList.remove('on');
     errboxFic.classList.remove('on'); errboxFic.textContent='';
     emptyFic.style.display='none'; progressFic.classList.add('on');
     runFicBtn.disabled=true; runFicLabel.textContent='Analyse en cours…';
     const ic=runFicBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ esFic=e; },
-  viderEtapes(){ stepsFic.innerHTML=''; },
-  etape(m){ addStepFic(m); },
+  viderEtapes(){ stepsFic.innerHTML=''; viderProg(progressFic); },
+  etape(m){ addStepFic(m); majProg(progressFic, 'fiction', m); },
   resultat(d){ renderFic(d); },
   erreur(m){ errboxFic.textContent='Erreur : '+m; errboxFic.classList.add('on'); },
   apres(){
@@ -3742,8 +3896,8 @@ function chargerUsage(){
         body: JSON.stringify({mot_de_passe: $('#cloture-mdp').value})}).catch(()=>null);
       if(rep && rep.status === 204){ location.reload(); return; }
       msg.textContent = rep && rep.status === 401
-        ? 'Mot de passe incorrect — rien n’a été supprimé.'
-        : 'Clôture impossible pour le moment — rien n’a été supprimé.';
+        ? 'Mot de passe incorrect. Rien n’a été supprimé.'
+        : 'Clôture impossible pour le moment. Rien n’a été supprimé.';
     });
   }
 
@@ -3779,46 +3933,49 @@ const AIDE = {
       <p>Vous donnez un mot de départ. L'outil demande à l'IA une dizaine d'idées de sujets,
       vérifie <strong>gratuitement</strong> lesquels sont réellement tapés dans la barre de
       recherche d'Amazon, puis va observer les livres déjà en place sur les meilleurs d'entre
-      eux. Vous obtenez une carte par niche, avec les chiffres qui comptent.</p>
+      eux. Vous obtenez une carte par niche, avec les chiffres importants.</p>
 
       <h3>Ce qu'est un bon résultat, et l'ordre de lecture</h3>
       <p>Regardez d'abord le <strong>BSR</strong> : s'il passe sous 10 000 chez au moins un
       concurrent, c'est la preuve que le sujet se vend. Puis le nombre de concurrents
       réellement installés dessus : peu de concurrents sur un sujet qui vend, c'est de la
-      place à prendre. Le score en tête de carte résume ces deux lectures — il vous dit si
+      place à prendre. Le score en tête de carte résume ces deux lectures : il vous dit si
       le rayon est vivant, <strong>il ne classe pas la qualité d'une niche</strong>, et un
       résultat en rouge n'est pas une erreur de l'outil : c'est un signal pour passer à la
-      suivante.</p>
+      suivante. Deux niches vertes ne sont pas classées l'une devant l'autre par qualité : le score
+      trie, il ne juge pas.</p>
 
       <h3>Le champ « Thématique »</h3>
-      <p>Tapez un domaine <strong>large</strong>, en un à trois mots : <em>sommeil</em>,
-      <em>jardinage urbain</em>, <em>reconversion</em>. L'IA part de ce mot et cherche
-      <strong>à côté</strong> : si vous saisissez déjà un sujet très précis, vous bridez la
-      recherche. Vous pouvez aussi laisser le champ vide pour explorer sans orientation.</p>
+      <p>Pour <strong>explorer</strong>, tapez un domaine large, en un à trois mots :
+      <em>sommeil</em>, <em>jardinage urbain</em>, <em>reconversion</em>. L'IA part de ce mot et
+      cherche <strong>à côté</strong> : univers connexes et sous-niches. Plus votre saisie est
+      <strong>précise</strong> (<em>insomnie chronique</em>), plus les niches proposées sont
+      ciblées, mais moins elles sont variées : vous bridez l'exploration. Vous pouvez aussi
+      laisser le champ vide pour explorer sans orientation.</p>
 
       <h3>Le niveau d'analyse</h3>
       <p>Rapide, Standard ou Complète fixent combien d'idées seront réellement confrontées à
-      Amazon (<strong>3, 6 ou 10</strong>) — c'est le seul réglage qui pèse sur la durée et
+      Amazon (<strong>3, 6 ou 10</strong>) : c'est le seul réglage qui pèse sur la durée et
       sur votre consommation. Commencez en <strong>Standard</strong> pour tester une thématique
       nouvelle ; passez en Complète seulement quand elle donne déjà de bons résultats et qu'il
       faut départager plusieurs pistes. Le chiffre exact se règle dans « Réglages avancés ».</p>
 
       <h3>Lire une carte</h3>
       <ul>
-        <li><strong>Le score</strong> — note sur 10 qui résume la demande et la place restante.
+        <li><strong>Le score</strong> : note sur 10 qui résume la demande et la place restante.
         Vert : à regarder en priorité. Orange : intéressant. Rouge : faible.</li>
-        <li><strong>🏆 BSR meilleur</strong> — le classement des ventes Amazon du meilleur
+        <li><strong>🏆 BSR meilleur</strong> : le classement des ventes Amazon du meilleur
         livre trouvé. <strong>Plus le nombre est petit, plus le livre se vend</strong> ; sous
         10 000, la preuve de vente est solide.</li>
-        <li><strong>💰 Prix médian</strong> — le prix affiché sur Amazon.fr, TVA comprise. C'est
+        <li><strong>💰 Prix médian</strong> : le prix affiché sur Amazon.fr, TVA comprise. C'est
         une donnée de marché : elle n'entre dans aucun score.</li>
-        <li><strong>🚪 Accessibilité</strong> — plus c'est haut, plus il semble facile de se
+        <li><strong>🚪 Accessibilité</strong> : plus c'est haut, plus il semble facile de se
         faire une place.</li>
-        <li><strong>📈 Demande</strong> — à quel point le sujet est cherché. Elle plafonne
+        <li><strong>📈 Demande</strong> : à quel point le sujet est cherché. Elle plafonne
         vite : au-delà d'un certain niveau, deux niches sont notées pareil.</li>
-        <li><strong>📚 Concurrents</strong> — combien de titres de la première page reprennent
+        <li><strong>📚 Concurrents</strong> : combien de titres de la première page reprennent
         vraiment vos mots. Ce n'est pas le nombre de livres du marché.</li>
-        <li><strong>« Place à prendre »</strong> — apparaît dans la fiche quand trois conditions
+        <li><strong>« Place à prendre »</strong> : apparaît dans la fiche quand trois conditions
         tombent ensemble : un livre qui se vend très bien, une moyenne correcte, et au moins un
         livre mal classé.</li>
       </ul>
@@ -3858,25 +4015,25 @@ const AIDE = {
       <h3>Sous-genre, rayon, nombre de trios</h3>
       <p>Choisissez le sous-genre que vous savez déjà écrire, pas celui qui a l'air le plus
       vide. Le <strong>rayon</strong> (Kindle ou papier) décide quel rayon Amazon est
-      observé et quels livres entrent dans les calculs — un livre de l'autre rayon est
+      observé et quels livres entrent dans les calculs : un livre de l'autre rayon est
       écarté, volontairement. Laissez 8 trios pour un premier essai.</p>
 
       <h3>Compter 10 à 15 minutes</h3>
       <p>L'essentiel du temps est une file d'attente chez Amazon, faite une seule fois pour
       tout le lot. <strong>Vous pouvez fermer la page</strong> : l'analyse continue et
       vous la retrouverez dans « Mes analyses ». Le panneau d'avancement est le seul endroit où apparaît la requête
-      exacte envoyée pour chaque trio — notez-la si elle vous intéresse.</p>
+      exacte envoyée pour chaque trio : notez-la si elle vous intéresse.</p>
 
       <h3>Lire une carte</h3>
       <p>Commencez par la <strong>conclusion</strong> en haut (Pépite, Porteur mais
       encombré, Mur installé, Désert, Sans intérêt, Non mesuré), puis les chiffres :</p>
       <ul>
-        <li><strong>Saturation du trio</strong> — la part de votre trio que les livres du
+        <li><strong>Saturation du trio</strong> : la part de votre trio que les livres du
         rayon promettent déjà. <strong>Ici, élevé = mauvais</strong> : c'est le seul chiffre
         de l'outil qui se lit à l'envers.</li>
-        <li><strong>Profondeur</strong> — est-ce que ces livres se vendent.</li>
-        <li><strong>Ouverture</strong> — reste-t-il de la place.</li>
-        <li><strong>Part séries</strong> — un pourcentage élevé signale un lectorat habitué
+        <li><strong>Profondeur</strong> : est-ce que ces livres se vendent.</li>
+        <li><strong>Ouverture</strong> : reste-t-il de la place.</li>
+        <li><strong>Part séries</strong> : un pourcentage élevé signale un lectorat habitué
         aux séries, où un tome unique s'installe plus difficilement.</li>
       </ul>
       <p>Lisez enfin les <strong>alertes en orange</strong> : elles disent ce qui n'a pas pu
@@ -3886,7 +4043,7 @@ const AIDE = {
       <p>Par défaut vous ne remplissez rien et l'IA propose librement : c'est le mode
       conseillé pour découvrir un sous-genre. Sinon, ouvrez « Composer moi-même le trio »
       pour imposer des tropes, un décor, et ajouter une piste personnelle en texte libre.
-      Plus vous contraignez, moins il reste de combinaisons — et si plus rien n'est crédible,
+      Plus vous contraignez, moins il reste de combinaisons, et si plus rien n'est crédible,
       l'outil vous le dit et vous invite à élargir.</p>`,
     pieges: [
       "La saturation du trio est le seul chiffre inversé : élevé = mauvais. Lue comme les autres, elle vous ferait choisir exactement les pires trios.",
@@ -3910,14 +4067,14 @@ const AIDE = {
       « registre ») est morte ou tenue par des papetiers, et l'argent est trois crans plus
       bas dans la traîne : « coloriage licorne 3 ans fille », « registre du personnel
       obligatoire ». Un modèle à qui on demande du long-tail invente aussi la demande qui
-      va avec. Amazon, lui, ne complète que ce que des gens cherchent — et c'est gratuit.</p>
+      va avec. Amazon, lui, ne complète que ce que des gens cherchent, et c'est gratuit.</p>
 
       <h3>Les deux axes que les autres onglets n'ont pas</h3>
       <p><strong>Rentabilité.</strong> Sous 9,99 € de prix catalogue hors TVA (le prix saisi
       dans KDP), KDP verse 50 % au lieu de 60 %, et le coût d'impression se déduit ensuite.
       Les prix du rayon sont affichés TVA comprise : pour un carnet ou un coloriage (TVA
       20 %), le seuil tombe vers 11,99 € affichés. Un rayon très demandé à 6,99 € peut ne
-      rien rapporter — c'est le piège le plus coûteux du low-content, et il ne se voit sur
+      rien rapporter : c'est le piège le plus coûteux du low-content, et il ne se voit sur
       aucun compteur de concurrence.</p>
       <p><strong>Faisabilité.</strong> Un carnet quadrillé et un cahier d'activités illustré
       ne se produisent pas dans le même monde. L'effort est annoncé, pas deviné.</p>
@@ -3938,7 +4095,7 @@ const AIDE = {
     pieges: [
       "Les variantes se lisent À L'ENVERS : beaucoup de variantes quasi identiques est une MAUVAISE nouvelle, pas un signe de marché porteur. C'est le seul chiffre de cet onglet dont une jauge colorée comme les autres ferait recommander exactement les pires rayons.",
       "« Normé » ne veut pas dire « difficile ». Un registre obligatoire a son contenu FIXÉ par un texte : la production est simple, c'est la conformité qui est exigeante. Le verdict est dégradé tant qu'aucune source réglementaire n'est citée, parce qu'un registre incomplet expose l'acheteur, qui est un employeur.",
-      "Une part indie « non mesurée » n'est pas une part indie nulle. Zéro pour cent voudrait dire « rayon tenu par des éditeurs installés », donc « n'y va pas » — une conclusion, là où il n'y a qu'une absence de lecture.",
+      "Une part indie « non mesurée » n'est pas une part indie nulle. Zéro pour cent voudrait dire « rayon tenu par des éditeurs installés », donc « n'y va pas » : une conclusion, là où il n'y a qu'une absence de lecture.",
       "Un prix médian bas n'est pas une mauvaise nouvelle en soi : c'est le couple prix × pagination qui décide de la redevance. Lire la ligne de rentabilité, pas le prix seul.",
       "Les seuils de cet onglet ne sont pas encore calibrés sur des rayons réels : ils sont cohérents entre eux, ce sont des hypothèses documentées. Les traiter comme des ordres de grandeur, pas comme des verdicts.",
     ],
@@ -3950,7 +4107,7 @@ const AIDE = {
 // Les durees sont celles des presets et des textes d'avancement de chaque onglet.
 const AIDE_RAPIDE = {
   nf: [
-    ['✍️', 'Un domaine large', 'Un à trois mots (sommeil, jardinage urbain…), ou rien pour explorer librement.'],
+    ['✍️', 'Votre thématique', 'Large (sommeil) pour explorer, précise (insomnie chronique) pour cibler. Ou rien : l’IA explore librement.'],
     ['🚀', 'Lancez', 'De 2 à 7 minutes selon le niveau. Vous pouvez fermer la page : l’analyse continue.'],
     ['🔎', 'Ouvrez une niche', 'BSR sous 10 000 = ça se vend. Peu de concurrents = de la place à prendre.'],
   ],
@@ -4031,6 +4188,15 @@ function aideHtml(a, rapide){
   function refermer(){ fond.classList.remove('on'); btn.focus(); }
 
   btn.addEventListener('click', ouvrir);
+  // « Comment lire le score » : ouvre l'aide DIRECTEMENT sur la rubrique concernee.
+  const lienScore = $('#lien-aide-score');
+  if(lienScore) lienScore.addEventListener('click', () => {
+    ouvrir();
+    const sec = [...corps.querySelectorAll('.aide-sec')].find(d => d.textContent.toLowerCase().indexOf('bon résultat') >= 0);
+    // Seule la rubrique demandee reste ouverte : on est venu pour elle, pas pour la premiere.
+    corps.querySelectorAll('.aide-sec').forEach(d => { d.open = (d === sec); });
+    if(sec) sec.scrollIntoView({block:'nearest'});
+  });
   // Le « Comment ca marche ? » du hero ouvre la MEME aide : deux textes a tenir a jour
   // divergeraient, et c'est l'aide qui perdrait.
   const heroAide = $('#hero-aide');

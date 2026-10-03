@@ -85,7 +85,8 @@ def test_un_bsr_inconnu_s_affiche_comme_non_mesure_pas_comme_zero():
 def test_sans_concurrents_connus_le_bloc_le_dit():
     """Liste vide = rayon non mesuré, jamais « aucun concurrent » (règle 3)."""
     html = appeler("blocConcurrents", {"top_books": []}, dependances=("esc", "fmt", "fmtEur"))
-    assert html.strip() == "" or "—" in html
+    # Ni vide, ni « rayon sans concurrent » : il dit que c'est une DONNEE absente.
+    assert html.strip() == "" or "donnee absente" in html
 
 
 # ── Le câblage : le bouton doit appeler l'endpoint ──────────────────────────────

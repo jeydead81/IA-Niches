@@ -31,14 +31,32 @@ def html() -> str:
 
 # ── 1. Régions live ────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("ident", ["steps", "steps-fic"])
-def test_la_liste_d_etapes_est_une_region_live_polie(html, ident):
-    """`polite` et non `assertive` : les étapes s'enchaînent pendant douze minutes.
-    En `assertive`, chaque ligne couperait la parole au lecteur d'écran — l'utilisateur
-    ne pourrait plus rien lire d'autre pendant tout le run."""
+@pytest.mark.parametrize("ident", ["progress", "progress-fic", "progress-lc"])
+def test_l_avancement_est_une_region_live_polie(html, ident):
+    """`polite` et non `assertive` : l'analyse dure de 2 à 15 minutes. En `assertive`, chaque
+    mise à jour couperait la parole au lecteur d'écran — l'utilisateur ne pourrait plus rien
+    lire d'autre pendant tout le run.
+
+    La région annoncée est la PHRASE DE PHASE (une par jalon) et la liste des avertissements :
+    le journal détaillé, replié sous « Voir le détail », n'est plus annoncé ligne à ligne —
+    une centaine de lignes seraient du bruit, pas de l'information. Les avertissements, eux,
+    restent annoncés : une source tombée ne doit jamais passer inaperçue."""
+    debut = html.index(f'id="{ident}"')
+    panneau = html[debut:html.index("</details>", debut)]
+    phase = re.search(r'<p class="prog-phase"[^>]*>', panneau)
+    alertes = re.search(r'<ul class="prog-alertes"[^>]*>', panneau)
+    assert phase and 'aria-live="polite"' in phase.group(0), phase and phase.group(0)
+    assert alertes and 'aria-live="polite"' in alertes.group(0), alertes and alertes.group(0)
+    assert 'aria-live="assertive"' not in panneau
+
+
+@pytest.mark.parametrize("ident", ["steps", "steps-fic", "steps-lc"])
+def test_le_journal_detaille_existe_toujours_sous_un_volet(html, ident):
+    """Rien n'est supprimé : le journal complet se retrouve sous « Voir le détail »."""
     m = re.search(r'<ul[^>]*id="' + ident + r'"[^>]*>', html)
     assert m, f"liste #{ident} introuvable"
-    assert 'aria-live="polite"' in m.group(0), m.group(0)
+    avant = html[:m.start()]
+    assert avant.rindex('<details class="prog-detail"') > avant.rindex('class="panel progress"')
 
 
 @pytest.mark.parametrize("ident", ["errbox", "errbox-fic"])

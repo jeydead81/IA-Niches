@@ -524,3 +524,148 @@ def test_la_reprise_garde_son_avertissement_de_consentement():
     bloc = html[html.index('id="auth-reprise-bloc"'):html.index('id="auth-btn"')]
     assert "propre installation" in bloc and 'type="checkbox"' in bloc and "hidden" in html[
         html.index('id="auth-reprise-bloc"') - 40:html.index('id="auth-reprise-bloc"') + 40]
+
+
+# ── Ce qui se déplie doit SE VOIR cliquable (Baptiste, 2026-10-03) ─────────────────────────
+#
+# « Zone sensible : clôturer mon compte » ressemblait à un bandeau d'information : rien ne
+# disait qu'on pouvait cliquer. Un volet <details> a besoin d'une flèche et d'un survol.
+
+def test_chaque_volet_replie_a_une_fleche():
+    """Tout <details class=…> de l'interface porte, dans la feuille, une flèche sur son
+    <summary> : sans elle, un volet se lit comme un simple libellé."""
+    import re
+    html = _html()
+    css = html[:html.index("</style>")]
+    classes = set()
+    for m in re.finditer(r'<details class="([^"]+)"', html):
+        classes.update(m.group(1).split())
+    # classes sans <summary> propre ou déjà couvertes par leur règle d'origine
+    attendues = {"avance", "compo", "pli", "lc-detail", "fic-detail", "sugbox", "rnote",
+                 "lc-groupe-note", "cpt-danger", "pq", "va-pli", "aide-sec"}
+    for c in attendues & classes:
+        assert re.search(r"\." + re.escape(c) + r"(\[open\])? > summary::after", css) \
+            or re.search(r"details\." + re.escape(c) + r"(\[open\])? > summary::after", css), \
+            f"volet « {c} » sans flèche"
+
+
+def test_la_zone_sensible_est_un_bouton_visible_pas_un_bandeau():
+    css = _html()
+    css = css[:css.index("</style>")]
+    regle = css[css.rindex(".cpt-danger > summary{"):]
+    regle = regle[:regle.index("}") + 1]
+    assert "border:1.5px solid" in regle and "cursor:pointer" in regle
+    assert ".cpt-danger > summary:hover" in css
+
+
+# ── « Comment lire le score » : un lien vers l'aide, plus un paragraphe (Baptiste) ───────
+
+def test_le_paragraphe_du_score_a_quitte_la_page_de_resultats_mais_vit_dans_l_aide():
+    """Du bruit, déjà expliqué dans l'aide : la page ne garde qu'un lien. La nuance « deux
+    niches vertes ne sont pas classées l'une devant l'autre » rejoint l'aide — rien n'est
+    perdu, ce n'est plus répété à chaque résultat."""
+    html = _html()
+    assert 'id="lien-aide-score"' in html
+    assert 'class="rnote"' not in html
+    corps = html[html.index("const AIDE = {"):html.index("const AIDE_RAPIDE")]
+    assert "le score" in corps.lower() and "trie, il ne juge pas" in corps
+
+
+def test_le_lien_du_score_ouvre_l_aide_sur_la_bonne_rubrique():
+    html = _html()
+    debut = html.index("const lienScore = $('#lien-aide-score');")
+    fin = html.index("});", debut)
+    code = html[debut:fin]
+    assert "ouvrir()" in code and "bon résultat" in code
+
+
+# ── Avancement en pourcentage : estimé sur des jalons, jamais inventé ────────────────────
+#
+# Les moteurs n'émettent que du texte (`progress(msg)`) : le pourcentage est ESTIMÉ en
+# reconnaissant des jalons dans ces messages. Trois garanties : il ne recule jamais, il
+# n'atteint 100 que quand le moteur dit « terminé », et les avertissements ne passent pas
+# à la trappe.
+
+_PROG = ("PROG_JALONS",)
+
+_NF = ["Génération de niches par l'IA (graine : animaux)…", "12 niches proposées par l'IA.",
+       "Validation de la demande sur Amazon (autocomplete, gratuit)…",
+       "11/12 niches avec demande confirmée.", "[1/6] Concurrence Amazon « animal totem »…",
+       "[2/6] Concurrence Amazon « deuil animal »…"]
+
+
+def _etat(type_, msgs):
+    return appeler_json("progressionEtat", type_, msgs, dependances=_PROG)
+
+
+def test_le_pourcentage_suit_la_vraie_sequence_d_un_run_non_fiction():
+    """La séquence est celle d'un run réel (capture de Baptiste, 2026-10-03)."""
+    e = _etat("scout", _NF)
+    assert e["phase"] == "Analyse de la concurrence (2/6)…"
+    assert 22 < e["pct"] < 85
+
+
+def test_le_pourcentage_ne_recule_jamais_et_n_atteint_100_qu_a_la_fin():
+    msgs = _NF + ["[3/6] Concurrence Amazon « x »…", "[4/6] Concurrence Amazon « y »…",
+                  "[5/6] Concurrence Amazon « z »…", "[6/6] Concurrence Amazon « w »…",
+                  "Récupération des BSR (18 livres uniques)…"]
+    pcts = [_etat("scout", msgs[:i])["pct"] for i in range(1, len(msgs) + 1)]
+    assert pcts == sorted(pcts), "le pourcentage a reculé"
+    assert max(pcts) < 100
+    assert _etat("scout", msgs + ["Scout terminé (6 recherches Amazon)."])["pct"] == 100
+
+
+def test_un_avertissement_est_remonte_et_ne_fait_pas_avancer_la_barre():
+    """Une source tombée ne se replie jamais (transparence sur les échecs)."""
+    avant = _etat("scout", _NF)
+    apres = _etat("scout", _NF + ["  ⚠ search échec (timeout) — niche scorée sans concurrence."])
+    assert apres["pct"] == avant["pct"] and apres["phase"] == avant["phase"]
+    assert len(apres["alertes"]) == 1 and "search échec" in apres["alertes"][0]
+
+
+def test_un_type_inconnu_ou_aucun_message_ne_donne_ni_erreur_ni_faux_avancement():
+    assert _etat("inconnu", _NF)["pct"] == 0
+    e = _etat("scout", [])
+    assert e["pct"] == 0 and e["alertes"] == []
+
+
+def test_la_fiction_et_le_low_content_ont_leur_propre_progression():
+    fic = ["Génération de 5 trios pour « cosy_mystery »…", "5 trios générés.",
+           "[1/5] SERP « a »…", "[5/5] SERP « e »…",
+           "Enrichissement de 54 ASIN uniques en UN seul batch (~250 s)…",
+           "Classification de 40 quatrièmes de couverture…",
+           "Sonde autocomplete « a »…", "Sonde autocomplete « b »…"]
+    pcts = [_etat("fiction", fic[:i])["pct"] for i in range(1, len(fic) + 1)]
+    assert pcts == sorted(pcts) and 60 < pcts[-1] < 100
+    lc = ["Lecture de ce qu'Amazon complète autour de « registre » (gratuit)…",
+          "31 requête(s) réelle(s) retenue(s).", "Classement des requêtes par l'IA…",
+          "12 niche(s) proposée(s).", "8/12 niche(s) avec demande confirmée.",
+          "[3/6] Concurrence Amazon « q »…", "Enrichissement de 40 ASIN uniques en UN seul batch…"]
+    pcts = [_etat("lowcontent", lc[:i])["pct"] for i in range(1, len(lc) + 1)]
+    assert pcts == sorted(pcts) and 40 < pcts[-1] < 100
+
+
+def test_les_jalons_cherchent_des_phrases_que_les_moteurs_emettent_vraiment():
+    """Si un moteur reformule un message, la barre ne doit pas se figer EN SILENCE : ce test
+    casse. Chaque fragment est lu dans le source du moteur correspondant."""
+    from pathlib import Path
+    sources = Path(__file__).resolve().parent.parent / "01-scripts"
+    lu = lambda f: (sources / f).read_text(encoding="utf-8")
+    attendus = {
+        "scout_master.py": ["Génération de niches", "niches proposées", "Validation de la demande",
+                            "niches avec demande confirmée", "Concurrence Amazon",
+                            "Récupération des BSR", "Verdict éditorial", "Scout terminé"],
+        "fiction_master.py": ["Génération de", "trios générés", "SERP «", "Enrichissement de",
+                              "déjà classée", "Classification de", "Sonde autocomplete",
+                              "Scout fiction terminé"],
+        "fiction_serp_provider.py": ["servie(s) par le cache"],
+        "lowcontent_master.py": ["Lecture de ce qu'Amazon complète", "réelle(s) retenue(s)",
+                                 "Classement des requêtes par l'IA", "proposée(s)",
+                                 "Confrontation des propositions", "niche(s) avec demande confirmée",
+                                 "Concurrence Amazon", "recherche(s) Amazon servie(s) par le ",
+                                 "Enrichissement de", "Classement de", "Scout low-content terminé"],
+    }
+    for fichier, fragments in attendus.items():
+        src = lu(fichier)
+        for f in fragments:
+            assert f in src, f"{fichier} n'émet plus « {f} » : la barre d'avancement se figerait"
