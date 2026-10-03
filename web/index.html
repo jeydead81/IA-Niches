@@ -1328,6 +1328,67 @@
     border:1.5px solid var(--line-control);border-radius:12px;padding:0 14px;outline:none;
     transition:border-color .15s,box-shadow .15s}
   .cpt input[type=password]:focus{border-color:var(--secondary);box-shadow:0 0 0 4px rgba(46,125,91,.14)}
+
+  /* ── Aide contextuelle : trois gestes d'abord, le mode d'emploi à la demande ── */
+  .aide-fond{backdrop-filter:blur(3px)}
+  .aide-panneau{max-width:680px;padding:26px 28px 28px}
+  .aide-panneau h2{font-family:var(--serif);font-weight:500;font-size:23px;letter-spacing:-.015em;line-height:1.25;margin:0 70px 16px 0}
+  .aide-gestes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+  .aide-geste{position:relative;background:var(--brand-soft);border-radius:16px;padding:14px 14px 12px}
+  .aide-num{position:absolute;top:10px;right:12px;width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;
+    font-size:12px;font-weight:700;display:grid;place-items:center}
+  .aide-emo{display:block;font-size:26px;line-height:1;margin-bottom:8px}
+  .aide-geste strong{display:block;font-size:14.5px;color:var(--heading);margin-bottom:3px}
+  .aide-geste p{margin:0;font-size:12.5px;line-height:1.45;color:var(--ink-soft)}
+  .aide-secs{display:flex;flex-direction:column;gap:8px}
+  .aide-sec{border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+  .aide-sec > summary{list-style:none;cursor:pointer;padding:12px 16px;font-size:14.5px;font-weight:600;color:var(--heading);
+    display:flex;align-items:center;gap:10px;border-radius:14px}
+  .aide-sec > summary::-webkit-details-marker{display:none}
+  .aide-sec > summary::after{content:"›";margin-left:auto;color:var(--text-muted);font-size:20px;line-height:1;transition:transform .2s var(--ease)}
+  .aide-sec[open] > summary::after{transform:rotate(90deg)}
+  .aide-sec > summary:hover{background:var(--bg)}
+  .aide-sec > div{padding:0 18px 12px}
+  .aide-pieges{margin-top:18px;border:1px solid #F1D6A0;border-top:1px solid #F1D6A0;border-radius:16px;background:var(--amber-bg);padding:14px 18px}
+  .aide-pieges h3{margin:0 0 6px;font-size:14.5px;color:#7C2D12}
+  .aide-pieges li{color:#78350F;font-size:13px}
+  @media (max-width:640px){.aide-gestes{grid-template-columns:1fr}.aide-panneau{padding:22px 18px 22px}}
+
+  /* ── Compositeur de trio : des pastilles, pas une liste à Ctrl-clic ── */
+  .compo{border-top:none;margin-top:6px;padding-top:0}
+  .compo > summary{display:inline-flex;align-items:center;gap:6px;background:var(--muted);border-radius:999px;padding:8px 16px;
+    color:var(--heading)}
+  .compo-corps{margin-top:14px;padding:16px 18px;background:var(--bg);border-radius:16px}
+  .compo-max{margin-left:6px;font-size:12px;font-weight:500;color:var(--text-muted)}
+  .field-tropes{flex:1 1 100%}
+  .pastilles-choix{display:flex;flex-wrap:wrap;gap:8px}
+  .pastille-choix{font:inherit;font-size:13.5px;font-weight:500;color:var(--heading);background:var(--surface);
+    border:1.5px solid var(--border);border-radius:999px;padding:7px 14px;cursor:pointer;text-transform:capitalize;
+    transition:all .15s var(--ease)}
+  .pastille-choix:hover:not(:disabled){border-color:var(--secondary);transform:translateY(-1px)}
+  .pastille-choix.on{background:var(--primary);border-color:var(--primary);color:#fff}
+  .pastille-choix:disabled{opacity:.4;cursor:not-allowed}
+  .compo-note{margin:2px 0 0;font-size:13px;color:var(--text-muted)}
+  .compo-pli{width:100%}
+  .compo-pli > summary{list-style:none;cursor:pointer;font-size:12.5px;color:var(--text-muted);padding:4px 0}
+  .compo-pli > summary::-webkit-details-marker{display:none}
+  .compo-pli p{margin:4px 0 0;font-size:13px;color:var(--ink-soft)}
+
+  /* ── États vides et erreurs ── */
+  .empty{padding:30px 24px;margin-top:14px}
+  .empty-ico{font-size:34px;line-height:1;margin-bottom:8px}
+  .empty div{font-size:14.5px}
+  .errbox.on::before{content:"⚠️ ";}
+  .errbox{font-size:14px;font-weight:500}
+
+  /* « Mes analyses » sur mobile : la regle de grille a 5 colonnes, redeclaree plus haut apres
+     la media query d'origine, la neutralisait -- la page debordait de 50 px. */
+  @media (max-width:700px){
+    .hist-ligne{grid-template-columns:auto minmax(0,1fr);gap:4px 12px}
+    .hist-ligne .quand{grid-column:1/-1;min-width:0}
+    .hist-ligne .sujet{white-space:normal}
+    .hist-ligne .btn-act{justify-self:end}
+  }
 </style>
 </head>
 <body>
@@ -1519,7 +1580,7 @@
     </section>
 
     <div class="panel empty" id="empty">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
+      <div class="empty-ico" aria-hidden="true">🔭</div>
       <div>Entrez une thématique et lancez l'analyse pour voir les niches.</div>
     </div>
   </div>
@@ -1567,9 +1628,13 @@
         <details class="compo" id="compo">
           <summary>🧩 Composer moi-même le trio (facultatif)</summary>
           <div class="compo-corps">
-            <div class="field">
-              <label for="fic-tropes">Tropes imposés</label>
-              <select id="fic-tropes" multiple size="4"></select>
+            <div class="field field-tropes">
+              <label for="fic-tropes">Tropes imposés <span class="compo-max">3 maximum</span></label>
+              <!-- Le <select multiple> reste la SOURCE : le lancement lit ses options choisies.
+                   Les pastilles ne font que les cocher. Un trio porte 1 a 3 tropes : en imposer
+                   plus rendrait la contrainte impossible a satisfaire, sans que rien le dise. -->
+              <select id="fic-tropes" multiple size="4" hidden></select>
+              <div class="pastilles-choix" id="fic-tropes-pastilles" role="group" aria-label="Tropes imposés"></div>
             </div>
             <div class="field">
               <label for="fic-decor">Décor imposé</label>
@@ -1579,11 +1644,12 @@
               <label for="fic-libre">Piste personnelle</label>
               <input type="text" id="fic-libre" placeholder="ex. thermalisme, fanfare de village…" autocomplete="off" />
             </div>
-            <p class="compo-note">Ce que vous fixez ici s'impose à <strong>tous</strong> les
-              trios ; l'IA cherche des combinaisons crédibles à l'intérieur de vos
-              contraintes. La piste personnelle ne fait pas partie de la taxonomie : elle
-              oriente la requête, elle ne remplace ni un trope ni un décor. Plus vous
-              contraignez, moins il reste de combinaisons possibles.</p>
+            <p class="compo-note">Ce que vous fixez s'impose à <strong>tous</strong> les trios :
+              plus vous contraignez, moins il reste de combinaisons.</p>
+            <details class="compo-pli"><summary>ℹ️ À propos de la piste personnelle</summary>
+              <p>La piste personnelle ne fait pas partie de la taxonomie : elle oriente la requête,
+              elle ne remplace ni un trope ni un décor. L'IA cherche des combinaisons crédibles à
+              l'intérieur de vos contraintes.</p></details>
           </div>
         </details>
       </form>
@@ -1604,7 +1670,7 @@
     </section>
 
     <div class="panel empty" id="empty-fic">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
+      <div class="empty-ico" aria-hidden="true">🎭</div>
       <div>Choisissez un sous-genre et lancez l'analyse pour voir les trios classés.</div>
     </div>
   </div>
@@ -1663,7 +1729,7 @@
     </section>
 
     <div class="panel empty" id="empty-lc">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+      <div class="empty-ico" aria-hidden="true">📓</div>
       <div>Entrez une thématique (ou laissez vide) et lancez l'analyse pour voir ce qu'Amazon complète.</div>
     </div>
   </div>
@@ -3127,6 +3193,38 @@ fetch('/api/fiction/sous-genres').then(r=>r.json()).then(list=>{
 // Menus du compositeur : rechargés à CHAQUE changement de sous-genre, parce que les tropes
 // et les décors ne sont pas les mêmes d'un sous-genre à l'autre. Garder les anciens ferait
 // composer un trio impossible, refusé ensuite par le serveur sans que l'auteur comprenne.
+// Les tropes se choisissent en pastilles (3 au plus) ; le <select multiple> cache reste la
+// source que lit le lancement. Au-dela de 3, les autres pastilles se desactivent : un trio ne
+// porte pas plus de 3 tropes, imposer le 4e rendrait la contrainte irrealisable.
+const MAX_TROPES_IMPOSES = 3;
+function dessinerTropesFic(){
+  const sel = $('#fic-tropes'), hote = $('#fic-tropes-pastilles');
+  if(!sel || !hote) return;
+  const choisis = () => [...sel.options].filter(o => o.selected).length;
+  hote.innerHTML = '';
+  [...sel.options].forEach(o => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pastille-choix'; b.textContent = o.textContent;
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      if(!o.selected && choisis() >= MAX_TROPES_IMPOSES) return;
+      o.selected = !o.selected;
+      majPastillesTropes();
+    });
+    hote.appendChild(b);
+  });
+  function majPastillesTropes(){
+    const plein = choisis() >= MAX_TROPES_IMPOSES;
+    [...hote.children].forEach((b, i) => {
+      const actif = sel.options[i].selected;
+      b.setAttribute('aria-pressed', String(actif));
+      b.classList.toggle('on', actif);
+      b.disabled = plein && !actif;
+    });
+  }
+  majPastillesTropes();
+}
+
 function chargerTaxonomie(){
   const sg = sgSelect.value;
   const selTropes=$('#fic-tropes'), selDecor=$('#fic-decor');
@@ -3134,6 +3232,7 @@ function chargerTaxonomie(){
   fetch('/api/fiction/taxonomie/'+encodeURIComponent(sg)).then(r=>r.ok?r.json():null).then(d=>{
     if(!d) return;
     selTropes.innerHTML = d.tropes.map(t=>`<option value="${esc(t)}">${esc(t.replace(/_/g,' '))}</option>`).join('');
+    dessinerTropesFic();
     selDecor.innerHTML = '<option value="">Peu importe</option>'
       + d.decors.map(t=>`<option value="${esc(t)}">${esc(t.replace(/_/g,' '))}</option>`).join('');
   }).catch(()=>{});
@@ -3617,13 +3716,13 @@ const AIDE = {
       <p>Vous donnez un mot de départ. L'outil demande à l'IA une dizaine d'idées de sujets,
       vérifie <strong>gratuitement</strong> lesquels sont réellement tapés dans la barre de
       recherche d'Amazon, puis va observer les livres déjà en place sur les meilleurs d'entre
-      eux. Vous obtenez un tableau classé, du plus prometteur au moins prometteur.</p>
+      eux. Vous obtenez une carte par niche, avec les chiffres qui comptent.</p>
 
       <h3>Ce qu'est un bon résultat, et l'ordre de lecture</h3>
       <p>Regardez d'abord le <strong>BSR</strong> : s'il passe sous 10 000 chez au moins un
       concurrent, c'est la preuve que le sujet se vend. Puis le nombre de concurrents
       réellement installés dessus : peu de concurrents sur un sujet qui vend, c'est de la
-      place à prendre. Le score en tête de ligne résume ces deux lectures — il vous dit si
+      place à prendre. Le score en tête de carte résume ces deux lectures — il vous dit si
       le rayon est vivant, <strong>il ne classe pas la qualité d'une niche</strong>, et un
       résultat en rouge n'est pas une erreur de l'outil : c'est un signal pour passer à la
       suivante.</p>
@@ -3634,45 +3733,48 @@ const AIDE = {
       <strong>à côté</strong> : si vous saisissez déjà un sujet très précis, vous bridez la
       recherche. Vous pouvez aussi laisser le champ vide pour explorer sans orientation.</p>
 
-      <h3>Le réglage « Niches à analyser »</h3>
-      <p>Il fixe combien d'idées seront réellement confrontées à Amazon — c'est le seul
-      réglage qui pèse sur la durée et sur votre consommation. Restez à <strong>4 ou 5</strong>
-      pour tester une thématique nouvelle ; montez seulement quand elle donne déjà de bons
-      résultats et qu'il faut départager plusieurs pistes.</p>
+      <h3>Le niveau d'analyse</h3>
+      <p>Rapide, Standard ou Complète fixent combien d'idées seront réellement confrontées à
+      Amazon (<strong>3, 6 ou 10</strong>) — c'est le seul réglage qui pèse sur la durée et
+      sur votre consommation. Commencez en <strong>Standard</strong> pour tester une thématique
+      nouvelle ; passez en Complète seulement quand elle donne déjà de bons résultats et qu'il
+      faut départager plusieurs pistes. Le chiffre exact se règle dans « Réglages avancés ».</p>
 
-      <h3>Lire le tableau</h3>
+      <h3>Lire une carte</h3>
       <ul>
-        <li><strong>Score</strong> — note sur 10 qui résume les deux colonnes suivantes.
+        <li><strong>Le score</strong> — note sur 10 qui résume la demande et la place restante.
         Vert : à regarder en priorité. Orange : intéressant. Rouge : faible.</li>
-        <li><strong>Demande</strong> — à quel point le sujet est cherché. Elle plafonne
-        vite : au-delà d'un certain niveau, deux niches sont notées pareil.</li>
-        <li><strong>Pénétration</strong> — plus c'est haut, plus il semble facile de se
+        <li><strong>🏆 BSR meilleur</strong> — le classement des ventes Amazon du meilleur
+        livre trouvé. <strong>Plus le nombre est petit, plus le livre se vend</strong> ; sous
+        10 000, la preuve de vente est solide.</li>
+        <li><strong>💰 Prix médian</strong> — le prix affiché sur Amazon.fr, TVA comprise. C'est
+        une donnée de marché : elle n'entre dans aucun score.</li>
+        <li><strong>🚪 Accessibilité</strong> — plus c'est haut, plus il semble facile de se
         faire une place.</li>
-        <li><strong>BSR</strong> — le classement des ventes Amazon.
-        <strong>Plus le nombre est petit, plus le livre se vend.</strong> À gauche le
-        meilleur livre trouvé, à droite la moyenne des livres relevés.</li>
-        <li><strong>Le badge ✓</strong> — il s'allume quand trois conditions tombent
-        ensemble : un livre qui se vend très bien, une moyenne correcte, et au moins un
-        livre mal classé. C'est le signe qu'il reste une place à prendre.</li>
-        <li><strong>Concurrents</strong> — combien de titres de la première page reprennent
+        <li><strong>📈 Demande</strong> — à quel point le sujet est cherché. Elle plafonne
+        vite : au-delà d'un certain niveau, deux niches sont notées pareil.</li>
+        <li><strong>📚 Concurrents</strong> — combien de titres de la première page reprennent
         vraiment vos mots. Ce n'est pas le nombre de livres du marché.</li>
+        <li><strong>« Place à prendre »</strong> — apparaît dans la fiche quand trois conditions
+        tombent ensemble : un livre qui se vend très bien, une moyenne correcte, et au moins un
+        livre mal classé.</li>
       </ul>
 
       <h3>Par quoi commencer</h3>
       <p>Regardez d'abord la <strong>couleur du score</strong>, puis le <strong>BSR</strong>,
-      puis la pénétration. Une niche verte dont tous les BSR sont mauvais n'est pas une
+      puis l'accessibilité. Une niche verte dont tous les BSR sont mauvais n'est pas une
       bonne niche : le classement des ventes prime sur la note.</p>
-      <p><strong>Cliquez sur une ligne</strong> pour ouvrir le détail : mises en garde,
-      fourchette de prix du rayon, requêtes proches et liens vers les livres concurrents.
-      Retenez une ou deux niches au maximum, allez taper la recherche vous-même sur
-      Amazon.fr, puis relancez la même thématique deux ou trois semaines plus tard : l'outil
-      vous dira alors ce qui a bougé.</p>`,
+      <p><strong>Cliquez sur une carte</strong> pour ouvrir sa fiche : les raisons du verdict,
+      les mises en garde, les livres du rayon, la fourchette de prix et les requêtes proches.
+      « Analyser cette niche » propose en plus un titre à écrire. Retenez une ou deux niches
+      au maximum, allez taper la recherche vous-même sur Amazon.fr, puis relancez la même
+      thématique deux ou trois semaines plus tard : l'outil vous dira alors ce qui a bougé.</p>`,
     pieges: [
-      "Une ligne grise « Non mesurée » n'est PAS une mauvaise niche : la recherche Amazon n'a pas répondu et tous les compteurs sont à zéro faute de mesure. Relancez avant de conclure.",
+      "Une carte grise « Non mesurée » n'est PAS une mauvaise niche : la recherche Amazon n'a pas répondu et tous les compteurs sont à zéro faute de mesure. Relancez avant de conclure.",
       "« Prix du rayon : inconnu » ne veut pas dire que les livres sont gratuits : Amazon n'a renvoyé aucun prix. C'est une donnée absente, pas un marché sans argent.",
       "Un mot signalé en orange parce qu'il revient dans la majorité des suggestions est souvent un auteur ou un titre qui tient tout le rayon. Allez le vérifier avant de vous lancer.",
       "Une demande « informationnelle » (avis, résumés, citations) signale des gens qui cherchent de l'information, pas forcément des acheteurs de livres.",
-      "Ces encadrés orange n'entrent pas dans le calcul du score : une niche verte peut très bien en porter un. Ce n'est pas une contradiction, c'est un avertissement à lire en plus de la note.",
+      "Ces alertes orange n'entrent pas dans le calcul du score : une niche verte peut très bien en porter un. Ce n'est pas une contradiction, c'est un avertissement à lire en plus de la note.",
       "Au premier passage sur une niche, il n'y a aucune évolution à lire : c'est normal, il faut deux passages pour comparer.",
     ],
   },
@@ -3698,8 +3800,8 @@ const AIDE = {
 
       <h3>Compter 10 à 15 minutes</h3>
       <p>L'essentiel du temps est une file d'attente chez Amazon, faite une seule fois pour
-      tout le lot. <strong>Laissez l'onglet ouvert jusqu'au bout</strong> : le résultat
-      serait perdu sinon. Le panneau d'avancement est le seul endroit où apparaît la requête
+      tout le lot. <strong>Vous pouvez fermer la page</strong> : l'analyse continue et
+      vous la retrouverez dans « Mes analyses ». Le panneau d'avancement est le seul endroit où apparaît la requête
       exacte envoyée pour chaque trio — notez-la si elle vous intéresse.</p>
 
       <h3>Lire une carte</h3>
@@ -3780,6 +3882,62 @@ const AIDE = {
   },
 };
 
+// En trois gestes : ce qu'il faut savoir pour LANCER, avant tout le reste. Le mode d'emploi
+// complet (AIDE.corps) et les pieges ne disparaissent pas : ils se deplient en dessous.
+// Les durees sont celles des presets et des textes d'avancement de chaque onglet.
+const AIDE_RAPIDE = {
+  nf: [
+    ['✍️', 'Un domaine large', 'Un à trois mots (sommeil, jardinage urbain…), ou rien pour explorer librement.'],
+    ['🚀', 'Lancez', 'De 2 à 7 minutes selon le niveau. Vous pouvez fermer la page : l’analyse continue.'],
+    ['🔎', 'Ouvrez une niche', 'BSR sous 10 000 = ça se vend. Peu de concurrents = de la place à prendre.'],
+  ],
+  fic: [
+    ['📖', 'Un sous-genre', 'Celui que vous savez déjà écrire, pas celui qui a l’air le plus vide.'],
+    ['🧩', 'Des trios', 'L’IA propose sous-genre × tropes × décor, ou vous composez le vôtre.'],
+    ['🔥', 'Lisez la saturation', 'Conclusion d’abord, puis la saturation : ici élevé = mauvais.'],
+  ],
+  lc: [
+    ['📓', 'Un thème ou un format', 'Ou rien : Amazon donne les requêtes que de vrais acheteurs tapent.'],
+    ['⏱️', 'Lancez', 'De 3 à 9 minutes. Vous pouvez fermer la page : l’analyse continue.'],
+    ['💶', 'Regardez le prix', 'Prix médian, redevance par vente et part d’éditeurs indépendants.'],
+  ],
+};
+
+// Un emoji par rubrique du mode d'emploi : il aide a retrouver ce qu'on cherche sans lire.
+function emojiAide(titre){
+  const t = String(titre).toLowerCase();
+  const table = [['à quoi sert','🎯'], ['bon résultat','✅'], ['thématique','✍️'], ['niches à analyser','🎚️'],
+    ['sous-genre','🎚️'], ['lire','👀'], ['par quoi commencer','🚦'], ['compter','⏱️'], ['composer','🧩'],
+    ['pourquoi','💡'], ['trio','🎭'], ['axes','⚖️'], ['signaux','📡'], ['marques','🛡️']];
+  for(const [cle, emo] of table) if(t.indexOf(cle) >= 0) return emo;
+  return '📌';
+}
+
+// PURE : decoupe le mode d'emploi (une suite de <h3>…</h3> puis du texte) en rubriques
+// repliables. Rien n'est supprime, tout est a un clic ; la premiere rubrique reste ouverte.
+function aideSections(corps){
+  const morceaux = String(corps).split('<h3>').slice(1);
+  return morceaux.map((m, i) => {
+    const fin = m.indexOf('</h3>');
+    const titre = m.slice(0, fin).trim();
+    const reste = m.slice(fin + 5);
+    return '<details class="aide-sec"' + (i === 0 ? ' open' : '') + '><summary><span aria-hidden="true">'
+      + emojiAide(titre) + '</span> ' + titre + '</summary><div>' + reste + '</div></details>';
+  }).join('');
+}
+
+// PURE : la page d'aide d'un onglet. Les pieges de lecture restent VISIBLES : une mise en
+// garde repliee ne previent personne.
+function aideHtml(a, rapide){
+  const gestes = (rapide || []).map((g, i) =>
+    '<div class="aide-geste"><span class="aide-num">' + (i + 1) + '</span><span class="aide-emo" aria-hidden="true">'
+    + g[0] + '</span><strong>' + g[1] + '</strong><p>' + g[2] + '</p></div>').join('');
+  return (gestes ? '<div class="aide-gestes">' + gestes + '</div>' : '')
+    + '<div class="aide-secs">' + aideSections(a.corps) + '</div>'
+    + '<div class="aide-pieges"><h3>⚠️ Pièges de lecture</h3><ul>'
+    + a.pieges.map(x => '<li>' + x + '</li>').join('') + '</ul></div>';
+}
+
 (function initAide(){
   const btn=$('#aide-btn'), fond=$('#aide-fond'), titre=$('#aide-titre'), corps=$('#aide-corps');
   const fermer=$('#aide-fermer');
@@ -3803,10 +3961,7 @@ const AIDE = {
   function ouvrir(){
     const a=AIDE[ongletActif()];
     titre.textContent=a.titre;
-    corps.innerHTML=a.corps
-      + `<div class="aide-pieges"><h3>Pièges de lecture</h3><ul>`
-      + a.pieges.map(x=>`<li>${x}</li>`).join('')
-      + `</ul></div>`;
+    corps.innerHTML=aideHtml(a, AIDE_RAPIDE[ongletActif()]);
     fond.classList.add('on');
     fermer.focus();
   }

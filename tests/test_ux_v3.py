@@ -410,3 +410,71 @@ def test_le_nombre_de_BSR_releves_affiche_est_celui_du_moteur():
     defaut = inspect.signature(run_scout).parameters["n_bsr_per_niche"].default
     src = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
     assert re.search(r"const BSR_RELEVES = (\d+);", src).group(1) == str(defaut)
+
+
+# ── Aide contextuelle : trois gestes d'abord, le mode d'emploi à la demande ────────────────
+
+_AIDE_DEPS = ("emojiAide", "aideSections")
+
+
+def test_aideSections_decoupe_en_rubriques_repliables_la_premiere_ouverte():
+    corps = "<h3>À quoi sert cet onglet</h3><p>a</p><h3>Lire une carte</h3><ul><li>b</li></ul>"
+    html = appeler("aideSections", corps, dependances=("emojiAide",))
+    assert html.count('<details class="aide-sec"') == 2
+    assert html.count("<details class=\"aide-sec\" open>") == 1
+    assert "À quoi sert cet onglet" in html and "<li>b</li>" in html
+
+
+def test_les_pieges_de_lecture_restent_VISIBLES_hors_des_volets():
+    """Une mise en garde repliée ne prévient personne : seule l'explication se replie."""
+    a = {"corps": "<h3>Rubrique</h3><p>x</p>", "pieges": ["piège un", "piège deux"]}
+    html = appeler("aideHtml", a, [["🚀", "Lancez", "t"]], dependances=_AIDE_DEPS)
+    pieges = html[html.index('<div class="aide-pieges">'):]
+    assert "<details" not in pieges and pieges.count("<li>") == 2
+    assert html.count('class="aide-geste"') == 1
+
+
+def test_aucune_rubrique_de_l_aide_ne_se_perd_dans_la_mise_en_volets():
+    """Le mode d'emploi n'est pas supprimé, il est rangé : autant de volets que de <h3>,
+    pour les trois onglets, sur le contenu RÉEL."""
+    import json
+    import subprocess
+    import shutil
+    import pytest
+    from tests.js_harness import _declaration, _source_js, extraire_fonction
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node absent")
+    src = _source_js()
+    prog = (_declaration("AIDE", src) + "\n" + extraire_fonction("emojiAide", src) + "\n"
+            + extraire_fonction("aideSections", src) + "\n"
+            + "const r = {}; for (const k of Object.keys(AIDE)) r[k] = "
+              "[(AIDE[k].corps.match(/<h3>/g)||[]).length, "
+              "(aideSections(AIDE[k].corps).match(/<details class=\"aide-sec\"/g)||[]).length];"
+            + "process.stdout.write(JSON.stringify(r));")
+    out = subprocess.run([node, "-e", prog], capture_output=True, text=True, encoding="utf-8")
+    assert out.returncode == 0, out.stderr
+    for onglet, (h3, volets) in json.loads(out.stdout).items():
+        assert h3 > 0 and h3 == volets, f"rubriques perdues pour « {onglet} »"
+
+
+def test_l_aide_ne_promet_plus_de_laisser_l_onglet_ouvert():
+    """Faux depuis les travaux asynchrones : le run survit à la fermeture de la page."""
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
+    assert "Laissez l'onglet ouvert" not in src
+    assert "Mes analyses" in src
+
+
+# ── Compositeur : trois tropes au plus ─────────────────────────────────────────────────────
+
+def test_le_nombre_de_tropes_imposables_est_celui_d_un_trio():
+    """Un trio porte 1 à 3 tropes (prompt et `tr[:3]` de fiction_ideator) : en imposer un
+    quatrième rendrait la contrainte irréalisable, sans que rien le dise."""
+    import re
+    from pathlib import Path
+    racine = Path(__file__).resolve().parent.parent
+    ui = (racine / "web" / "index.html").read_text(encoding="utf-8")
+    ideateur = (racine / "01-scripts" / "fiction_ideator.py").read_text(encoding="utf-8")
+    assert re.search(r"const MAX_TROPES_IMPOSES = 3;", ui)
+    assert "tr[:3]" in ideateur and "1 à 3 tropes" in ideateur
