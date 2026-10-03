@@ -1485,6 +1485,15 @@
   .prog-detail > summary:hover{color:var(--heading)}
   .prog-detail .steps{margin-top:12px}
   @media (max-width:520px){.prog-pct{font-size:28px}}
+
+  /* « Retour aux résultats » : un BOUTON (bordure, fond, survol), pas un lien perdu en haut de page */
+  .fiche-retour{display:inline-flex;align-items:center;gap:8px;margin:0 0 16px;padding:9px 16px 9px 13px;
+    font:inherit;font-size:14px;font-weight:600;color:var(--brand-ink);background:var(--surface);
+    border:1.5px solid var(--line-control);border-radius:12px;cursor:pointer;box-shadow:var(--shadow);
+    transition:background .15s,border-color .15s,transform .15s var(--ease)}
+  .fiche-retour span{font-size:16px;line-height:1;transition:transform .2s var(--ease)}
+  .fiche-retour:hover{background:var(--brand-soft);border-color:var(--secondary);transform:translateY(-1px)}
+  .fiche-retour:hover span{transform:translateX(-3px)}
 </style>
 </head>
 <body>
@@ -2604,7 +2613,7 @@ function ficheNiche(r){
     + (icoTon[c.ton] || '•') + '</span><strong>' + esc(c.titre) + '</strong>'
     + (c.court ? '<em>' + esc(c.court) + '</em>' : '') + '</summary>'
     + '<p>' + esc(c.texte) + '</p></details>';
-  return '<button type="button" class="fiche-retour" id="fiche-retour">‹ Retour aux résultats</button>'
+  return '<button type="button" class="fiche-retour" id="fiche-retour"><span aria-hidden="true">←</span> Retour aux résultats</button>'
     + '<div class="fiche-tete">'
       + '<span class="anneau anneau-xl anneau-' + g + '" style="--p:' + part.toFixed(3) + '">'
       + '<svg viewBox="0 0 60 60" aria-hidden="true"><circle class="anneau-fond" cx="30" cy="30" r="26"/>'

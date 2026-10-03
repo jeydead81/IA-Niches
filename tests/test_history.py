@@ -117,7 +117,11 @@ def test_une_niche_vue_une_seule_fois_nest_pas_une_erreur(tmp_path, monkeypatch)
 
 # ── Le chemin asynchrone doit consigner l'historique lui aussi ──────────────────────
 
-def _attendre(client, job_id, timeout=3.0):
+# 10 s et non 3 : un job de test tient en quelques millisecondes, mais sous charge (suite
+# complete, machine occupee par ailleurs) le fil du job peut etre servi tard -- un echec
+# ponctuel a ete vu ainsi le 2026-10-03, sans cause reproductible en isole. Le delai ne fait
+# qu'attendre PLUS longtemps un job qui finit : il ne masque aucun defaut.
+def _attendre(client, job_id, timeout=10.0):
     fin = time.time() + timeout
     while time.time() < fin:
         if client.get(f"/api/jobs/{job_id}").json()["statut"] in ("termine", "echec"):

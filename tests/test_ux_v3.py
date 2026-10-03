@@ -669,3 +669,15 @@ def test_les_jalons_cherchent_des_phrases_que_les_moteurs_emettent_vraiment():
         src = lu(fichier)
         for f in fragments:
             assert f in src, f"{fichier} n'émet plus « {f} » : la barre d'avancement se figerait"
+
+
+# ── « Retour aux résultats » : un bouton (Baptiste, 2026-10-03) ────────────────────────────
+
+def test_le_retour_aux_resultats_est_un_bouton_visible():
+    html = _html()
+    css = html[:html.index("</style>")]
+    assert "Retour aux résultats" in html and 'id="fiche-retour"' in html
+    regle = css[css.rindex(".fiche-retour{"):]
+    regle = regle[:regle.index("}") + 1]
+    assert "border:1.5px solid" in regle and "cursor:pointer" in regle
+    assert ".fiche-retour:hover" in css
