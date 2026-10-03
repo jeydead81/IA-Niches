@@ -976,6 +976,234 @@
      tiennent sur une ligne et que la ligne 2 reste « niveau + réglages ». */
   .controls form > .field:not(.grow):not(:has(.presets)){flex:0 1 240px;min-width:0}
   .controls form > .field select{width:100%;min-width:0}
+
+  /* ══ Surcouche v3 « Vif » ═══════════════════════════════════════════════════════
+     Moins de texte, plus de signaux : un emoji porte le sens, un chiffre porte la preuve,
+     la phrase se déplie. Posée en toute fin : elle gagne la cascade sans renommer un seul
+     sélecteur (le JS et les tests s'appuient dessus). */
+  :root{--peach-bg:#FFF1E6;--ink-soft:#3D4B43}
+
+  /* Accueil : un titre, une phrase, puis l'action */
+  .hero{display:block;position:relative;margin:2px 0 20px;padding-right:96px}
+  .hero-tag,.hero-illu{display:none}
+  .hero h2{font-size:44px;max-width:none;margin:0 0 6px}
+  .hero-emo{display:inline-block;animation:flotte 4s ease-in-out infinite}
+  .hero p{font-size:17px;margin:0;max-width:none;color:var(--text-muted)}
+  .hero-aide{position:absolute;right:0;top:8px;font:inherit;font-size:13px;font-weight:600;color:var(--brand-ink);
+    background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:7px 14px;cursor:pointer;
+    box-shadow:var(--shadow);transition:all .18s var(--ease)}
+  .hero-aide:hover{background:var(--brand-soft);border-color:var(--secondary);transform:translateY(-1px)}
+
+  /* Le premier choix : quel livre ? Trois grandes tuiles à emoji, pas des onglets */
+  .tabs.modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;background:none;padding:0;
+    width:auto;margin:0 0 16px;border-radius:0}
+  .tab.mode{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:14px;row-gap:1px;align-items:center;
+    text-align:left;padding:14px 16px;border-radius:18px;background:var(--surface);border:1.5px solid var(--border);
+    box-shadow:var(--shadow);color:var(--text);font-family:var(--sans);cursor:pointer;
+    transition:transform .2s var(--ease),border-color .2s,box-shadow .2s,background .2s}
+  .tab.mode:hover:not(.active){transform:translateY(-2px);border-color:var(--line-control);box-shadow:var(--shadow-2)}
+  .mode-ico{grid-row:1/3;font-size:28px;width:54px;height:54px;display:grid;place-items:center;border-radius:15px;
+    background:var(--muted);transition:transform .25s var(--ease),background .2s}
+  .tab.mode b{font-size:16px;font-weight:700;color:var(--heading);align-self:end}
+  .tab.mode i{font-style:normal;font-size:12.5px;font-weight:400;color:var(--text-muted);align-self:start;line-height:1.3}
+  .tab.mode.active{border-color:var(--primary);background:linear-gradient(180deg,#F4F9F5,#E5EFE8);
+    box-shadow:0 0 0 4px rgba(46,125,91,.13),var(--shadow)}
+  .tab.mode.active .mode-ico{background:#fff;transform:scale(1.06) rotate(-4deg);box-shadow:var(--shadow)}
+
+  /* Carte de lancement : l'essentiel, aéré */
+  .suggestions{gap:8px}
+  .suggestions button{font-size:13.5px;padding:7px 15px;background:var(--surface);border:1px solid var(--border)}
+  .suggestions button:hover{background:var(--peach-bg);border-color:var(--accent);color:var(--heading)}
+  .presets{gap:8px}
+  .preset span{flex-direction:row;align-items:baseline;gap:8px;padding:11px 14px;border-radius:12px}
+  .preset span i{margin-left:auto}
+  .preset input:checked + span{border-color:var(--primary);background:#EAF4EE}
+
+  /* Progression */
+  .progress-tete{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:0 0 14px}
+  .progress-emo{font-size:22px;display:inline-block;animation:sablier 2.6s ease-in-out infinite}
+  @keyframes sablier{50%{transform:rotate(180deg)}}
+  .progress-tete b{font-size:16.5px;font-weight:700;color:var(--heading)}
+  .progress-tete i{font-style:normal;font-size:13px;color:var(--text-muted);flex-basis:100%}
+
+  /* Résultats : une lecture en haut, le détail à la demande */
+  details.rnote{margin:2px 0 14px}
+  details.rnote summary{display:inline-flex;list-style:none;cursor:pointer;font-size:13px;font-weight:500;
+    color:var(--text-muted);background:var(--muted);border-radius:999px;padding:5px 12px}
+  details.rnote summary::-webkit-details-marker{display:none}
+  details.rnote summary:hover{color:var(--heading)}
+  details.rnote p{margin:8px 2px 0;font-size:13px;max-width:70ch;color:var(--text-muted)}
+  .bilan{grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+  .bilan-tuile.t-n{background:var(--muted)} .bilan-tuile.t-n b{color:var(--text-muted)}
+  .bilan-tuile.t-r b{color:var(--low-ink)} .bilan-tuile.t-a b{color:var(--maybe-ink)}
+  .nicheC-kpis{grid-template-columns:repeat(5,minmax(0,88px))}
+  .nicheC-kpi{padding-left:14px}
+  .nicheC-kpi i{display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .nicheC-kpi b{font-size:16px;font-weight:800}
+  @media (max-width:1100px){.nicheC-kpis{grid-template-columns:repeat(5,minmax(0,1fr))}}
+  @media (max-width:640px){.nicheC-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+  /* Fiche : verdict en tête, preuves en tuiles, raisons en lignes */
+  .fiche-tete{padding:18px 22px;border-radius:20px;background:linear-gradient(120deg,var(--brand-soft),rgba(229,239,232,0) 75%)}
+  .fk-ico{font-size:19px}
+  .fiche-kpi{border-radius:16px;transition:transform .2s var(--ease),box-shadow .2s}
+  .fiche-kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+  .fiche-kpi b{font-size:26px}
+  .pq-liste{display:flex;flex-direction:column;gap:8px}
+  details.pq{border:1px solid var(--border);border-radius:14px;padding:0;background:var(--surface)}
+  details.pq.pq-bon{box-shadow:inset 4px 0 0 var(--green)}
+  details.pq.pq-neutre{box-shadow:inset 4px 0 0 var(--amber)}
+  details.pq.pq-alerte{box-shadow:inset 4px 0 0 var(--red)}
+  details.pq > summary{list-style:none;display:flex;align-items:baseline;gap:10px;padding:12px 16px 12px 18px;
+    cursor:pointer;border-radius:14px}
+  details.pq > summary::-webkit-details-marker{display:none}
+  details.pq > summary::after{content:"›";margin-left:auto;color:var(--text-muted);font-size:20px;line-height:1;
+    transition:transform .2s var(--ease)}
+  details.pq[open] > summary::after{transform:rotate(90deg)}
+  details.pq > summary:hover{background:var(--bg)}
+  details.pq .pq-ico{width:auto;height:auto;margin:0;background:none;font-size:18px;display:inline}
+  details.pq strong{margin:0;font-size:15px;font-weight:700}
+  details.pq em{font-style:normal;font-size:13.5px;color:var(--text-muted)}
+  details.pq p{margin:0;padding:0 18px 14px 46px;font-size:13.5px;color:var(--ink-soft)}
+
+  /* Alertes de lecture : une ligne visible, l'explication se déplie */
+  details.sugbox{background:var(--amber-bg);border:1px solid #F1D6A0;border-radius:14px;padding:0;margin-top:12px}
+  .sugbox + .sugbox{margin-top:8px}
+  details.sugbox > summary{list-style:none;display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;
+    padding:11px 16px;cursor:pointer}
+  details.sugbox > summary::-webkit-details-marker{display:none}
+  details.sugbox strong{color:#7C2D12;font-size:14px}
+  details.sugbox em{font-style:normal;font-size:13px;color:#92400E}
+  details.sugbox p{margin:0;padding:0 16px 12px;font-size:13px;color:#78350F}
+
+  /* L'analyse éditoriale : une invitation, pas une phrase d'état */
+  .vask{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 16px;align-items:center;margin-bottom:14px;
+    padding:16px 18px;border:1.5px dashed var(--secondary);border-radius:16px;
+    background:linear-gradient(90deg,#F1F7F3,var(--surface))}
+  .vask-ico{font-size:28px}
+  .vask p{margin:0;font-size:13.5px;color:var(--text-muted)}
+  .vask p strong{display:block;font-size:15.5px;color:var(--heading);margin-bottom:1px}
+  .vask .btn-act{margin:0;padding:11px 18px;font-size:14px;white-space:nowrap}
+  @media (max-width:640px){.vask{grid-template-columns:auto 1fr}.vask .btn-act{grid-column:1/-1}}
+
+  /* Low-content : trois chiffres, le reste replié */
+  .lc-grid{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .lc-groupe>h3{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:22px 0 4px;
+    font-family:var(--serif);font-size:24px;font-weight:500;letter-spacing:-.015em}
+  .lc-groupe>h3 em{font-style:normal;font-family:var(--sans);font-size:13px;font-weight:600;background:var(--muted);
+    border-radius:99px;padding:1px 10px;color:var(--heading)}
+  .lc-groupe>h3 small{flex-basis:100%;font-family:var(--sans);font-size:13.5px;font-weight:400;color:var(--text-muted)}
+  details.lc-groupe-note{grid-column:1/-1;margin:0 0 6px;background:none;border:none;padding:0;max-width:none}
+  details.lc-groupe-note summary{display:inline-flex;list-style:none;cursor:pointer;font-size:12.5px;color:var(--text-muted);
+    background:var(--muted);border-radius:999px;padding:4px 11px}
+  details.lc-groupe-note summary::-webkit-details-marker{display:none}
+  details.lc-groupe-note p{margin:8px 2px 0;font-size:13px;max-width:78ch;color:var(--ink-soft)}
+  .lc-cles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .lc-key{display:flex;flex-direction:column;gap:1px;background:var(--bg);border-radius:14px;padding:10px 12px;min-width:0}
+  .lc-key-ico{font-size:19px;line-height:1.1}
+  .lc-key-k{font-size:12px;color:var(--text-muted);line-height:1.25}
+  .lc-key b{font-size:19px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--heading)}
+  .lc-key b .mut{font-size:13px;font-weight:500;font-style:italic;letter-spacing:0}
+  .lc-key.v-bad{background:var(--red-bg)} .lc-key.v-bad b{color:var(--low-ink)}
+  .lc-flags{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+  .lc-flags li{font-size:12.5px;line-height:1.35;background:var(--amber-bg);color:#78350F;border-radius:9px;padding:6px 10px}
+  .lc-detail,.fic-detail{border-top:1px solid var(--border);padding-top:2px}
+  .lc-detail > summary,.fic-detail > summary{list-style:none;cursor:pointer;font-size:13px;font-weight:600;
+    color:var(--text-muted);padding:9px 0 7px}
+  .lc-detail > summary::-webkit-details-marker,.fic-detail > summary::-webkit-details-marker{display:none}
+  .lc-detail > summary:hover,.fic-detail > summary:hover{color:var(--heading)}
+  .lc-detail[open] > summary,.fic-detail[open] > summary{color:var(--brand-ink)}
+  .lc-detail .lc-mesures{padding:6px 0 4px}
+
+  /* Fiction : quatre signaux, le détail replié */
+  .fic-card{display:flex;flex-direction:column;gap:2px}
+  .fic-concl{font-size:14px;margin:0 0 10px}
+  .fic-cles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 6px}
+  .fic-cle{display:flex;flex-direction:column;gap:1px;background:var(--bg);border-radius:14px;padding:10px 12px;min-width:0}
+  .fic-cle-k{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-muted);white-space:nowrap}
+  .fic-cle b{font-size:21px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--heading)}
+  .fic-cle .verdict,.fic-cle .mut{font-size:12.5px}
+  .fic-cle.fic-sat{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 12px;margin:0;border-radius:14px}
+  .fic-sat.high b{color:#991B1B} .fic-sat.mid b{color:#92400E} .fic-sat.low b{color:#166534}
+  .fic-sat-note{margin:4px 0 10px;font-size:13px;color:var(--ink-soft)}
+  @media (max-width:760px){.fic-cles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+  @media (max-width:760px){
+    .hero{padding-right:0} .hero h2{font-size:32px} .hero-aide{position:static;margin-top:10px}
+    .tabs.modes{gap:8px}
+    .tab.mode{grid-template-columns:1fr;justify-items:center;text-align:center;padding:12px 8px;row-gap:4px}
+    .mode-ico{grid-row:auto;width:46px;height:46px;font-size:24px}
+    .tab.mode b{align-self:center;font-size:14px} .tab.mode i{display:none}
+    .lc-cles{grid-template-columns:1fr}
+  }
+
+  /* Les tuiles du bilan sont les filtres : on masque la rangée de pastilles redondante
+     (elle reste dans le DOM, c'est elle qui porte l'état ARIA du filtre). */
+  .filtres{display:none}
+  .bilan-tuile{font:inherit;text-align:left;cursor:pointer;transition:transform .2s var(--ease),box-shadow .2s,outline-color .2s;
+    outline:2px solid transparent;outline-offset:2px}
+  .bilan-tuile:hover{transform:translateY(-2px);box-shadow:var(--shadow-2)}
+  .bilan-tuile.actif{outline-color:var(--secondary)}
+  .bilan-tuile.vide.t-g,.bilan-tuile.vide{background:var(--surface);border-color:var(--border);box-shadow:var(--shadow)}
+  .bilan-tuile.vide b{color:var(--text-muted)} .bilan-tuile.vide span{color:var(--text-muted)}
+  .hero h2{font-size:clamp(30px,4.4vw,44px)}
+
+  .fiche-kpis{grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:10px}
+  .fiche-kpi{padding:12px 14px}
+  .fiche-kpi b{font-size:24px}
+  .histbox{border-radius:12px;padding:9px 14px;font-size:13px}
+
+  /* Dans une carte (low-content), l'invitation se réduit à un bouton pleine largeur : le
+     texte d'explication n'a de place que dans la fiche. */
+  .lc-carte .vask{display:block;padding:0;margin:0;border:none;background:none}
+  .lc-carte .vask p,.lc-carte .vask-ico{display:none}
+  .lc-carte .vask .btn-act{display:block;width:100%;margin:0;padding:11px 14px;text-align:center}
+  .lc-carte .vask .btn-act::before{content:"✨ "}
+  .lc-carte .vbox{margin-top:0}
+
+  /* Fiction et low-content : la question, le menu et le bouton tiennent sur UNE ligne */
+  #form-fic > .field.grow,#form-lc > .field.grow{flex:1 1 220px}
+  #form-fic > .field:not(.grow):not(:has(.presets)){flex:0 1 150px}
+  #form-lc > .field:not(.grow):not(:has(.presets)){flex:0 1 210px}
+  #form-fic > button.run,#form-lc > button.run{flex:none}
+
+  /* Mes analyses : des lignes lisibles d'un coup d'oeil */
+  .hist-ligne{display:grid;grid-template-columns:96px 140px minmax(0,1fr) auto auto;gap:6px 14px;align-items:center;
+    padding:13px 4px}
+  .hist-ligne .sujet{font-weight:600;color:var(--heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-ligne .type{font-weight:600;white-space:nowrap}
+  .hist-ligne .etat{white-space:nowrap}
+  .hist-ligne .btn-act{margin:0}
+  @media (max-width:700px){.hist-ligne{grid-template-columns:1fr auto}.hist-ligne .quand{grid-column:1/-1;min-width:0}
+    .hist-ligne .sujet{white-space:normal}}
+
+  /* Mobile : la pastille « ? » flottante porte déjà l'aide, on n'en double pas l'accès */
+  @media (max-width:760px){ .hero-aide{display:none} .hero{margin-bottom:14px} }
+
+  /* ── Corrections de la revue adversariale ── */
+  .hist-ligne{grid-template-columns:96px 140px minmax(0,1fr) auto auto}
+  .hist-ligne .etat{white-space:nowrap}
+  .hist-ligne .etat-long{grid-column:1/-1;white-space:normal;overflow-wrap:anywhere;color:var(--low-ink);
+    font-size:12.5px;padding:0 0 0 2px}
+  .lc-grid{grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr))}
+  .lc-key-sous{font-size:11.5px;color:var(--text-muted);line-height:1.3}
+  .lc-carte .vask p.vask-err{display:block;margin:8px 0 0;font-size:12.5px;color:var(--low-ink)}
+  .vask p.vask-err strong{display:none}
+  .bilan-tuile:focus-visible{outline-color:var(--heading)}
+  .bilan-tuile.actif{box-shadow:0 0 0 3px var(--secondary),var(--shadow)}
+  .nicheC-kpis{grid-template-columns:repeat(5,minmax(0,112px))}
+  @media (max-width:1280px){
+    .nicheC-tete{grid-template-columns:64px minmax(0,1fr) 24px}
+    .nicheC-kpis{grid-column:1/-1;grid-template-columns:repeat(5,minmax(0,1fr));border-left:none;
+      border-top:1px solid var(--border);padding-top:12px}
+    .nicheC-kpi:first-child{padding-left:0}
+    .nicheC-chev{grid-row:1;grid-column:3}
+  }
+  @media (max-width:640px){.nicheC-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .nicheC-kpi:nth-child(odd){padding-left:0}}
+  @media (prefers-reduced-motion:reduce){.hero-emo,.progress-emo,.mode-ico{animation:none!important;transform:none!important}}
+
+  .lc-flags li.lc-info{background:var(--muted);color:var(--ink-soft)}
 </style>
 </head>
 <body>
@@ -1042,31 +1270,24 @@
   </header>
 
   <section id="vue-explorer">
+  <!-- Un titre, une phrase, puis l'action. Plus d'illustration ni de pastille : tout ce qui
+       précède le champ de recherche le repousse sous la ligne de flottaison. -->
   <section class="hero">
-    <div class="hero-texte">
-      <span class="hero-tag">🔎 Recherche de niches KDP · Amazon.fr</span>
-      <h2>Trouvez votre prochaine niche KDP</h2>
-      <p>Explorez Amazon et identifiez les rayons où la demande existe et où la place reste
-        prenable.</p>
-      <button type="button" class="hero-aide" id="hero-aide">💡 Comment ça marche ? <span aria-hidden="true">→</span></button>
-    </div>
-    <svg class="hero-illu" viewBox="0 0 220 170" aria-hidden="true">
-      <ellipse cx="112" cy="150" rx="92" ry="14" class="i-ombre"/>
-      <rect x="44" y="112" width="140" height="30" rx="5" class="i-livre1"/><rect x="44" y="122" width="140" height="6" class="i-tranche"/>
-      <rect x="54" y="84" width="124" height="30" rx="5" class="i-livre2"/><rect x="54" y="94" width="124" height="6" class="i-tranche"/>
-      <rect x="40" y="56" width="132" height="30" rx="5" class="i-livre3"/><rect x="40" y="66" width="132" height="6" class="i-tranche"/>
-      <circle cx="150" cy="38" r="22" class="i-loupe-verre"/><circle cx="150" cy="38" r="22" class="i-loupe"/>
-      <path d="m166 54 14 14" class="i-loupe" stroke-width="8"/>
-      <path d="m141 38 6 6 12-13" class="i-coche"/>
-      <circle cx="30" cy="40" r="5" class="i-point"/><circle cx="200" cy="96" r="4" class="i-point"/><circle cx="96" cy="26" r="3" class="i-point"/>
-    </svg>
+    <h2>Trouvez votre prochaine niche KDP <span class="hero-emo" aria-hidden="true">🚀</span></h2>
+    <p>Où ça se vend, et où il reste de la place — sur Amazon.fr.</p>
+    <button type="button" class="hero-aide" id="hero-aide">💡 Aide</button>
   </section>
 
-
-  <div class="tabs" role="tablist">
-    <button type="button" class="tab active" id="tab-nf" role="tab" aria-selected="true">Non-fiction</button>
-    <button type="button" class="tab" id="tab-fic" role="tab" aria-selected="false">Fiction</button>
-    <button type="button" class="tab" id="tab-lc" role="tab" aria-selected="false">Low-content</button>
+  <!-- Le premier choix de l'auteur : quel LIVRE écrit-il ? Les trois moteurs ne se pilotent
+       pas pareil (une thématique, un trio, un format) : ce sont donc trois entrées, mais
+       nommées par ce qu'on écrit, pas par ce que le moteur calcule. -->
+  <div class="tabs modes" role="tablist" aria-label="Type de livre">
+    <button type="button" class="tab mode active" id="tab-nf" role="tab" aria-selected="true">
+      <span class="mode-ico" aria-hidden="true">📘</span><b>Non-fiction</b><i>Guides, santé, mieux-être…</i></button>
+    <button type="button" class="tab mode" id="tab-fic" role="tab" aria-selected="false">
+      <span class="mode-ico" aria-hidden="true">📖</span><b>Fiction</b><i>Romans par genre et trope</i></button>
+    <button type="button" class="tab mode" id="tab-lc" role="tab" aria-selected="false">
+      <span class="mode-ico" aria-hidden="true">📓</span><b>Low-content</b><i>Carnets, registres, journaux…</i></button>
   </div>
 
 
@@ -1086,14 +1307,13 @@
           <!-- Un champ vide devant quelqu'un qui découvre l'outil est un mur : les
                suggestions montrent la FORME attendue, elles ne sont pas décoratives. Le
                champ reste libre, et vide il lance le mode « à partir de rien ». -->
-          <span class="sugg-titre">Suggestions</span>
-          <div class="suggestions" id="suggestions-nf">
-            <button type="button" data-theme="sommeil">Sommeil</button>
-            <button type="button" data-theme="développement personnel">Développement personnel</button>
-            <button type="button" data-theme="bien-être">Bien-être</button>
-            <button type="button" data-theme="organisation">Organisation</button>
-            <button type="button" data-theme="animaux">Animaux</button>
-            <button type="button" data-theme="spiritualité">Spiritualité</button>
+          <div class="suggestions" id="suggestions-nf" aria-label="Suggestions de thématiques">
+            <button type="button" data-theme="sommeil">😴 Sommeil</button>
+            <button type="button" data-theme="développement personnel">🌱 Développement personnel</button>
+            <button type="button" data-theme="bien-être">🧘 Bien-être</button>
+            <button type="button" data-theme="organisation">🗂️ Organisation</button>
+            <button type="button" data-theme="animaux">🐾 Animaux</button>
+            <button type="button" data-theme="spiritualité">✨ Spiritualité</button>
           </div>
         </div>
         <!-- Le nombre d'idées n'est plus réglable : l'ideator est UN SEUL appel LLM quel
@@ -1121,12 +1341,10 @@
           </div>
         </details>
       </form>
-      <p class="hint hint-nf">Le niveau fixe combien de rayons sont réellement ouverts et comparés
-        sur Amazon. Le tri en amont est gratuit : en élargir le vivier change quels rayons
-        sont testés, jamais leur note de demande.</p>
     </div>
 
     <div class="panel progress" id="progress">
+      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><i>Vous pouvez fermer cette page : elle continue sans vous.</i></div>
       <div class="bar"><span></span></div>
       <ul class="steps" id="steps" aria-live="polite" aria-relevant="additions"
           aria-label="Progression du scout"></ul>
@@ -1147,17 +1365,19 @@
           </select>
         </label>
       </div>
-      <!-- Ce que le score est, et ce qu'il n'est pas : ecrit une fois, au-dessus de la
-           liste, plutot que repete sur chaque carte. -->
-      <p class="rnote">Le score résume la demande mesurée et la place restante. Il trie, il
+      <!-- Ce que le score est, et ce qu'il n'est pas : ecrit une fois, replie -- la mise en
+           garde reste, elle ne prend plus la place de la liste. -->
+      <details class="rnote"><summary>ℹ️ Comment lire le score</summary>
+        <p>Le score résume la demande mesurée et la place restante. Il trie, il
         ne juge pas : deux niches vertes ne sont pas classées l'une devant l'autre par
-        qualité.</p>
-      <div class="bilan" id="bilan-nf" aria-live="polite"></div>
+        qualité.</p></details>
+      <div class="bilan" id="bilan-nf" aria-live="polite" role="group" aria-label="Filtrer par verdict"></div>
       <div class="filtres" id="filtres-nf" role="radiogroup" aria-label="Filtrer par verdict">
         <button type="button" role="radio" aria-checked="true" data-f="tout">Toutes <span data-n="tout"></span></button>
         <button type="button" role="radio" aria-checked="false" data-f="g">🟢 Prioritaires <span data-n="g"></span></button>
         <button type="button" role="radio" aria-checked="false" data-f="a">🟡 Intéressantes <span data-n="a"></span></button>
         <button type="button" role="radio" aria-checked="false" data-f="r">🔴 Faibles <span data-n="r"></span></button>
+        <button type="button" role="radio" aria-checked="false" data-f="n" hidden>⚪ Non mesurées <span data-n="n"></span></button>
       </div>
       <div id="cartes-nf" class="nicheC-liste"></div>
       <div class="tablewrap" hidden>
@@ -1214,14 +1434,14 @@
         </details>
         <button class="run" id="run-fic" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
-          <span id="run-fic-label">Lancer le scout fiction</span>
+          <span id="run-fic-label">Trouver les trios</span>
         </button>
 
         <!-- Composer soi-même le trio. Les menus sont peuplés depuis la TAXONOMIE (aucune
              liste en dur ici, elle se périmerait à la première taxo v2). Laissés vides,
              l'IA propose librement : c'est le comportement d'origine, inchangé. -->
         <details class="compo" id="compo">
-          <summary>Composer moi-même le trio (facultatif)</summary>
+          <summary>🧩 Composer moi-même le trio (facultatif)</summary>
           <div class="compo-corps">
             <div class="field">
               <label for="fic-tropes">Tropes imposés</label>
@@ -1243,10 +1463,10 @@
           </div>
         </details>
       </form>
-      <p class="hint">Un trio = sous-genre × tropes × décor. Le relevé des ventes est fait UNE seule fois pour tous les trios, quel que soit leur nombre. Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page : le travail continue et vous le retrouverez ici.</p>
     </div>
 
     <div class="panel progress" id="progress-fic">
+      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><i>Une analyse fiction prend 10 à 15 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
       <div class="bar"><span></span></div>
       <ul class="steps" id="steps-fic" aria-live="polite" aria-relevant="additions"
           aria-label="Progression du scout fiction"></ul>
@@ -1261,7 +1481,7 @@
 
     <div class="panel empty" id="empty-fic">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 3-3 3 3 5-6"/></svg>
-      <div>Choisis un sous-genre et lance le scout fiction pour voir les trios classés.</div>
+      <div>Choisissez un sous-genre et lancez l'analyse pour voir les trios classés.</div>
     </div>
   </div>
 
@@ -1290,7 +1510,7 @@
         </div>
         <button class="run" id="run-lc" type="submit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>
-          <span id="run-lc-label">Lancer le scout low-content</span>
+          <span id="run-lc-label">Trouver les niches</span>
         </button>
         <details class="avance">
           <summary>⚙️ Réglages avancés</summary>
@@ -1302,13 +1522,10 @@
             Inclure les niches saisonnières (Noël, rentrée, agendas datés)</label>
         </details>
       </form>
-      <p class="hint">Ici les niches ne sont pas inventées : elles sont LUES dans ce
-        qu'Amazon complète réellement, puis classées. Une requête que les acheteurs
-        affinent encore vaut mieux qu'une requête générique. Un run prend 3 à 9 minutes ;
-        vous pouvez fermer cette page.</p>
     </div>
 
     <div class="panel progress" id="progress-lc">
+      <div class="progress-tete"><span class="progress-emo" aria-hidden="true">⏳</span><b>Analyse en cours…</b><i>Compter 3 à 9 minutes. Vous pouvez fermer cette page : elle continue sans vous.</i></div>
       <div class="bar"><span></span></div>
       <ul class="steps" id="steps-lc" aria-live="polite" aria-relevant="additions"
           aria-label="Progression du scout low-content"></ul>
@@ -1332,11 +1549,10 @@
   <section id="vue-analyses" hidden>
   <section id="historique" class="panel hist">
     <div class="hist-tete">
-      <h2>Mes analyses</h2>
+      <h2>🗂️ Mes analyses</h2>
       <button type="button" id="hist-rafraichir" class="btn-act">Rafraîchir</button>
     </div>
-    <p class="hist-note">Vos analyses passées, relues depuis votre compte. Les rouvrir ne
-      relance rien et ne coûte rien : c'est le résultat déjà payé.</p>
+    <p class="hist-note">🔁 Rouvrir une analyse ne relance rien et ne coûte rien.</p>
     <div id="hist-liste"></div>
   </section>
   </section>
@@ -1411,7 +1627,7 @@ const GLOSSAIRE = {
   'Trope': `Un ressort d'intrigue que le lecteur attend et recherche. Exemple : « ennemis devenus amants », « mariage arrangé ».`,
   'Profondeur': `Est-ce que les livres de ce rayon <strong>se vendent</strong> ? Proche de 1 : oui, franchement. Proche de 0 : non.`,
   'Ouverture': `Reste-t-il de la <strong>place</strong> ? Proche de 1 : oui. Proche de 0 : les places sont tenues par des livres bien installés.`,
-  'Saturation du trio': `Part des livres qui promettent <strong>déjà la même chose que vous</strong>. 0,7 = 7 livres sur 10 : mieux vaut changer d'angle.`,
+  'Saturation du trio': `Part de votre trio que les livres du rayon <strong>reprennent déjà</strong>, en moyenne. 0,7 = ils en couvrent déjà 70 % : mieux vaut changer d'angle.`,
   'Part séries': `Proportion de livres qui font partie d'une série. Élevée = un tome unique sera désavantagé.`,
   'Sonde autocomplete': `Est-ce que les lecteurs tapent vraiment ces mots dans la recherche Amazon ?`,
   'Sponso écartés': `Livres sponsorisés (publicité) retirés du calcul : ils fausseraient la mesure de la concurrence.`,
@@ -1483,7 +1699,9 @@ function verdictSlot(r){
   // Le libelle porte le TEMPS et jamais le montant (commit 4165efb) : un cout affiche
   // freine l'exploration, alors que la duree fixe une attente.
   return '<div class="vask">'
-    + '<p>Analyse editoriale non demandee pour cette niche.</p>'
+    + '<span class="vask-ico" aria-hidden="true">✨</span>'
+    + '<p><strong>Obtenir le titre à écrire</strong>L\'IA propose un angle, un sous-titre et les '
+    + 'requêtes à viser.</p>'
     + '<button type="button" class="btn-act btn-verdict">Analyser cette niche (~10 s)</button>'
     + '</div>';
 }
@@ -1583,7 +1801,7 @@ async function loadVerdict(r, det, btn){
     btn.removeAttribute('aria-busy');
     btn.textContent = 'Analyser cette niche (~10 s)';
     const p = det.querySelector('.vask p');
-    if(p) p.textContent = String(e.message || e);
+    if(p){ p.classList.add('vask-err'); p.setAttribute('role','alert'); p.textContent = String(e.message || e); }
   }
 }
 
@@ -1684,16 +1902,15 @@ async function loadHistorique(niche, slot){
     // Une niche vue une seule fois n'a pas d'évolution : le dire, plutôt qu'afficher
     // une erreur ou un delta nul qui se lirait « stable ».
     if(!h.delta){
-      slot.innerHTML = `<div class="histbox"><strong>Premier passage sur cette niche.</strong>
-        Relancez dans quelques semaines : c'est la comparaison entre deux runs qui montre
-        si la niche s'ouvre ou se referme.</div>`;
+      slot.innerHTML = `<div class="histbox">🆕 <strong>Premier passage sur cette niche.</strong>
+        Relancez dans quelques semaines pour voir si elle s’ouvre ou se referme.</div>`;
       return;
     }
     // On affiche `lecture` (le français), pas `variations` (le delta brut) : « +0,23 »
     // ne fait pas agir, « la niche s'est densifiée » si.
     // Le nombre de jours est déjà porté par `lecture` (« En 45 jour(s) : … ») : le
     // répéter dans l'en-tête ferait lire deux fois la même information.
-    slot.innerHTML = `<div class="histbox"><strong>Évolution
+    slot.innerHTML = `<div class="histbox">📈 <strong>Évolution
       (${h.delta.n_passages} passages) :</strong> ${esc(h.delta.lecture)}</div>`;
   }catch(e){ /* l'historique est un plus : son absence ne casse pas la fiche */ }
 }
@@ -1731,18 +1948,24 @@ async function downloadPdf(niche, opts) {
 // Volontairement affichées comme des alertes et NON intégrées au score — les ajouter
 // silencieusement à une note serait un jugement déguisé en mesure.
 function blocSuggestions(r){
+  // Une ligne d'alerte, TOUJOURS visible (une mise en garde repliee ne previent personne) ;
+  // seule l'explication se deplie.
+  const alerte = (titre, court, texte) =>
+    '<details class="sugbox"><summary><span aria-hidden="true">⚠️</span><strong>' + titre
+    + '</strong><em>' + court + '</em></summary><p>' + texte + '</p></details>';
   let html='';
   if(r.terme_dominant){
-    html += `<p class="sugbox"><strong>« ${esc(r.terme_dominant)} » revient dans
-      ${Math.round((r.part_dominante||0)*100)} % des suggestions.</strong> Les gens qui
-      tapent cette requête cherchent surtout ça — souvent un auteur ou un titre qui tient
-      le rayon. Vérifiez à qui vous vous mesurez avant d'écrire.</p>`;
+    html += alerte('« ' + esc(r.terme_dominant) + ' » revient dans '
+      + Math.round((r.part_dominante||0)*100) + ' % des suggestions',
+      'souvent un auteur ou un titre qui tient le rayon',
+      'Les gens qui tapent cette requête cherchent surtout ça. '
+      + 'Vérifiez à qui vous vous mesurez avant d’écrire.');
   }
   if(r.intention_informationnelle){
-    html += `<p class="sugbox"><strong>Demande plutôt informationnelle</strong> — les
-      suggestions parlent de : ${(r.marqueurs_informationnels||[]).map(esc).join(', ')}. Ces
-      lecteurs cherchent l'information, pas forcément un livre à acheter : une demande
-      élevée ne se convertira pas mécaniquement en ventes.</p>`;
+    html += alerte('Demande plutôt informationnelle',
+      (r.marqueurs_informationnels||[]).map(esc).join(', '),
+      'Ces lecteurs cherchent l’information, pas forcément un livre à acheter : une '
+      + 'demande élevée ne se convertira pas mécaniquement en ventes.');
   }
   return html;
 }
@@ -1778,19 +2001,22 @@ function carteNicheTete(r){
   const pNote = v => v == null ? '' : (v >= 7.5 ? 'g' : v >= 6 ? 'a' : 'r');
   const pBsr = v => v == null ? '' : (v < 10000 ? 'g' : 'a');
   const pConc = v => v == null ? '' : (v > 50 ? 'r' : v > 30 ? 'a' : 'g');
-  const kpi = (libelle, valeur, ton) =>
-    '<span class="nicheC-kpi"><i>' + libelle + '</i><b>'
-    + (ton ? '<span class="pt pt-' + ton + '" aria-hidden="true"></span>' : '') + valeur + '</b></span>';
+  const kpi = (ico, libelle, valeur, ton) =>
+    '<span class="nicheC-kpi"><i><span aria-hidden="true">' + ico + '</span> ' + libelle + '</i><b>'
+    + (ton ? '<span class="pt pt-' + ton + '" role="img" aria-label="' + ({g:'favorable', a:'moyen', r:'défavorable'}[ton] || '') + '"></span>' : '') + valeur + '</b></span>';
   return '<span class="nicheC-note">' + anneau + '</span>'
     + '<span class="nicheC-id"><span class="nicheC-titre"><strong>' + esc(r.niche) + '</strong>'
       + '<span class="verdict-pill ' + g + '">' + emo + ' '
       + (nm ? 'Non mesurée' : verdict(r.global_score)) + '</span></span>'
       + '<span class="cat">' + esc(r.categorie || '') + '</span></span>'
     + '<span class="nicheC-kpis">'
-      + kpi('Demande', nm ? '—' : fmtDec(r.demande, 1), nm ? '' : pNote(r.demande))
-      + kpi('Accessibilité', nm ? '—' : fmtDec(r.penetration, 1), nm ? '' : pNote(r.penetration))
-      + kpi('BSR meilleur', fmt(r.bsr_best), pBsr(r.bsr_best))
-      + kpi('Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles), nm ? '' : pConc(r.n_concurrents_cibles))
+      + kpi('🏆', 'BSR meilleur', fmt(r.bsr_best), pBsr(r.bsr_best))
+      // Le prix est la deuxieme question de l'auteur : il remonte sur la carte, avec les
+      // chiffres qui justifient la note. Absent = tiret, jamais zero.
+      + kpi('💰', 'Prix médian', r.n_prix_connus ? fmtEur(r.prix_median) : '—', '')
+      + kpi('🚪', 'Accessibilité', nm ? '—' : fmtDec(r.penetration, 1), nm ? '' : pNote(r.penetration))
+      + kpi('📈', 'Demande', nm ? '—' : fmtDec(r.demande, 1), nm ? '' : pNote(r.demande))
+      + kpi('📚', 'Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles), nm ? '' : pConc(r.n_concurrents_cibles))
     + '</span><span class="nicheC-chev" aria-hidden="true">'
     + '<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
 }
@@ -1835,35 +2061,43 @@ function trierNiches(rows, cle){
 // l'incoherence.
 function pourquoiNiche(r){
   if(nonMesuree(r)) return [{cle:'non_mesuree', ton:'alerte', titre:'Rayon non mesuré',
+    court:'à relancer avant de conclure',
     texte:"La recherche Amazon n'a pas répondu pour cette niche. Les compteurs sont à zéro "
         + "faute de mesure, pas parce que le rayon est vide — relancez avant de conclure."}];
   const cartes = [];
   if(r.bsr_best == null){
     cartes.push({cle:'demande', ton:'neutre', titre:'Preuve de vente absente',
+      court:'aucun classement lu',
       texte:"Aucun classement de ventes n'a pu être lu sur le top du rayon."});
   }else if(r.bsr_best < 10000){
     cartes.push({cle:'demande', ton:'bon', titre:'Demande réelle',
+      court:'meilleur BSR ' + fmt(r.bsr_best),
       texte:'Au moins un livre du top se vend bien : meilleur classement ' + fmt(r.bsr_best)
           + ' sur Amazon. Sous 10 000, la preuve est solide.'});
   }else{
     cartes.push({cle:'demande', ton:'neutre', titre:'Demande à confirmer',
+      court:'meilleur BSR ' + fmt(r.bsr_best),
       texte:'Le meilleur classement du rayon est ' + fmt(r.bsr_best) + ' : au-delà de '
           + '10 000, la preuve que le sujet se vend est plus faible.'});
   }
   const n = r.n_concurrents_cibles;
   if(n > 50){
     cartes.push({cle:'concurrence', ton:'alerte', titre:'Concurrence installée',
+      court:fmt(n) + ' livres sur la même requête',
       texte: fmt(n) + ' livres visent déjà exactement cette requête. Un angle plus '
           + 'spécifique sera plus accessible que le mot-clé général.'});
   }else if(n > 30){
     cartes.push({cle:'concurrence', ton:'neutre', titre:'Concurrence présente',
+      court:fmt(n) + ' livres sur la même requête',
       texte: fmt(n) + ' livres visent cette requête : la place existe, mais elle se dispute.'});
   }else{
     cartes.push({cle:'concurrence', ton:'bon', titre:'Peu de concurrents ciblés',
+      court:fmt(n) + ' livres sur la requête',
       texte: fmt(n) + ' livres seulement visent cette requête précise.'});
   }
   if(r.criteres_bsr_ok){
     cartes.push({cle:'opportunite', ton:'bon', titre:'Place à prendre',
+      court:'un livre du top est loin derrière',
       texte:"Le rayon vend, et l'un des livres du top est déjà loin derrière : il reste de "
           + "la place devant lui."});
   }
@@ -1880,13 +2114,17 @@ function ficheNiche(r){
   const pNote = v => v == null ? '' : (v >= 7.5 ? 'g' : v >= 6 ? 'a' : 'r');
   const tuile = (ico, libelle, valeur, ton, note) =>
     '<div class="fiche-kpi"><i><span class="fk-ico" aria-hidden="true">' + ico + '</span>' + libelle + '</i><b>'
-    + (ton ? '<span class="pt pt-' + ton + '" aria-hidden="true"></span>' : '') + valeur + '</b>'
+    + (ton ? '<span class="pt pt-' + ton + '" role="img" aria-label="' + ({g:'favorable', a:'moyen', r:'défavorable'}[ton] || '') + '"></span>' : '') + valeur + '</b>'
     + (note ? '<em>' + esc(note) + '</em>' : '') + '</div>';
-  const icoTon = {bon:'✓', neutre:'!', alerte:'⚠'};
+  // Une LIGNE par raison, avec son emoji et une demi-phrase ; la phrase entiere se deplie.
+  // L'ancien bloc de trois cartes de texte etait le « pave » que l'auteur sautait : le
+  // verdict se lit d'un coup d'oeil, l'explication reste a un clic.
+  const icoTon = {bon:'✅', neutre:'🟠', alerte:'⚠️'};
   const carte = c =>
-    '<div class="pq pq-' + c.ton + '"><span class="pq-ico" aria-hidden="true">' + (icoTon[c.ton] || '•')
-    + '</span><strong>' + esc(c.titre) + '</strong>'
-    + '<p>' + esc(c.texte) + '</p></div>';
+    '<details class="pq pq-' + c.ton + '"><summary><span class="pq-ico" aria-hidden="true">'
+    + (icoTon[c.ton] || '•') + '</span><strong>' + esc(c.titre) + '</strong>'
+    + (c.court ? '<em>' + esc(c.court) + '</em>' : '') + '</summary>'
+    + '<p>' + esc(c.texte) + '</p></details>';
   return '<button type="button" class="fiche-retour" id="fiche-retour">‹ Retour aux résultats</button>'
     + '<div class="fiche-tete">'
       + '<span class="anneau anneau-xl anneau-' + g + '" style="--p:' + part.toFixed(3) + '">'
@@ -1899,21 +2137,20 @@ function ficheNiche(r){
       + '<p class="cat">' + esc(r.categorie || '') + '</p></div>'
     + '</div>'
     + '<div class="fiche-kpis">'
-      + tuile('📈', 'Demande', nm ? '—' : fmtDec(r.demande, 1), nm ? '' : pNote(r.demande))
-      + tuile('🚪', 'Accessibilité', nm ? '—' : fmtDec(r.penetration, 1), nm ? '' : pNote(r.penetration))
       + tuile('🏆', 'BSR meilleur', fmt(r.bsr_best), r.bsr_best == null ? '' : (r.bsr_best < 10000 ? 'g' : 'a'))
-      + tuile('📚', 'Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles),
-              nm ? '' : (r.n_concurrents_cibles > 50 ? 'r' : r.n_concurrents_cibles > 30 ? 'a' : 'g'))
-      // Le prix du rayon remonte ici : il etait noye dans une ligne de texte en bas de page
-      // alors que c'est la donnee que l'auteur regarde en second, apres « est-ce que ca vend ».
+      // Le prix du rayon est la deuxieme question de l'auteur, apres « est-ce que ca vend ».
       // Il garde son « sur N livre(s) » -- une mediane sur deux prix ne se lit pas comme sur
       // vingt (4.1), et une tuile sans son n ferait passer une fourchette etroite pour une
       // mesure solide. Prix TTC lu sur amazon.fr : donnee de marche, jamais une facture (5.27).
       + tuile('💰', 'Prix médian', r.n_prix_connus ? fmtEur(r.prix_median) : '—', '',
               r.n_prix_connus ? 'sur ' + r.n_prix_connus + ' livre(s) affichant un prix'
                               : 'aucun prix rendu par Amazon')
+      + tuile('🚪', 'Accessibilité', nm ? '—' : fmtDec(r.penetration, 1), nm ? '' : pNote(r.penetration))
+      + tuile('📈', 'Demande', nm ? '—' : fmtDec(r.demande, 1), nm ? '' : pNote(r.demande))
+      + tuile('📚', 'Concurrents', nm ? '—' : fmt(r.n_concurrents_cibles),
+              nm ? '' : (r.n_concurrents_cibles > 50 ? 'r' : r.n_concurrents_cibles > 30 ? 'a' : 'g'))
     + '</div>'
-    + '<h3 class="fiche-h">Pourquoi cette niche ?</h3>'
+    + '<h3 class="fiche-h">💡 Pourquoi cette niche ?</h3>'
     + '<div class="pq-liste">' + pourquoiNiche(r).map(carte).join('') + '</div>';
 }
 
@@ -1928,17 +2165,24 @@ function render(rows){
   $('#rtitre').textContent = THEMATIQUE_NF
     ? `Niches analysées pour « ${THEMATIQUE_NF} »` : 'Niches analysées';
   const b = bilanNiches(LIGNES_NF);
-  const tuile = (cls, val, lib) =>
-    '<div class="bilan-tuile ' + cls + '"><b>' + val + '</b><span>' + lib + '</span></div>';
+  // La tuile EST le filtre : un clic filtre la liste, un second clic revient a « toutes ».
+  const tuile = (cls, val, lib, f) =>
+    '<button type="button" class="bilan-tuile ' + cls + (val ? '' : ' vide') + '" data-f="' + f
+    + '" aria-pressed="false"><b>' + val + '</b><span>' + lib + '</span></button>';
+  // Quatre tuiles qui sont AUSSI les filtres : une seule lecture du lot. Les niches non
+  // mesurees ont leur propre tuile -- les fondre dans « faibles » faisait lire une absence
+  // de mesure comme un verdict de marche (regle 3).
   $('#bilan-nf').innerHTML =
-      tuile('t-g', b.g, '🟢 prioritaire' + (b.g > 1 ? 's' : ''))
-    + tuile('t-a', b.a, '🟡 intéressante' + (b.a > 1 ? 's' : ''))
-    + tuile('t-r', b.r + b.n, '🔴 faible' + (b.r + b.n > 1 ? 's' : '') + (b.n ? ' ou non mesurée' + (b.n > 1 ? 's' : '') : ''))
-    + tuile('t-bsr', fmt(b.bsr), '🏆 meilleur BSR lu');
+      tuile('t-g', b.g, '🟢 prioritaire' + (b.g > 1 ? 's' : ''), 'g')
+    + tuile('t-a', b.a, '🟡 intéressante' + (b.a > 1 ? 's' : ''), 'a')
+    + tuile('t-r', b.r, '🔴 faible' + (b.r > 1 ? 's' : ''), 'r')
+    + (b.n ? tuile('t-n', b.n, '⚪ non mesurée' + (b.n > 1 ? 's' : ''), 'n') : '');
   document.querySelectorAll('#filtres-nf [data-n]').forEach(s => {
     const k = s.dataset.n;
-    s.textContent = k === 'tout' ? b.total : (k === 'r' ? b.r + b.n : b[k]);
+    s.textContent = k === 'tout' ? b.total : b[k];
   });
+  const filtreN = document.querySelector('#filtres-nf [data-f="n"]');
+  if(filtreN) filtreN.hidden = !b.n;
   choisirFiltreNf('tout');
   empty.style.display='none'; results.classList.add('on');
 }
@@ -1947,8 +2191,16 @@ function choisirFiltreNf(f){
   FILTRE_NF = f;
   document.querySelectorAll('#filtres-nf [data-f]').forEach(btn =>
     btn.setAttribute('aria-checked', String(btn.dataset.f === f)));
+  document.querySelectorAll('#bilan-nf [data-f]').forEach(t => {
+    const actif = t.dataset.f === f;
+    t.setAttribute('aria-pressed', String(actif)); t.classList.toggle('actif', actif);
+  });
   dessinerCartesNf();
 }
+$('#bilan-nf').addEventListener('click', ev => {
+  const t = ev.target.closest('[data-f]');
+  if(t) choisirFiltreNf(FILTRE_NF === t.dataset.f ? 'tout' : t.dataset.f);
+});
 document.querySelectorAll('#filtres-nf [data-f]').forEach(btn =>
   btn.addEventListener('click', () => choisirFiltreNf(btn.dataset.f)));
 
@@ -1962,7 +2214,7 @@ function dessinerCartesNf(){
   const garde = r => {
     if(FILTRE_NF === 'tout') return true;
     const g = nonMesuree(r) ? 'n' : grade(r.global_score);
-    return FILTRE_NF === 'r' ? (g === 'r' || g === 'n') : g === FILTRE_NF;
+    return g === FILTRE_NF;
   };
   const liste = trierNiches(LIGNES_NF, $('#tri-nf').value).filter(garde);
   liste.forEach((r, i) => {
@@ -2207,6 +2459,43 @@ function carteLowContent(r){
       + 'est vide. Score non exploitable — à relancer.</p>'
     : '';
 
+  // TROIS chiffres en gros -- ceux qui font decider d'ecrire ou non (le prix, ce qu'il
+  // rapporte, qui tient le rayon). Les six mesures completes, et leurs notes de lecture
+  // (TVA supposee, format de coupe, sens inverse des variantes), restent a un clic : rien
+  // n'est retire, l'ordre de lecture change.
+  const cle = (ico, lib, valeur, mauvais, sous) =>
+    '<div class="lc-key' + (mauvais ? ' v-bad' : '') + '"><span class="lc-key-ico" aria-hidden="true">'
+    + ico + '</span><span class="lc-key-k">' + lib + '</span><b>'
+    + (valeur == null ? '<span class="mut">non mesuré</span>' : valeur) + '</b>'
+    + (sous ? '<small class="lc-key-sous">' + sous + '</small>' : '') + '</div>';
+  const cles =
+      cle('💰', 'Prix médian', r.prix_median == null ? null : fmtEur(r.prix_median),
+          r.prix_median != null && r.prix_sous_seuil_60pct)
+    + cle('💶', 'Redevance',
+          ancien ? 'à recalculer' : (r.redevance_estimee == null ? null : fmtEur(r.redevance_estimee)),
+          !ancien && r.redevance_estimee != null && r.redevance_estimee < 0)
+    + cle('🙋', 'Part indie', r.part_indie == null ? null : fmtPct(r.part_indie), false,
+          r.n_editeur_inconnu ? r.n_editeur_inconnu + ' éditeur(s) illisible(s)' : '');
+
+  // Deux sortes de lignes visibles. Un FAIT (bareme KDP, arithmetique) alerte : ⚠️. Un seuil
+  // d'HYPOTHESE (redevance sous 2 €, editeurs > 50 %, non calibres) informe sans alarmer :
+  // ℹ️, fond neutre. Les VARIANTES n'ont pas de ligne ici : le score les ignore depuis le
+  // 2026-09-30 (variantes_max=1000, le terme degradait la detection des rayons morts) ; le
+  // chiffre reste affiche, a l'envers (eleve = mauvais), dans « Toutes les mesures ».
+  const drapeaux = [];
+  if(r.prix_median != null && r.prix_sous_seuil_60pct)
+    drapeaux.push({fait: true, t: 'Sous 9,99 € HT : KDP verse 50 % au lieu de 60 %'});
+  if(!ancien && r.redevance_estimee != null && r.redevance_estimee < 0)
+    drapeaux.push({fait: true, t: 'Redevance négative : chaque vente fait perdre de l’argent'});
+  else if(!ancien && r.redevance_estimee != null && r.redevance_estimee < 2)
+    drapeaux.push({fait: false, t: 'Redevance sous 2 € par vente'});
+  if(r.part_editeurs_traditionnels != null && r.part_editeurs_traditionnels > 0.5)
+    drapeaux.push({fait: false, t: 'Rayon tenu en majorité par des éditeurs installés'});
+  const flags = drapeaux.length
+    ? '<ul class="lc-flags">' + drapeaux.map(d =>
+        '<li class="' + (d.fait ? 'lc-fait' : 'lc-info') + '">' + (d.fait ? '⚠️ ' : 'ℹ️ ') + d.t + '</li>'
+      ).join('') + '</ul>' : '';
+
   return '<article class="lc-carte">'
     + '<div class="lc-tete">'
     // Couleur = verdict du SERVEUR, dont les seuils vivent dans lowcontent_criteres.json
@@ -2219,10 +2508,13 @@ function carteLowContent(r){
     + 'PAS une bonne niche d’une mauvaise — ce n’est pas une note de qualité.">'
     + (nm ? '—' : fmtDec(r.global_score, 1)) + '</span>'
     + '<h3>' + esc(n.niche || n.requete_amazon || '—') + '</h3></div>'
-    + '<div class="lc-req">« ' + esc(n.requete_amazon || '') + ' »</div>'
+    + '<div class="lc-req">🔎 « ' + esc(n.requete_amazon || '') + ' »</div>'
     + (badges.length ? '<div class="lc-badges">' + badges.join('') + '</div>' : '')
     + alerte
-    + '<div class="lc-mesures">' + indie + variantes + prix + red + trad + bsr + '</div>'
+    + '<div class="lc-cles">' + cles + '</div>'
+    + flags
+    + '<details class="lc-detail"><summary>📊 Toutes les mesures</summary>'
+    + '<div class="lc-mesures">' + indie + variantes + prix + red + trad + bsr + '</div></details>'
     + '<div class="verdictslot" aria-live="polite">' + verdictSlot(r) + '</div>'
     + '</article>';
 }
@@ -2270,15 +2562,17 @@ function grouperLc(rows){
     else vivant.push(r);
   });
   return [
-    {cle: 'vivant', titre: 'Rayons vivants', rows: vivant,
+    {cle: 'vivant', titre: 'Rayons vivants', emo: '🟢', court: "à examiner vous-même — l'ordre n'est pas un classement de qualité", rows: vivant,
      note: "à examiner vous-même. L'ordre dans ce groupe n'est PAS un classement de "
          + "qualité : mesuré sur 95 rayons, le score ne départage pas une bonne niche "
          + "d'une mauvaise."},
-    {cle: 'mort', titre: 'Signaux de rayon mort', rows: mort,
+    {cle: 'mort', titre: 'Signaux de rayon mort', emo: '🔴',
+     court: "à vérifier avant d'y passer du temps — ce n'est pas un rejet", rows: mort,
      note: "à vérifier avant d'y passer du temps — ce n'est pas un rejet : sur les lots "
          + "mesurés, environ un rayon sur trois de ce groupe était quand même une bonne "
          + "niche."},
-    {cle: 'nonmesure', titre: 'Non mesurés', rows: nonmesure,
+    {cle: 'nonmesure', titre: 'Non mesurés', emo: '⚪',
+     court: "Amazon n'a pas répondu — à relancer", rows: nonmesure,
      note: "la recherche Amazon n'a pas répondu : ce n'est pas un rayon vide, c'est une "
          + "absence de mesure. À relancer."},
   ].filter(g => g.rows.length);
@@ -2291,8 +2585,10 @@ function renderLc(rows){
   // autre — un dossier PDF payé pour la mauvaise niche (§5.26, même famille).
   const rendus = groupes.flatMap(g => g.rows);
   gridLc.innerHTML = groupes.map(g =>
-      '<section class="lc-groupe"><h3>' + esc(g.titre) + ' (' + g.rows.length + ')</h3>'
-    + '<p class="lc-groupe-note">' + esc(g.note) + '</p>'
+      '<section class="lc-groupe lc-groupe-' + g.cle + '"><h3><span aria-hidden="true">' + g.emo
+    + '</span> ' + esc(g.titre) + ' <em>' + g.rows.length + '</em><small>' + esc(g.court) + '</small></h3>'
+    + '<details class="lc-groupe-note"><summary>ℹ️ Pourquoi cette lecture</summary><p>'
+    + esc(g.note) + '</p></details>'
     + g.rows.map(carteLowContent).join('') + '</section>').join('');
   rcountLc.textContent = rows.length
     ? rows.length + ' niche(s) analysée(s)' : 'aucune niche';
@@ -2336,7 +2632,7 @@ async function loadVerdictLc(r, carte, btn){
     btn.disabled = false; btn.removeAttribute('aria-busy');
     btn.textContent = 'Analyser cette niche (~10 s)';
     const p = carte.querySelector('.vask p');
-    if(p) p.textContent = String(e.message || e);
+    if(p){ p.classList.add('vask-err'); p.setAttribute('role','alert'); p.textContent = String(e.message || e); }
   }
 }
 
@@ -2347,7 +2643,7 @@ const VUE_LC = {
     stepsLc.innerHTML=''; gridLc.innerHTML=''; resultsLc.classList.remove('on');
     errboxLc.classList.remove('on'); errboxLc.textContent='';
     emptyLc.style.display='none'; progressLc.classList.add('on');
-    runLcBtn.disabled=true; runLcLabel.textContent='Scout en cours…';
+    runLcBtn.disabled=true; runLcLabel.textContent='Analyse en cours…';
     const ic=runLcBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ esLc=e; },
@@ -2357,7 +2653,7 @@ const VUE_LC = {
   erreur(m){ errboxLc.textContent='Erreur : '+m; errboxLc.classList.add('on'); },
   apres(){
     progressLc.classList.remove('on');
-    runLcBtn.disabled=false; runLcLabel.textContent='Lancer le scout low-content';
+    runLcBtn.disabled=false; runLcLabel.textContent='Trouver les niches';
     const sp=runLcBtn.querySelector('.spin');
     if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
     if(!gridLc.children.length && !errboxLc.classList.contains('on'))
@@ -2499,6 +2795,7 @@ function menuCompteHtml(){
 // minutes plus tot etait donc inatteignable : une donnee produite et jamais affichee,
 // meme famille que §5.26. Rouvrir ne relance RIEN et ne coute rien.
 const TYPE_LABEL = {scout: 'Non-fiction', fiction: 'Fiction', lowcontent: 'Low-content'};
+const TYPE_EMO = {scout: '📘', fiction: '📖', lowcontent: '📓'};
 
 function fmtDate(ts){
   if(!ts) return '—';
@@ -2521,9 +2818,11 @@ function ligneAnalyse(job){
     : 'en attente';
   return '<div class="hist-ligne">'
     + '<span class="quand">' + esc(fmtDate(job.cree_le)) + '</span>'
-    + '<span class="type">' + esc(TYPE_LABEL[job.type] || job.type) + '</span>'
+    + '<span class="type"><span aria-hidden="true">' + (TYPE_EMO[job.type] || '📄') + '</span> '
+      + esc(TYPE_LABEL[job.type] || job.type) + '</span>'
     + '<span class="sujet">« ' + esc(String(sujet)) + ' »</span>'
-    + '<span class="etat">' + esc(etat) + '</span>'
+    + '<span class="etat' + (job.statut === 'echec' ? ' etat-long' : '') + '" title="' + esc(etat) + '">'
+      + esc(etat) + '</span>'
     + (ouvrable
         ? '<button type="button" class="btn-act hist-ouvrir" data-id="' + esc(job.id)
           + '">Rouvrir</button>'
@@ -2572,6 +2871,8 @@ function rouvrirAnalyse(id){
   switchTab(onglet);
   vue.viderEtapes();
   (job.progression || []).forEach(m => vue.etape(m));
+  if(job.type === 'scout') fermerFiche();
+  if(job.type === 'scout') THEMATIQUE_NF = (job.params && (job.params.seed || job.params.thematique)) || '';
   vue.resultat(job.resultat);
 }
 
@@ -2682,10 +2983,14 @@ function verdictBlockFic(v){
   return normalHtml + warnHtml;
 }
 
+// Les cles de taxonomie (cosy_mystery, enemies_to_lovers) sont des identifiants, pas du
+// francais : un auteur lit « cosy mystery », jamais le tiret bas.
+const libCle = x => String(x == null ? '' : x).replace(/_/g, ' ');
+
 function renderFic(rows){
   gridFic.innerHTML='';
   rcountFic.textContent = rows.length ? `${rows.length} trio(s) analysé(s) en profondeur` : 'aucun trio';
-  rows.forEach(r=>{
+  rows.forEach((r, i)=>{
     const [dmEmoji, dmTitre, dmGrade, dmTexte] = DM_CONCLUSION[r.demand_matrix]
       || ['⚪', r.demand_matrix || '—', 'n', ''];
     // Grille d'habillage (Task U2) : profondeur/ouverture normales, saturation INVERSÉE
@@ -2695,47 +3000,57 @@ function renderFic(rows){
     const [depthLabel, depthGrade] = niveau3(r.depth_score);
     const [openLabel, openGrade] = niveau3(r.openness_score);
     const n = r.niche || {};
-    const tropesHtml = (n.tropes||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join('') || '<span class="mut">—</span>';
+    const tropesHtml = (n.tropes||[]).map(t=>`<span class="chip">${esc(libCle(t))}</span>`).join('') || '<span class="mut">—</span>';
     const acLabel = esc(autocompleteLabel(r));
     const acVal = r.autocomplete_score==null
       ? `<span class="mval mut">non mesuré</span>`
       : `<span class="mval">${fmtDec(r.autocomplete_score,1)} <span class="mut">(${acLabel})</span></span>`;
     const [pmin,pmed,pmax] = (r.price_band && r.price_band.length===3) ? r.price_band : [null,null,null];
+    // Les reserves du verdict (rayon incomplet, sous-genre fantome, non classes) restent
+    // VISIBLES : une mise en garde repliee ne previent personne (§10). Le reste du texte
+    // du verdict se deplie.
+    const phrases = (r.verdict||'').split(/(?<=\.)\s+/).filter(Boolean);
+    const avert = phrases.filter(p=>WARN_RE.test(p))
+      .map(p=>`<p class="fic-warn">${ICON_WARN}<span>${esc(p)}</span></p>`).join('');
+    const pasAvert = phrases.filter(p=>!WARN_RE.test(p));
     const card=document.createElement('div'); card.className='panel fic-card';
+    card.style.setProperty('--i', i);
     card.innerHTML=`
-      <p class="dl">Trio${glossBtn('Trio')} : sous-genre × trope${glossBtn('Trope')} × décor</p>
       <div class="fic-head">
         <div class="fic-trio">
-          <span class="fic-sg">${esc(n.sous_genre||'—')}</span>
+          <span class="fic-sg">${esc(libCle(n.sous_genre)||'—')}</span>
           <span class="fic-sep">×</span>${tropesHtml}
-          <span class="fic-sep">·</span><span class="chip">${esc(n.decor||'—')}</span>
+          <span class="fic-sep">·</span><span class="chip">${esc(libCle(n.decor)||'—')}</span>
         </div>
         <span class="dm ${dmGrade}">${dmEmoji} ${esc(dmTitre)}</span>
       </div>
       <p class="fic-concl ${dmGrade}">${dmTexte}</p>
-      <div class="fic-sat ${satCss}">
-        <span class="sval">${fmtDec(r.saturation_trio)}</span>
-        <span class="stext"><strong>Saturation du trio</strong>${glossBtn('Saturation du trio')}<span class="verdict ${satGrade}">${esc(satLabel)}</span> — combien de livres promettent déjà exactement ce trio</span>
+      ${avert}
+      <div class="fic-cles">
+        <div class="fic-cle fic-sat ${satCss}"><span class="fic-cle-k">🔥 Saturation${glossBtn('Saturation du trio')}</span><b>${fmtDec(r.saturation_trio)}</b><span class="verdict ${satGrade}">${esc(satLabel)}</span></div>
+        <div class="fic-cle"><span class="fic-cle-k">🌊 Profondeur${glossBtn('Profondeur')}</span><b>${fmtDec(r.depth_score)}</b><span class="verdict ${depthGrade}">${esc(depthLabel)}</span></div>
+        <div class="fic-cle"><span class="fic-cle-k">🚪 Ouverture${glossBtn('Ouverture')}</span><b>${fmtDec(r.openness_score)}</b><span class="verdict ${openGrade}">${esc(openLabel)}</span></div>
+        <div class="fic-cle"><span class="fic-cle-k">💰 Prix médian</span><b>${fmtEur(pmed)}</b><span class="mut">${pmin==null?'':fmtEur(pmin)+' – '+fmtEur(pmax)}</span></div>
       </div>
-      <div class="fic-metrics">
-        <div class="metric"><span class="mlabel">Profondeur${glossBtn('Profondeur')}</span><span class="mval"><span class="verdict ${depthGrade}">${esc(depthLabel)}</span> <span class="mut">(${fmtDec(r.depth_score)})</span></span></div>
-        <div class="metric"><span class="mlabel">Ouverture${glossBtn('Ouverture')}</span><span class="mval"><span class="verdict ${openGrade}">${esc(openLabel)}</span> <span class="mut">(${fmtDec(r.openness_score)})</span></span></div>
-        <div class="metric"><span class="mlabel">Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
-        <div class="metric"><span class="mlabel">Prix min/méd/max</span><span class="mval">${fmtEur(pmin)} / ${fmtEur(pmed)} / ${fmtEur(pmax)}</span></div>
-        <div class="metric"><span class="mlabel">Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
-      </div>
-      <div class="fic-verdict">${verdictBlockFic(r.verdict)}</div>
-      <div class="histslot"></div>`;
+      <details class="fic-detail"><summary>📊 Voir le détail</summary>
+        <p class="fic-sat-note">Saturation : les livres du rayon reprennent déjà, en moyenne, ${Math.round((r.saturation_trio||0)*100)} % de votre trio. Plus c’est élevé, moins il reste de place.</p>
+        <div class="fic-metrics">
+          <div class="metric"><span class="mlabel">Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
+          <div class="metric"><span class="mlabel">Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
+        </div>
+        ${pasAvert.length ? `<p class="vrow">${esc(pasAvert.join(' '))}</p>` : ''}
+        <div class="histslot"></div>
+      </details>`;
     // L'historique fiction etait ECRIT a chaque run (_consigner_fiction) et JAMAIS lu :
     // la carte n'avait ni emplacement ni appel. L'auteur accumulait une serie qu'aucun
     // ecran ne lui montrait, et la seule fonction capable de repondre a « est-ce que ca
     // bouge ? » restait aveugle sur la moitie du produit.
     //
-    // Charge A L'OUVERTURE, comme en non-fiction : interroger l'historique de dix trios
-    // que l'utilisateur ne depliera jamais, c'est dix requetes pour rien.
+    // Charge a l'OUVERTURE du detail, comme en non-fiction : interroger l'historique de dix
+    // trios que l'utilisateur ne depliera jamais, c'est dix requetes pour rien.
     let histCharge = false;
-    card.addEventListener('click', () => {
-      if (histCharge) return;
+    card.querySelector('.fic-detail').addEventListener('toggle', ev => {
+      if (!ev.target.open || histCharge) return;
       histCharge = true;
       loadHistorique(r.niche && r.niche.query, card.querySelector('.histslot'));
     });
@@ -2751,7 +3066,7 @@ formFic.addEventListener('submit', e=>{
   stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
   errboxFic.classList.remove('on'); errboxFic.textContent='';
   emptyFic.style.display='none'; progressFic.classList.add('on');
-  runFicBtn.disabled=true; runFicLabel.textContent='Scout en cours…';
+  runFicBtn.disabled=true; runFicLabel.textContent='Analyse en cours…';
   runFicBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
 
   const params={sous_genre:sgSelect.value, n_niches:Number($('#fic-n').value),
@@ -2788,7 +3103,7 @@ const VUE_NF = {
     progress.classList.remove('on');
     runBtn.disabled=false; runLabel.textContent='Trouver les niches';
     const sp=runBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
-    if(!tbody.children.length && !errbox.classList.contains('on')) empty.style.display='block';
+    if(!$('#cartes-nf').children.length && !errbox.classList.contains('on')) empty.style.display='block';
   },
 };
 
@@ -2799,7 +3114,7 @@ const VUE_FIC = {
     stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
     errboxFic.classList.remove('on'); errboxFic.textContent='';
     emptyFic.style.display='none'; progressFic.classList.add('on');
-    runFicBtn.disabled=true; runFicLabel.textContent='Scout en cours…';
+    runFicBtn.disabled=true; runFicLabel.textContent='Analyse en cours…';
     const ic=runFicBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
   },
   flux(e){ esFic=e; },
@@ -2809,7 +3124,7 @@ const VUE_FIC = {
   erreur(m){ errboxFic.textContent='Erreur : '+m; errboxFic.classList.add('on'); },
   apres(){
     progressFic.classList.remove('on');
-    runFicBtn.disabled=false; runFicLabel.textContent='Lancer le scout fiction';
+    runFicBtn.disabled=false; runFicLabel.textContent='Trouver les trios';
     const sp=runFicBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
     if(!gridFic.children.length && !errboxFic.classList.contains('on')) emptyFic.style.display='block';
   },

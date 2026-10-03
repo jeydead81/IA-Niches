@@ -346,7 +346,7 @@ def _job(**kw):
 
 
 def test_une_analyse_terminee_est_REOUVRABLE_avec_son_contenu():
-    html = appeler("ligneAnalyse", _job(), dependances=("esc", "TYPE_LABEL", "fmtDate"))
+    html = appeler("ligneAnalyse", _job(), dependances=("esc", "TYPE_LABEL", "TYPE_EMO", "fmtDate"))
     assert "registre" in html and "3 niche" in html
     assert "Low-content" in html
     assert 'data-id="a1b2"' in html, "le bouton doit porter l'identifiant du run"
@@ -356,7 +356,7 @@ def test_une_analyse_en_cours_n_est_pas_proposee_a_la_reouverture():
     """Rouvrir un run sans résultat afficherait un écran vide en faisant croire qu'il n'a
     rien trouvé — une absence de mesure présentée comme un verdict (règle 3)."""
     html = appeler("ligneAnalyse", _job(statut="en_cours", resultat=None),
-                   dependances=("esc", "TYPE_LABEL", "fmtDate"))
+                   dependances=("esc", "TYPE_LABEL", "TYPE_EMO", "fmtDate"))
     assert "data-id" not in html
     assert "cours" in html.lower()
 
@@ -364,6 +364,6 @@ def test_une_analyse_en_cours_n_est_pas_proposee_a_la_reouverture():
 def test_une_analyse_en_ECHEC_dit_pourquoi_et_ne_se_rouvre_pas():
     html = appeler("ligneAnalyse",
                    _job(statut="echec", resultat=None, erreur="compte DataForSEO refusé"),
-                   dependances=("esc", "TYPE_LABEL", "fmtDate"))
+                   dependances=("esc", "TYPE_LABEL", "TYPE_EMO", "fmtDate"))
     assert "data-id" not in html
     assert "dataforseo" in html.lower()

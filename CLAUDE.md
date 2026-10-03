@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-09-29** (1 295 tests sur 103 fichiers, 49 modules, 34
+> Comptages revérifiés le **2026-10-03** (1 398 tests sur 114 fichiers, 49 modules, 34
 > variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -557,6 +557,19 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
   dans `index.html` — c'est l'alias de `document.querySelector` et le marqueur d'interpolation
   des gabarits, pas un symbole monétaire. `fmtEur` (`:1048`) sert **uniquement** au prix des
   LIVRES, donnée de marché.
+- **Refonte « Vif » (2026-10-03)** : moins de texte, un emoji porte le sens, un chiffre porte la
+  preuve, la phrase se déplie. Les trois moteurs restent trois ENTRÉES nommées par ce qu'on
+  écrit (📘 / 📖 / 📓) : un auto-routage depuis un champ libre serait refusé, un mauvais
+  aiguillage consomme une unité de plafond et rend des chiffres plausibles hors sujet. **Règle
+  qui tient la simplification** (`tests/test_ux_v3.py`) : on replie une EXPLICATION, jamais une
+  MISE EN GARDE — « l'ordre n'est pas un classement », « pas un rejet », « non mesuré », les
+  éditeurs illisibles à côté de la part indie, le seuil 9,99 € HT restent visibles. Les
+  alertes visibles distinguent un FAIT (barème KDP, redevance négative : ⚠️) d'un seuil
+  d'HYPOTHÈSE non calibré (redevance sous 2 €, éditeurs > 50 % : ℹ️, fond neutre). Les
+  VARIANTES n'alertent pas sur la carte (le score les ignore depuis le 2026-09-30,
+  `variantes_max=1000`) : le chiffre reste dans « Toutes les mesures », élevé = mauvais.
+  Une couleur seule ne porte jamais un jugement : drapeau texte ou `aria-label`. Le CSS de la refonte est une surcouche en FIN de feuille (« Surcouche v3 »), les
+  couches v2 et « Foyer » en dessous ne sont pas purgées.
 - **Compositeur de trio** : `#fic-tropes` (multi-sélection), `#fic-decor`, `#fic-libre`, peuplés
   par `/api/fiction/taxonomie/{sous_genre}` et **rechargés à chaque changement de sous-genre**
   (garder les anciens ferait composer un trio impossible, refusé ensuite par le serveur sans que
@@ -564,8 +577,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1295 tests** sur **103 fichiers** `tests/test_*.py`, **1295 passés, 0 ignoré, 0 échec,
-0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-09-29,
+**1398 tests** sur **114 fichiers** `tests/test_*.py`, **1398 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
 
@@ -1450,7 +1463,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1295 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1398 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
