@@ -1255,6 +1255,79 @@
   .lc-carte .va-lignes li .va-k{grid-column:2}
   .lc-carte .va-lignes li .va-v{grid-column:2}
   @media (max-width:640px){.va-lignes li{grid-template-columns:22px minmax(0,1fr)}.va-lignes li .va-v{grid-column:2}}
+
+  /* ── Mots-clés KDP : sept champs à coller, un coup d'oeil par emplacement ── */
+  .kdpbox{border-radius:16px;padding:16px 18px;margin-top:12px;box-shadow:var(--shadow)}
+  .kdp-tete{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .kdp-tete .dl{margin:0;font-size:15px;font-weight:700;color:var(--heading)}
+  .kdp-sous{margin:3px 0 10px;font-size:13px;color:var(--text-muted)}
+  .kdprow{display:grid;grid-template-columns:26px minmax(0,1fr) 92px auto auto;gap:10px;align-items:center;
+    padding:9px 0;border-bottom:1px dashed var(--border)}
+  .kdpnum{width:24px;height:24px;border-radius:50%;background:var(--brand-soft);color:var(--brand-ink);
+    font-size:12px;font-weight:700;display:grid;place-items:center;font-family:var(--sans)}
+  .kdpkw{font-size:14px;font-weight:600;color:var(--heading);overflow-wrap:anywhere}
+  .kdplen{position:relative;display:block;height:20px;border-radius:7px;background:var(--muted);overflow:hidden;
+    font-family:var(--sans)}
+  .kdplen i{position:absolute;inset:0 auto 0 0;background:#CFE5D8}
+  .kdplen b{position:relative;display:block;text-align:center;font-size:11.5px;font-weight:600;line-height:20px;color:var(--ink-soft)}
+  .kdptag{font-size:12px;padding:3px 10px}
+  .btn-copy{border-radius:9px;padding:5px 12px;font-size:12.5px;font-weight:600;background:var(--surface);
+    border:1.5px solid var(--line-control);color:var(--brand-ink);transition:all .15s var(--ease)}
+  .btn-copy:hover{background:var(--brand-soft);border-color:var(--secondary)}
+  .btn-copy-tout{background:var(--primary);border-color:var(--primary);color:#fff;padding:7px 14px}
+  .btn-copy-tout:hover{background:var(--primary-600);border-color:var(--primary-600);color:#fff}
+  .kdpnote{border-radius:12px;padding:10px 14px}
+  @media (max-width:640px){
+    .kdprow{grid-template-columns:26px minmax(0,1fr) auto;row-gap:6px}
+    .kdplen{grid-column:2;max-width:120px}
+    .kdprow .kdptag{grid-column:2}
+    .kdprow .btn-copy{grid-column:3;grid-row:1}
+  }
+
+  /* ── Concurrents du top : un classement lisible, le sens du BSR dit une fois ── */
+  .ctab-sens{margin:0 0 8px;font-size:12.5px;color:var(--text-muted)}
+  .ctab{font-size:13.5px}
+  .ctab th{font-size:12.5px;padding:0 10px 8px 0}
+  .ctab td{padding:10px 10px 10px 0}
+  .ctab td.rang{width:28px;color:var(--text-muted);font-weight:700;font-variant-numeric:tabular-nums}
+  .ctab tr.fort td.rang{color:var(--go-ink)}
+  .ctab tr.fort td:last-child{color:var(--go-ink);font-weight:700}
+  .ctab a{font-weight:600}
+  .prixbox{font-size:14px;margin:0 0 14px}
+
+  /* Le tableau global impose min-width:760px : dans la fiche il debordait de son panneau et
+     decalait toute la page. Les concurrents tiennent dans la largeur disponible. */
+  .ctab{min-width:0;width:100%;table-layout:auto}
+  .ctab th:nth-child(n+3){text-align:right}
+  .ctab td.n{font-size:13px}
+  .ctab .nm{font-size:12px}
+
+  /* ── Mon compte ── */
+  .cpt{padding:24px 26px}
+  .cpt-profil{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:20px;border-bottom:1px solid var(--border)}
+  .cpt-avatar{width:56px;height:56px;border-radius:50%;background:var(--brand-soft);display:grid;place-items:center;font-size:26px;flex:none}
+  .cpt-id{flex:1;min-width:180px}
+  .cpt-id h2{margin:0;font-family:var(--serif);font-weight:500;font-size:26px;letter-spacing:-.015em}
+  .cpt-id p{margin:2px 0 0;font-size:13.5px;color:var(--text-muted);overflow-wrap:anywhere}
+  .cpt-id strong{color:var(--heading)}
+  .cpt-bloc{margin:0;padding:22px 0 6px}
+  .cpt-bloc h4,.cpt-danger h4{margin:0 0 4px;font-size:16px;font-weight:700;color:var(--heading)}
+  .cpt-aide{margin:0 0 12px;font-size:13.5px;color:var(--text-muted)}
+  .cpt-champs{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .cpt-champs input{flex:1 1 200px;width:auto;margin:0;height:46px}
+  .cpt-champs .btn-act{margin:0;height:46px;padding:0 22px}
+  .cpt .compte-msg{min-height:20px;margin:8px 0 0;font-size:13px;color:var(--ink-soft)}
+  .cpt-danger{margin-top:18px;border:1px solid #F1C7BF;border-radius:16px;background:#FFF8F6}
+  .cpt-danger > summary{list-style:none;cursor:pointer;padding:14px 18px;font-size:14px;font-weight:600;color:var(--low-ink)}
+  .cpt-danger > summary::-webkit-details-marker{display:none}
+  .cpt-danger form{padding:0 18px 16px;margin:0;border:none}
+  .cpt-danger p{font-size:13.5px;line-height:1.5;color:var(--ink-soft)}
+  .cpt .btn-act.danger{background:var(--low-ink)}
+  .cpt .btn-act.danger:hover{background:#8C2415}
+  .cpt input[type=password]{font:inherit;font-size:15px;color:var(--text);background:var(--surface);
+    border:1.5px solid var(--line-control);border-radius:12px;padding:0 14px;outline:none;
+    transition:border-color .15s,box-shadow .15s}
+  .cpt input[type=password]:focus{border-color:var(--secondary);box-shadow:0 0 0 4px rgba(46,125,91,.14)}
 </style>
 </head>
 <body>
@@ -1609,11 +1682,13 @@
   </section>
 
   <section id="vue-compte" hidden>
-    <section class="panel">
-      <h2 class="fiche-h" style="margin-top:0">Compte</h2>
-      <p class="hist-note">Connecté en tant que <strong id="compte-email-txt"></strong>.</p>
+    <section class="panel cpt">
+      <div class="cpt-profil">
+        <span class="cpt-avatar" aria-hidden="true">👤</span>
+        <div class="cpt-id"><h2>Mon compte</h2><p>Connecté en tant que <strong id="compte-email-txt"></strong></p></div>
+        <button type="button" id="btn-deconnexion-2" class="btn-act">👋 Se déconnecter</button>
+      </div>
       <div id="compte-reglages"></div>
-      <button type="button" id="btn-deconnexion-2" class="btn-act">Se déconnecter</button>
     </section>
   </section>
 
@@ -1764,19 +1839,34 @@ function verdictSlot(r){
 function blocConcurrents(r){
   const livres = (r && r.top_books) || [];
   if(!livres.length)
-    return '<p class="dl">Top livres concurrents</p><p class="mut">\u2014 aucun concurrent '
-         + 'connu : la recherche Amazon n\'a rien rendu pour cette niche. Ce n\'est pas '
-         + 'un rayon vide, c\'est une donnee absente.</p>';
-  const lignes = livres.map(b => ''
-    + '<tr><td><a href="' + esc(b.url) + '" target="_blank" rel="noopener">'
+    return '<p class="dl">Top livres concurrents</p><p class="mut">— aucun concurrent '
+         + 'connu : la recherche Amazon n’a rien rendu pour cette niche. Ce n’est pas '
+         + 'un rayon vide, c’est une donnee absente.</p>';
+  // Un BSR inconnu s'affiche « non mesure » et JAMAIS 0 : zero est le MEILLEUR classement
+  // possible, l'afficher pour une donnee absente inverserait completement la lecture (5.10).
+  // Le moteur ne releve le BSR que des BSR_RELEVES premiers organiques de chaque niche
+  // (scout_master.run_scout : n_bsr_per_niche, pour maitriser le cout). Un BSR vide au-dela
+  // n'est PAS une mesure ratee, c'est une mesure jamais demandee : « non mesure » ferait
+  // croire a une panne, et laisserait penser que le livre n'a pas de classement.
+  // tests/test_ux_v3.py tient cette valeur egale au defaut du moteur.
+  const BSR_RELEVES = 3;
+  const nm = '<span class="nm">non mesure</span>';
+  const horsTop = '<span class="nm" title="Le classement n’est relevé que pour les '
+    + BSR_RELEVES + ' premiers livres de la niche.">hors top ' + BSR_RELEVES + '</span>';
+  const lignes = livres.map((b, i) => ''
+    + '<tr' + (b.bsr != null && b.bsr < 10000 ? ' class="fort"' : '') + '>'
+    + '<td class="rang">' + (i + 1) + '</td>'
+    + '<td><a href="' + esc(b.url) + '" target="_blank" rel="noopener">'
     + esc(b.title || b.asin) + '</a></td>'
-    + '<td class="n">' + (b.price==null ? '<span class="nm">\u2014</span>' : fmtEur(b.price)) + '</td>'
-    + '<td class="n">' + (b.rating==null ? '<span class="nm">\u2014</span>' : b.rating) + '</td>'
-    + '<td class="n">' + (b.reviews_count==null ? '<span class="nm">\u2014</span>' : fmt(b.reviews_count)) + '</td>'
-    + '<td class="n">' + (b.bsr==null ? '<span class="nm">non mesure</span>' : fmt(b.bsr)) + '</td></tr>').join('');
-  return '<p class="dl">Top livres concurrents (organiques)</p>'
-    + '<table class="ctab"><thead><tr><th>Titre</th><th>Prix</th><th>Note</th>'
-    + '<th>Avis</th><th>BSR</th></tr></thead><tbody>' + lignes + '</tbody></table>';
+    + '<td class="n">' + (b.price==null ? '<span class="nm">—</span>' : fmtEur(b.price)) + '</td>'
+    + '<td class="n">' + (b.rating==null ? '<span class="nm">—</span>' : b.rating) + '</td>'
+    + '<td class="n">' + (b.reviews_count==null ? '<span class="nm">—</span>' : fmt(b.reviews_count)) + '</td>'
+    + '<td class="n">' + (b.bsr==null ? (i >= BSR_RELEVES ? horsTop : nm) : fmt(b.bsr)) + '</td></tr>').join('');
+  return '<p class="dl">📚 Top livres concurrents (organiques)</p>'
+    + '<p class="ctab-sens">🏆 BSR : plus il est <strong>bas</strong>, mieux le livre se vend. '
+    + 'Sous 10 000, la preuve de vente est solide.</p>'
+    + '<table class="ctab"><thead><tr><th></th><th>Titre</th><th>💰 Prix</th><th>⭐ Note</th>'
+    + '<th>💬 Avis</th><th>🏆 BSR</th></tr></thead><tbody>' + lignes + '</tbody></table>';
 }
 
 // L'ANGLE EN PREMIER, et en grand. Verdict de Baptiste devant l'ecran le 2026-10-02 :
@@ -1942,8 +2032,9 @@ async function loadKdp(niche, slot, btn){
     slot.querySelectorAll('.btn-copy').forEach(b=>{
       b.addEventListener('click', ev=>{
         ev.stopPropagation();
+        const libelle = b.textContent;
         navigator.clipboard.writeText(b.dataset.kw).then(()=>{
-          b.textContent='Copié'; setTimeout(()=>{b.textContent='Copier';}, 1400);
+          b.textContent='✓ Copié'; setTimeout(()=>{b.textContent=libelle;}, 1400);
         });
       });
     });
@@ -1957,17 +2048,21 @@ async function loadKdp(niche, slot, btn){
 
 function kdpBlock(k){
   const confirmes = new Set(k.confirmes_par_amazon || []);
-  const lignes = (k.emplacements || []).map((kw, i) => {
+  const emplacements = k.emplacements || [];
+  const lignes = emplacements.map((kw, i) => {
     // « Confirmé par Amazon » = l'amorce de l'expression est réellement complétée par la
     // barre de recherche. « À vérifier » n'est PAS un rejet : un emplacement KDP laissé
     // vide est une perte sèche, donc on remplit les sept.
     const ok = confirmes.has(kw);
-    const tag = ok ? '<span class="kdptag ok">confirmé par Amazon</span>'
-                   : '<span class="kdptag tv">à vérifier</span>';
+    const tag = ok ? '<span class="kdptag ok">✅ confirmé par Amazon</span>'
+                   : '<span class="kdptag tv">🟠 à vérifier</span>';
+    // La longueur consommée sur la limite DURE de 50 caractères : une jauge, pas un chiffre
+    // seul -- on voit d'un coup d'oeil l'emplacement qu'on peut encore remplir.
+    const part = Math.min(100, Math.round(kw.length / 50 * 100));
     return `<div class="kdprow">
-        <span class="kdpnum">${i+1}.</span>
+        <span class="kdpnum">${i+1}</span>
         <span class="kdpkw">${esc(kw)}</span>
-        <span class="kdplen">${kw.length}/50</span>
+        <span class="kdplen" title="${kw.length} caractères sur 50"><i style="width:${part}%"></i><b>${kw.length}/50</b></span>
         ${tag}
         <button type="button" class="btn-copy" data-kw="${esc(kw)}">Copier</button>
       </div>`;
@@ -1975,26 +2070,31 @@ function kdpBlock(k){
 
   // Une panne de la sonde doit se lire comme une panne. Sans ce message, « 0 confirmé »
   // se lirait « aucun de tes mots-clés n'est cherché » — contresens total, l'auteur
-  // jetterait de bons mots-clés.
+  // jetterait de bons mots-clés. Toujours VISIBLE.
   const panne = k.sonde_indisponible
-    ? `<p class="kdpnote">L'autocomplete Amazon n'a pas répondu : ces expressions
+    ? `<p class="kdpnote">⚠️ L'autocomplete Amazon n'a pas répondu : ces expressions
         n'ont pas pu être vérifiées. Elles restent utilisables, mais leur confirmation
         est inconnue — ce n'est pas un « aucun ne marche ».</p>` : '';
 
   const av = (k.a_verifier || []).length
-    ? `<details class="kdpfold"><summary>${k.a_verifier.length} expression(s) en réserve
+    ? `<details class="kdpfold"><summary>🔍 ${k.a_verifier.length} expression(s) en réserve
         — à vérifier à la main sur Amazon</summary><ul>${
         k.a_verifier.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></details>` : '';
 
   // §10 : un mot-clé écarté en silence est une décision invisible.
   const rj = (k.rejetes || []).length
-    ? `<details class="kdpfold"><summary>${k.rejetes.length} expression(s) écartée(s)
+    ? `<details class="kdpfold"><summary>🚫 ${k.rejetes.length} expression(s) écartée(s)
         — et le motif de chacune</summary><ul>${
         k.rejetes.map(x=>`<li><strong>${esc(x.mot)}</strong> — ${esc(x.motif)}</li>`).join('')
       }</ul></details>` : '';
 
+  // « Tout copier » : une expression par ligne, dans l'ordre des sept emplacements.
+  const tout = emplacements.length > 1
+    ? `<button type="button" class="btn-copy btn-copy-tout" data-kw="${esc(emplacements.join('\n'))}">📋 Tout copier</button>` : '';
+
   return `<div class="kdpbox">
-      <p class="dl">Les 7 emplacements backend KDP — à coller un par un</p>
+      <div class="kdp-tete"><p class="dl">🏷️ Les 7 emplacements backend KDP</p>${tout}</div>
+      <p class="kdp-sous">À coller un par un dans les 7 champs du formulaire KDP.</p>
       ${lignes}${panne}${av}${rj}
     </div>`;
 }
@@ -2078,10 +2178,10 @@ function blocSuggestions(r){
 
 function blocPrix(r){
   if(!r.n_prix_connus)
-    return `<p class="prixbox">Prix du rayon : <strong>inconnu</strong> — Amazon n'a
+    return `<p class="prixbox">💰 Prix du rayon : <strong>inconnu</strong> — Amazon n'a
       renvoyé aucun prix pour cette niche. Ce n'est pas un rayon gratuit, c'est une donnée
       absente.</p>`;
-  return `<p class="prixbox">Prix du rayon : de <strong>${fmtEur(r.prix_min)}</strong>
+  return `<p class="prixbox">💰 Prix du rayon : de <strong>${fmtEur(r.prix_min)}</strong>
     à <strong>${fmtEur(r.prix_max)}</strong>, médiane <strong>${fmtEur(r.prix_median)}</strong>
     <span class="mut">(sur ${r.n_prix_connus} livre(s) affichant un prix)</span></p>`;
 }
@@ -2369,11 +2469,11 @@ function ouvrirFiche(r){
       + blocConcurrents(r) + '</details>'
     + '<details class="avance pli"><summary>🔍 Le rayon en détail — prix, requêtes, mesures</summary>'
       + blocPrix(r)
-      + `<p class="dl">Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>`
-      + '<p class="dl">Mesures brutes</p><div class="chips">'
-      + `<span class="chip">BSR moyen du top : ${fmt(r.bsr_top5_avg)}</span>`
-      + `<span class="chip">Livres sponsorisés écartés : ${fmt(r.n_sponsored)}</span>`
-      + (r.criteres_bsr_ok ? '<span class="chip">Critères BSR §4.1 réunis</span>' : '')
+      + `<p class="dl">🔎 Requêtes satellites (tapées sur Amazon)</p><div class="chips">${kws}</div>`
+      + '<p class="dl">📏 Mesures brutes</p><div class="chips">'
+      + `<span class="chip">🏆 BSR moyen du top : ${fmt(r.bsr_top5_avg)}</span>`
+      + `<span class="chip">📢 Livres sponsorisés écartés : ${fmt(r.n_sponsored)}</span>`
+      + (r.criteres_bsr_ok ? '<span class="chip">✅ Critères de vente réunis</span>' : '')
       + '</div></details>';
   fiche.hidden = false;
   results.classList.remove('on');
@@ -2876,22 +2976,27 @@ const ICON_WARN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 // IRREVERSIBLE du produit, et l'ecran doit nommer ce qui part comme ce qui reste. Consentir
 // a l'aveugle n'est pas consentir.
 function menuCompteHtml(){
-  return '<form id="form-mdp" autocomplete="off">'
-    + '<h4>Changer de mot de passe</h4>'
-    + '<p>Les autres appareils connectés seront déconnectés ; celui-ci reste ouvert.</p>'
+  return '<form id="form-mdp" class="cpt-bloc" autocomplete="off">'
+    + '<h4>🔐 Changer de mot de passe</h4>'
+    + '<p class="cpt-aide">Les autres appareils connectés seront déconnectés ; celui-ci reste ouvert.</p>'
+    + '<div class="cpt-champs">'
     + '<input type="password" id="mdp-ancien" placeholder="Mot de passe actuel" required>'
     + '<input type="password" id="mdp-nouveau" placeholder="Nouveau (12 caractères minimum)" required>'
-    + '<button type="submit" class="btn-act">Changer</button>'
-    + '<p class="compte-msg" id="mdp-msg"></p></form>'
+    + '<button type="submit" class="btn-act">Changer</button></div>'
+    + '<p class="compte-msg" id="mdp-msg" role="status"></p></form>'
+    // La clôture est la SEULE action irréversible du produit : repliée pour qu'on ne tombe pas
+    // dessus, et ce qui part (comme ce qui reste) se lit AVANT le bouton, une fois ouverte.
+    + '<details class="cpt-danger"><summary>⚠️ Zone sensible : clôturer mon compte</summary>'
     + '<form id="form-cloture" autocomplete="off">'
     + '<h4 class="danger">Clôturer mon compte</h4>'
     + '<p><strong>Irréversible.</strong> Sont effacés : votre compte, vos analyses passées et '
     + 'leurs résultats, votre consommation et votre historique de niches. Reste en place : le '
     + 'cache des rayons Amazon, partagé entre tous les comptes, qui ne contient aucune donnée '
     + 'personnelle.</p>'
+    + '<div class="cpt-champs">'
     + '<input type="password" id="cloture-mdp" placeholder="Votre mot de passe" required>'
-    + '<button type="submit" class="btn-act danger">Clôturer définitivement</button>'
-    + '<p class="compte-msg" id="cloture-msg"></p></form>';
+    + '<button type="submit" class="btn-act danger">Clôturer définitivement</button></div>'
+    + '<p class="compte-msg" id="cloture-msg" role="status"></p></form></details>';
 }
 
 // ================= Mes analyses (historique) =================

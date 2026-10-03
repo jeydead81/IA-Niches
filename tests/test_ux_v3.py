@@ -314,3 +314,99 @@ def test_un_angle_sans_champ_facultatif_ne_laisse_ni_trou_ni_undefined():
     html = appeler("verdictBlock", {"niche": "n", "verdict": v}, dependances=_VB)
     assert "undefined" not in html and "null" not in html
     assert "va-risque" not in html and "va-pastilles" not in html
+
+
+# ── Mots-clés KDP et concurrents du top ────────────────────────────────────────
+
+def _kdp(**kw):
+    base = {"emplacements": ["insomnie chronique", "dormir sans somnifère", "troubles du sommeil"],
+            "confirmes_par_amazon": ["insomnie chronique"], "a_verifier": [], "rejetes": [],
+            "sonde_indisponible": False}
+    base.update(kw)
+    return base
+
+
+def test_chaque_emplacement_porte_sa_longueur_et_son_statut_et_tout_se_copie_d_un_clic():
+    html = appeler("kdpBlock", _kdp(), dependances=("esc",))
+    assert "18/50" in html and "confirmé par Amazon" in html and "à vérifier" in html
+    assert html.count('class="btn-copy"') == 3
+    assert "btn-copy-tout" in html and "Tout copier" in html
+
+
+def test_un_seul_emplacement_n_offre_pas_de_Tout_copier():
+    html = appeler("kdpBlock", _kdp(emplacements=["insomnie chronique"]), dependances=("esc",))
+    assert "btn-copy-tout" not in html
+
+
+def test_une_sonde_en_panne_est_une_alerte_VISIBLE_pas_un_zero_confirme():
+    """« 0 confirmé » se lirait « aucun de vos mots-clés n'est cherché » : contresens."""
+    html = appeler("kdpBlock", _kdp(confirmes_par_amazon=[], sonde_indisponible=True),
+                   dependances=("esc",))
+    visible = html[:html.index("<details") if "<details" in html else len(html)]
+    assert "n'a pas répondu" in visible and "n'ont pas pu être vérifiées" in visible
+
+
+def test_les_expressions_ecartees_gardent_leur_motif():
+    html = appeler("kdpBlock", _kdp(rejetes=[{"mot": "meilleur livre", "motif": "terme interdit"}]),
+                   dependances=("esc",))
+    assert "meilleur livre" in html and "terme interdit" in html
+
+
+def test_les_concurrents_sont_classes_et_le_sens_du_BSR_est_dit():
+    livres = [{"asin": "A", "title": "Premier", "price": 9.99, "rating": 4.4, "reviews_count": 37,
+               "bsr": 964, "url": "u1"},
+              {"asin": "B", "title": "Second", "bsr": 142622, "url": "u2"},
+              {"asin": "C", "title": "Troisième", "bsr": None, "url": "u3"}]
+    html = appeler("blocConcurrents", {"top_books": livres}, dependances=("esc", "fmt", "fmtEur"))
+    assert "plus il est <strong>bas</strong>" in html
+    assert html.count('<td class="rang">') == 3
+    assert html.count('class="fort"') == 1, "seul le BSR sous 10 000 est signalé fort"
+    assert ">0<" not in html
+
+
+# ── Mon compte ────────────────────────────────────────────────────────────────
+
+def test_la_cloture_est_repliee_mais_l_avertissement_precede_le_bouton():
+    """Clôturer est la seule action irréversible du produit : on n'y tombe pas par hasard
+    (volet fermé), et ce qui part se lit AVANT le bouton, une fois le volet ouvert."""
+    html = appeler("menuCompteHtml", dependances=())
+    assert '<details class="cpt-danger">' in html, "volet fermé par défaut (aucun attribut open)"
+    assert html.index("Irréversible") < html.index("Clôturer définitivement")
+    assert 'id="form-mdp"' in html and 'id="form-cloture"' in html
+    assert html.index('id="form-mdp"') < html.index('id="form-cloture"'), \
+        "le changement de mot de passe, courant, passe avant la clôture"
+
+
+# ── BSR « hors top 3 » : une mesure jamais demandée n'est pas une mesure ratée ──────────
+
+def _livres(n):
+    return [{"asin": f"A{i}", "title": f"Livre {i}", "bsr": None, "url": f"u{i}"} for i in range(n)]
+
+
+def test_au_dela_du_top_releve_le_BSR_vide_se_dit_HORS_TOP_et_non_non_mesure():
+    """scout_master ne résout le BSR que des 3 premiers organiques de chaque niche : pour les
+    livres 4 à 8, « non mesuré » ferait croire à une panne alors que rien n'a été demandé."""
+    html = appeler("blocConcurrents", {"top_books": _livres(5)}, dependances=("esc", "fmt", "fmtEur"))
+    assert html.count("non mesure") == 3, "les trois premiers : lecture tentée, absente"
+    assert html.count("hors top 3") == 2
+    assert ">0<" not in html
+
+
+def test_un_BSR_lu_au_dela_du_top_s_affiche_normalement():
+    livres = _livres(5)
+    livres[4]["bsr"] = 5230
+    html = appeler("blocConcurrents", {"top_books": livres}, dependances=("esc", "fmt", "fmtEur"))
+    assert "5" in html and html.count("hors top 3") == 1
+
+
+def test_le_nombre_de_BSR_releves_affiche_est_celui_du_moteur():
+    """Deux sources pour la même valeur dériveraient en silence (§5.32) : la constante de
+    l'interface est tenue égale au défaut de `run_scout`."""
+    import inspect
+    import re
+    from pathlib import Path
+
+    from scout_master import run_scout
+    defaut = inspect.signature(run_scout).parameters["n_bsr_per_niche"].default
+    src = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
+    assert re.search(r"const BSR_RELEVES = (\d+);", src).group(1) == str(defaut)

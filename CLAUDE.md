@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-03** (1 406 tests sur 114 fichiers, 49 modules, 34
+> Comptages revérifiés le **2026-10-03** (1 415 tests sur 114 fichiers, 49 modules, 34
 > variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -577,7 +577,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1406 tests** sur **114 fichiers** `tests/test_*.py`, **1406 passés, 0 ignoré, 0 échec,
+**1415 tests** sur **114 fichiers** `tests/test_*.py`, **1415 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1463,7 +1463,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1406 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1415 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
