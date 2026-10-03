@@ -1204,6 +1204,57 @@
   @media (prefers-reduced-motion:reduce){.hero-emo,.progress-emo,.mode-ico{animation:none!important;transform:none!important}}
 
   .lc-flags li.lc-info{background:var(--muted);color:var(--ink-soft)}
+
+  /* ── Page d'analyse éditoriale : l'angle, ses chiffres, ses risques ── */
+  .va-tete{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;flex-wrap:wrap;margin:0 0 12px}
+  .va-tete .vangle-src{margin:0}
+  .va-verdict{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;font-weight:700;border-radius:999px;
+    padding:5px 14px;white-space:nowrap}
+  .va-verdict.va-g{background:var(--green-bg);color:var(--go-ink)}
+  .va-verdict.va-a{background:var(--amber-bg);color:var(--maybe-ink)}
+  .va-verdict.va-r{background:var(--red-bg);color:var(--low-ink)}
+  .va-pastilles{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 2px}
+  .va-pastille{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);
+    border-radius:12px;padding:7px 13px;font-size:13.5px;box-shadow:var(--shadow)}
+  .va-pastille b{font-weight:800;font-variant-numeric:tabular-nums;color:var(--heading)}
+  .va-lignes{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .va-lignes li{display:grid;grid-template-columns:22px 108px minmax(0,1fr);gap:0 8px;align-items:baseline;font-size:13.5px}
+  .va-ico{font-size:16px;text-align:center}
+  .va-k{font-weight:600;color:var(--heading)}
+  .va-v{color:var(--ink-soft);line-height:1.45}
+  .va-norme{margin:14px 0 0;padding:11px 14px;border-radius:12px;background:#EEF2FF;color:#312E81;font-size:13.5px;line-height:1.45}
+  .va-norme.va-norme-vide{background:var(--red-bg);color:var(--low-ink)}
+  .va-risque{margin:12px 0 0;padding:9px 13px;border-radius:12px;background:var(--amber-bg);color:#78350F;font-size:13.5px;line-height:1.45}
+  .va-reqs-t{margin:16px 0 4px;font-size:12.5px;font-weight:600;color:var(--text-muted)}
+  .vangle-bloc .chips{margin:0 0 4px}
+  .va-pli{margin-top:10px}
+  .va-pli > summary{list-style:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);padding:7px 0}
+  .va-pli > summary::-webkit-details-marker{display:none}
+  .va-pli > summary::after{content:" ›";transition:transform .2s}
+  .va-pli[open] > summary{color:var(--brand-ink)}
+  .va-pli > p{margin:0 0 6px;font-size:13.5px;line-height:1.5;color:var(--ink-soft)}
+  .vangle-bloc .va-pli{border-top:1px dashed var(--border);margin-top:14px}
+  .vraison .va-pli{border-top:1px dashed var(--line-control)}
+  .vraison .va-lignes{margin:4px 0 8px}
+  .va-autre{display:flex;flex-direction:column;gap:2px;padding:9px 0;border-bottom:1px dashed var(--line-control);font-size:13.5px}
+  .va-autre:last-child{border-bottom:none}
+  .va-autre strong{color:var(--heading)} .va-autre span{color:var(--ink-soft)}
+  .va-autre em{font-style:normal;font-size:12.5px;color:var(--text-muted)}
+  .va-jauge{display:inline-flex;gap:3px;vertical-align:middle;margin-left:10px}
+  .va-jauge i{width:14px;height:6px;border-radius:3px;background:var(--line-control)}
+  .va-jauge i.on{background:var(--secondary)}
+  .vraison .vhead{display:flex;align-items:center;margin:0 0 8px}
+  .vconf{font-family:var(--sans);font-weight:600;color:var(--heading)}
+  .vactions .btn-act{padding:11px 18px;font-size:14px;margin:0}
+  .vactions .btn-pdf{box-shadow:0 6px 16px rgba(31,91,69,.22)}
+  .lc-carte .vangle{font-size:21px}
+  .lc-carte .vangle-bloc{padding:16px 16px 14px}
+  .lc-carte .vactions{padding:12px 16px}
+  .lc-carte .vraison{padding:12px 16px}
+  .lc-carte .va-lignes li{grid-template-columns:22px minmax(0,1fr)}
+  .lc-carte .va-lignes li .va-k{grid-column:2}
+  .lc-carte .va-lignes li .va-v{grid-column:2}
+  @media (max-width:640px){.va-lignes li{grid-template-columns:22px minmax(0,1fr)}.va-lignes li .va-v{grid-column:2}}
 </style>
 </head>
 <body>
@@ -1740,34 +1791,87 @@ function verdictBlock(r){
   const v=r.verdict;
   if(!v) return '';
   const g=verdictGrade(v.verdict);
-  const a=(v.angles||[])[0];
+  const emo={g:'🟢', a:'🟡', r:'🔴'}[g] || '🟡';
+  const angles=v.angles||[];
+  const a=angles[0];
+  // Low-content : `niche` est un objet (format, requete…) ; en non-fiction c'est une chaine.
+  // C'est ce qui distingue les deux, et ce qui decide d'offrir les mots-cles KDP : leur
+  // endpoint ne valide que la forme non-fiction, un bouton low-content rendrait une 400.
+  const lc=!!(r.niche && typeof r.niche==='object');
+  const conf=Math.max(0, Math.min(10, Math.round(Number(v.confiance)||0)));
+  const jauge='<span class="va-jauge" role="img" aria-label="confiance '+conf+' sur 10">'
+    +Array.from({length:10},(_,i)=>'<i'+(i<conf?' class="on"':'')+'></i>').join('')+'</span>';
+  const ligne=(ico,lib,txt)=> txt
+    ? '<li><span class="va-ico" aria-hidden="true">'+ico+'</span><span class="va-k">'+lib
+      +'</span><span class="va-v">'+esc(txt)+'</span></li>' : '';
+
   let angleHtml='';
   if(a){
     const reqs=[a.requete_principale,...(a.requetes_secondaires||[])].filter(Boolean)
       .map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
+    // Les chiffres que l'auteur compare d'un coup d'oeil : le prix a viser, ce que ca rapporte.
+    const pastilles=[
+      a.prix_suggere ? '<span class="va-pastille">💰 <b>'+esc(a.prix_suggere)+'</b></span>' : '',
+      a.redevance_estimee ? '<span class="va-pastille">💶 <b>'+esc(a.redevance_estimee)+'</b></span>' : '',
+    ].join('');
+    // En low-content l'INTERIEUR est le produit : sa specification se lit sans deplier.
+    const lignes=ligne('📐','Intérieur',a.spec_interieur)+ligne('🎨','Couverture',a.direction_couverture);
+    // Format norme : le contenu est impose par un texte externe, un registre incomplet
+    // expose l'acheteur (un employeur). Le serveur degrade un « Go » sans source citee ; ce
+    // bloc dit POURQUOI, et jamais replie (une mise en garde repliee ne previent personne).
+    const norme=(r.risques||[]).indexOf('norme_a_verifier')>=0;
+    const source=(a.source_reglementaire||'').trim();
+    const blocNorme = source
+      ? '<p class="va-norme">📜 <strong>Source réglementaire :</strong> '+esc(source)+'</p>'
+      : (norme ? '<p class="va-norme va-norme-vide">⚠️ <strong>Format normé sans source citée.</strong> '
+          +'Ne publiez pas avant d’avoir vérifié le texte de référence : un contenu incomplet '
+          +'expose l’acheteur.</p>' : '');
     angleHtml=`
       <div class="vangle-bloc">
-        <p class="vangle-src">✨ Angle proposé par l’IA — titre à écrire, pas un livre existant</p>
+        <div class="va-tete">
+          <p class="vangle-src">✨ Angle proposé par l’IA — titre à écrire, pas un livre existant</p>
+          <span class="va-verdict va-${g}">${emo} ${esc(v.verdict)}</span>
+        </div>
         <p class="vangle"><strong>${esc(a.titre)}</strong></p>
         <p class="vangle-sous">${esc(a.sous_titre)}</p>
-        <p class="vrow"><strong>Pourquoi cet angle :</strong> ${esc(a.pourquoi)}</p>
-        <p class="vrow"><strong>Requêtes visées</strong></p>
+        ${pastilles ? '<div class="va-pastilles">'+pastilles+'</div>' : ''}
+        ${lignes ? '<ul class="va-lignes">'+lignes+'</ul>' : ''}
+        ${blocNorme}
+        ${a.risque ? '<p class="va-risque">⚠️ <strong>Risque :</strong> '+esc(a.risque)+'</p>' : ''}
+        <p class="va-reqs-t">🔎 Requêtes à viser</p>
         <div class="chips">${reqs}</div>
+        <details class="va-pli"><summary>💬 Pourquoi cet angle</summary><p>${esc(a.pourquoi)}</p></details>
       </div>`;
   }
+
+  // Analyse strategique du verdict (saturation, faux concurrent, differenciation) : le
+  // raisonnement du modele, utile a relire, jamais ce qu'on vient chercher -- replie.
+  const strat=ligne('🧱','Saturation',v.saturation)+ligne('🎭','Faux concurrent',v.faux_concurrent)
+    +ligne('🧬','Différenciation',v.differenciation);
+  const stratHtml = strat
+    ? '<details class="va-pli"><summary>🧠 Analyse stratégique</summary><ul class="va-lignes">'+strat+'</ul></details>' : '';
+  const autres=angles.slice(1);
+  const autresHtml = autres.length
+    ? '<details class="va-pli"><summary>🧩 '+autres.length+' autre'+(autres.length>1?'s':'')+' angle'
+      +(autres.length>1?'s':'')+'</summary>'
+      +autres.map(x=>'<div class="va-autre"><strong>'+esc(x.titre)+'</strong><span>'+esc(x.sous_titre)+'</span>'
+        +(x.prix_suggere?'<em>💰 '+esc(x.prix_suggere)+'</em>':'')
+        +(x.risque?'<em>⚠️ '+esc(x.risque)+'</em>':'')+'</div>').join('')
+      +'</details>' : '';
+
   return `<div class="vbox">
       ${angleHtml}
       <div class="vactions">
-        <button type="button" class="btn-act btn-pdf">Télécharger le Dossier (PDF)</button>
-        <button type="button" class="btn-act btn-kdp">Mots-clés KDP</button>
+        <button type="button" class="btn-act btn-pdf">📄 Télécharger le Dossier (PDF)</button>
+        ${lc ? '' : '<button type="button" class="btn-act btn-kdp">🏷️ Mots-clés KDP</button>'}
       </div>
       <div class="kdpslot"></div>
       <div class="vraison">
         <div class="vhead">
-          <span class="vbadge ${g}">${esc(v.verdict)}</span>
-          <span class="vconf">confiance ${esc(v.confiance)}/10</span>
+          <span class="vconf">Confiance ${conf}/10</span>${jauge}
         </div>
-        <p class="vfacteur"><strong>Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
+        <p class="vfacteur"><strong>🧭 Facteur décisif :</strong> ${esc(v.facteur_decisif)}</p>
+        ${stratHtml}${autresHtml}
       </div>
     </div>`;
 }
@@ -1796,6 +1900,8 @@ async function loadVerdict(r, det, btn){
     const slot = det.querySelector('.verdictslot');
     slot.innerHTML = verdictSlot(r);
     brancherActions(r, det);          // le bloc vient d'etre remplace : re-brancher
+    const vb = slot.querySelector('.vbox');   // l'analyse arrive sous le bouton : on y amene l'ecran
+    if(vb && vb.scrollIntoView) vb.scrollIntoView({behavior:'smooth', block:'nearest'});
   }catch(e){
     btn.disabled = false;
     btn.removeAttribute('aria-busy');
@@ -1841,7 +1947,7 @@ async function loadKdp(niche, slot, btn){
         });
       });
     });
-    btn.textContent = 'Mots-clés KDP';
+    btn.textContent = '🏷️ Mots-clés KDP';
   }catch(e){
     slot.innerHTML = `<p class="kdpnote">Les mots-clés n'ont pas pu être générés (${esc(String(e.message||e))}).</p>`;
     btn.textContent = 'Réessayer';

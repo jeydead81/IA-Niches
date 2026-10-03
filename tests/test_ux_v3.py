@@ -229,3 +229,88 @@ def test_les_pastilles_de_couleur_ont_un_equivalent_texte():
     html = appeler("carteNicheTete", _niche(),
                    dependances=("esc", "fmt", "fmtEur", "fmtDec", "grade", "verdict", "nonMesuree"))
     assert 'aria-label="favorable"' in html and 'aria-label="défavorable"' in html
+
+
+# ── Page d'analyse éditoriale : ce que le modèle produit et que l'écran taisait ───────────
+#
+# `AngleAttaque` porte le prix conseillé, la direction de couverture, le RISQUE, et en
+# low-content la spec d'intérieur, la redevance et la source réglementaire. L'écran n'en
+# montrait que le titre, le sous-titre, le pourquoi et les requêtes : le reste n'existait
+# que dans le PDF. Ce qui justifie l'analyse (le prix, l'intérieur) doit se lire à l'écran.
+
+def _verdict(**angle):
+    a = {"angle": "a", "titre": "Dormir enfin : le protocole en 21 jours", "sous_titre": "pas à pas",
+         "pourquoi": "parce que le rayon généraliste est saturé", "risque": "Allégations santé",
+         "direction_couverture": "Bleu nuit", "prix_suggere": "14,90 – 19,90 €",
+         "requete_principale": "insomnie chronique", "requetes_secondaires": ["dormir sans somnifère"]}
+    a.update(angle)
+    return {"verdict": "Go prudent", "confiance": 7, "facteur_decisif": "raisonnement long",
+            "saturation": "Rayon dense", "faux_concurrent": "aucun", "differenciation": "Angle",
+            "angles": [a, {"angle": "b", "titre": "Autre angle", "sous_titre": "s", "pourquoi": "p",
+                           "risque": "r"}]}
+
+
+_VB = ("esc", "verdictGrade")
+
+
+def test_le_prix_conseille_et_le_risque_sont_VISIBLES_sans_deplier():
+    html = appeler("verdictBlock", {"niche": "n", "verdict": _verdict()}, dependances=_VB)
+    visible = html[:html.index('<details class="va-pli"')]
+    assert "14,90 – 19,90 €" in visible and "Allégations santé" in visible
+
+
+def test_le_pourquoi_et_l_analyse_strategique_sont_repliables_mais_PRESENTS():
+    html = appeler("verdictBlock", {"niche": "n", "verdict": _verdict()}, dependances=_VB)
+    assert html.count('<details class="va-pli"') == 3     # pourquoi, stratégie, autres angles
+    for texte in ("parce que le rayon généraliste est saturé", "Rayon dense", "Autre angle"):
+        assert texte in html, f"contenu disparu : {texte}"
+
+
+def test_les_mots_cles_ne_sont_offerts_qu_en_non_fiction():
+    """`/api/kdp-keywords` ne valide que la forme non-fiction : en low-content le bouton
+    rendait une 400, donc un bouton mort (§5.26)."""
+    nf = appeler("verdictBlock", {"niche": "n", "verdict": _verdict()}, dependances=_VB)
+    lc = appeler("verdictBlock", {"niche": {"niche": "registre"}, "verdict": _verdict()},
+                 dependances=_VB)
+    assert "btn-kdp" in nf and "btn-pdf" in nf
+    assert "btn-kdp" not in lc and "btn-pdf" in lc
+
+
+def test_un_format_norme_SANS_source_le_dit_en_toutes_lettres():
+    """Le serveur dégrade un « Go » sans source citée (lowcontent_verdict) ; l'écran doit dire
+    pourquoi, et ne jamais le replier : un registre incomplet expose l'acheteur."""
+    lc = {"niche": {"niche": "registre"}, "risques": ["norme_a_verifier"],
+          "verdict": _verdict(spec_interieur="21 x 29,7 cm")}
+    html = appeler("verdictBlock", lc, dependances=_VB)
+    assert "Format normé sans source citée" in html
+    visible = html[:html.index('<details class="va-pli"')]
+    assert "Format normé sans source citée" in visible
+
+
+def test_une_source_reglementaire_citee_est_affichee():
+    lc = {"niche": {"niche": "registre"}, "risques": ["norme_a_verifier"],
+          "verdict": _verdict(source_reglementaire="Code du travail, art. L1221-13")}
+    html = appeler("verdictBlock", lc, dependances=_VB)
+    assert "Code du travail, art. L1221-13" in html and "sans source citée" not in html
+
+
+def test_la_specification_d_interieur_low_content_est_lisible_d_emblee():
+    lc = {"niche": {"niche": "carnet"}, "risques": [],
+          "verdict": _verdict(spec_interieur="21 x 29,7 cm, 200 pages", redevance_estimee="≈ 2,80 € par vente")}
+    html = appeler("verdictBlock", lc, dependances=_VB)
+    visible = html[:html.index('<details class="va-pli"')]
+    assert "21 x 29,7 cm, 200 pages" in visible and "2,80 €" in visible
+
+
+def test_la_jauge_de_confiance_porte_le_bon_nombre_de_segments():
+    html = appeler("verdictBlock", {"niche": "n", "verdict": _verdict()}, dependances=_VB)
+    assert html.count('<i class="on"></i>') == 7 and "Confiance 7/10" in html
+
+
+def test_un_angle_sans_champ_facultatif_ne_laisse_ni_trou_ni_undefined():
+    v = {"verdict": "Go", "confiance": 8, "facteur_decisif": "f",
+         "angles": [{"titre": "T", "sous_titre": "S", "pourquoi": "P",
+                     "requete_principale": "q", "requetes_secondaires": []}]}
+    html = appeler("verdictBlock", {"niche": "n", "verdict": v}, dependances=_VB)
+    assert "undefined" not in html and "null" not in html
+    assert "va-risque" not in html and "va-pastilles" not in html
