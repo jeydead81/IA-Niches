@@ -478,3 +478,49 @@ def test_le_nombre_de_tropes_imposables_est_celui_d_un_trio():
     ideateur = (racine / "01-scripts" / "fiction_ideator.py").read_text(encoding="utf-8")
     assert re.search(r"const MAX_TROPES_IMPOSES = 3;", ui)
     assert "tr[:3]" in ideateur and "1 à 3 tropes" in ideateur
+
+
+# ── Écran de connexion : une marque, un formulaire, rien d'autre ──────────────────────────
+#
+# Signalé par Baptiste (capture du 2026-10-03) : « trop de texte, ça ressemble à rien ». Et un
+# défaut derrière : la case « reprendre mes analyses » portait l'attribut `hidden`, mais
+# `.auth-reprise{display:flex}` le battait — elle s'affichait aussi en CONNEXION, alors que la
+# reprise ne se propose qu'à l'inscription (CLAUDE.md §2.1).
+
+def _html():
+    from pathlib import Path
+    return (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
+
+
+def test_l_attribut_hidden_n_est_plus_battu_par_un_display_d_auteur():
+    assert "[hidden]{display:none!important}" in _html()
+
+
+def test_la_connexion_ne_porte_plus_de_phrase_de_presentation():
+    html = _html()
+    assert 'id="auth-sous"' not in html
+    assert "rattachés à votre compte" not in html
+
+
+def test_les_champs_gardent_un_label_accessible_meme_sans_label_visible():
+    """Icônes + placeholders : les <label for> restent (masqués visuellement) pour les
+    lecteurs d'écran."""
+    html = _html()
+    for champ, libelle in (("auth-email", "Adresse e-mail"), ("auth-mdp", "Mot de passe")):
+        assert f'<label for="{champ}" class="vh">{libelle}</label>' in html
+
+
+def test_le_mot_de_passe_peut_etre_affiche_et_la_regle_des_12_caracteres_est_dite():
+    from auth import LONGUEUR_MIN_MOT_DE_PASSE
+    html = _html()
+    assert 'id="auth-voir"' in html and 'aria-pressed="false"' in html
+    assert f"{LONGUEUR_MIN_MOT_DE_PASSE} caractères minimum" in html
+
+
+def test_la_reprise_garde_son_avertissement_de_consentement():
+    """Le texte est raccourci, jamais l'avertissement : on ne coche cela que sur sa propre
+    installation (le premier inscrit venu raflait sinon l'historique)."""
+    html = _html()
+    bloc = html[html.index('id="auth-reprise-bloc"'):html.index('id="auth-btn"')]
+    assert "propre installation" in bloc and 'type="checkbox"' in bloc and "hidden" in html[
+        html.index('id="auth-reprise-bloc"') - 40:html.index('id="auth-reprise-bloc"') + 40]

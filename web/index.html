@@ -1389,6 +1389,45 @@
     .hist-ligne .sujet{white-space:normal}
     .hist-ligne .btn-act{justify-self:end}
   }
+
+  /* ── Connexion : une marque, un formulaire, rien d'autre ── */
+  [hidden]{display:none!important}   /* un display d'auteur ne doit jamais battre l'attribut hidden */
+  .auth-ecran{background:
+      radial-gradient(700px 380px at 15% 0%,rgba(46,125,91,.16),transparent 70%),
+      radial-gradient(600px 340px at 90% 100%,rgba(232,147,95,.14),transparent 70%),var(--bg)}
+  .auth-zone{width:100%;max-width:400px;display:flex;flex-direction:column;align-items:center;gap:22px}
+  .auth-marque{text-align:center}
+  .auth-logo{width:60px;height:60px;border-radius:18px;margin:0 auto 12px;display:grid;place-items:center;color:#F4F1E8;
+    background:linear-gradient(140deg,#2E8B66 0%,#1F5B45 100%);box-shadow:0 12px 26px rgba(31,91,69,.32)}
+  .auth-logo svg{width:30px;height:30px}
+  .auth-marque h1{margin:0;font-family:var(--serif);font-weight:500;font-size:34px;letter-spacing:-.02em;color:var(--heading)}
+  .auth-marque p{margin:4px 0 0;font-size:16px;color:var(--text-muted)}
+  .auth-carte{max-width:none;padding:26px 26px 22px;border-radius:24px;box-shadow:var(--shadow-2)}
+  .auth-carte h2{font-family:var(--serif);font-weight:500;font-size:24px;margin:0 0 18px;text-align:center}
+  .auth-champ{position:relative;margin:0 0 12px}
+  .auth-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:17px;pointer-events:none}
+  .auth-carte .auth-champ input{padding:0 46px 0 44px;height:50px;margin:0;font-size:15.5px}
+  .auth-voir{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:38px;height:38px;border:none;border-radius:10px;
+    background:none;cursor:pointer;font-size:17px;opacity:.7;transition:opacity .15s,background .15s}
+  .auth-voir:hover{opacity:1;background:var(--muted)}
+  .auth-aide{margin:-4px 0 12px 4px;font-size:12.5px;color:var(--text-muted)}
+  .auth-carte .auth-reprise{display:flex;align-items:flex-start;gap:12px;margin:4px 0 14px;padding:12px 14px;border-radius:14px;
+    background:var(--brand-soft);cursor:pointer;font-size:14px;font-weight:400;color:var(--heading)}
+  .auth-carte .auth-reprise input{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--primary)}
+  .auth-reprise span{display:flex;flex-direction:column;gap:2px}
+  .auth-reprise strong{font-weight:600}
+  .auth-reprise small{font-size:12.5px;color:var(--text-muted)}
+  .auth-btn{margin-top:6px;display:flex;align-items:center;justify-content:center;gap:8px}
+  .auth-btn::after{content:"→";transition:transform .2s var(--ease)}
+  .auth-btn:hover:not(:disabled)::after{transform:translateX(4px)}
+  .auth-err,.auth-ok{border-radius:12px;font-size:13.5px}
+  .auth-err.on::before{content:"⚠️ "} .auth-ok.on::before{content:"✅ "}
+  .auth-bascule{margin:16px 0 0}
+  .auth-bascule button{font-weight:600;text-decoration:none;color:var(--brand-ink)}
+  .auth-bascule button:hover{text-decoration:underline}
+  @media (max-width:420px){.auth-marque h1{font-size:30px}.auth-carte{padding:22px 18px 18px}}
+  /* Pas de pastille d'aide sur l'ecran de connexion : l'aide parle des onglets, qui n'y sont pas. */
+  .auth-ecran.on ~ .aide-btn{display:none}
 </style>
 </head>
 <body>
@@ -1397,37 +1436,51 @@
      autres que « / » rendent 401 sans session, donc afficher l'application derrière
      n'offrirait que des boutons qui échouent. -->
 <div class="auth-ecran" id="auth-ecran">
-  <form class="auth-carte" id="auth-form">
-    <h2 id="auth-titre">Connexion</h2>
-    <p class="sous" id="auth-sous">Vos analyses, votre historique et votre consommation sont
-      rattachés à votre compte.</p>
+  <div class="auth-zone">
+    <!-- Une marque, une promesse, puis le formulaire : tout le reste est parti. -->
+    <div class="auth-marque">
+      <span class="auth-logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19V6a2 2 0 0 1 2-2h9l5 5v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><circle cx="11.5" cy="13" r="3"/><path d="m16 17.5-2.3-2.3"/></svg></span>
+      <h1>IA-Niches</h1>
+      <p>Trouvez votre prochaine niche KDP <span aria-hidden="true">🚀</span></p>
+    </div>
+    <form class="auth-carte" id="auth-form">
+      <h2 id="auth-titre">Connexion</h2>
 
-    <label for="auth-email">Adresse e-mail</label>
-    <input type="email" id="auth-email" autocomplete="email" required />
+      <div class="auth-champ">
+        <span class="auth-ico" aria-hidden="true">✉️</span>
+        <label for="auth-email" class="vh">Adresse e-mail</label>
+        <input type="email" id="auth-email" placeholder="Adresse e-mail" autocomplete="email" required />
+      </div>
 
-    <label for="auth-mdp">Mot de passe</label>
-    <input type="password" id="auth-mdp" autocomplete="current-password" required />
-    <p class="auth-aide" id="auth-aide-mdp" hidden>12 caractères minimum. Les mots de passe les plus courants sont refusés.</p>
+      <div class="auth-champ">
+        <span class="auth-ico" aria-hidden="true">🔒</span>
+        <label for="auth-mdp" class="vh">Mot de passe</label>
+        <input type="password" id="auth-mdp" placeholder="Mot de passe" autocomplete="current-password" required />
+        <button type="button" class="auth-voir" id="auth-voir" aria-label="Afficher le mot de passe" aria-pressed="false">👁️</button>
+      </div>
+      <p class="auth-aide" id="auth-aide-mdp" hidden>12 caractères minimum</p>
 
-    <!-- Reprise des analyses antérieures aux comptes. Le serveur ne l'applique PLUS
-         automatiquement : le premier inscrit venu raflait sinon l'historique et la
-         consommation accumulés en local (revue de sécurité). Sans effet s'il existe
-         déjà un compte. -->
-    <label class="auth-reprise" id="auth-reprise-bloc" hidden>
-      <input type="checkbox" id="auth-reprise" />
-      <span>Rattacher à ce compte les analyses effectuées avant la création des
-        comptes. À cocher uniquement s'il s'agit de votre propre installation.</span>
-    </label>
+      <!-- Reprise des analyses antérieures aux comptes. Le serveur ne l'applique PLUS
+           automatiquement : le premier inscrit venu raflait sinon l'historique et la
+           consommation accumulés en local (revue de sécurité). Sans effet s'il existe
+           déjà un compte. Visible en inscription SEULEMENT. -->
+      <label class="auth-reprise" id="auth-reprise-bloc" hidden>
+        <input type="checkbox" id="auth-reprise" />
+        <span><strong>🏠 Reprendre mes analyses d'avant les comptes</strong>
+          <small>À cocher uniquement sur votre propre installation.</small></span>
+      </label>
 
-    <button type="submit" class="auth-btn" id="auth-btn">Se connecter</button>
-    <div class="auth-err" id="auth-err"></div>
-    <div class="auth-ok" id="auth-ok"></div>
+      <button type="submit" class="auth-btn" id="auth-btn">Se connecter</button>
+      <div class="auth-err" id="auth-err" role="alert"></div>
+      <div class="auth-ok" id="auth-ok" role="status"></div>
 
-    <p class="auth-bascule">
-      <span id="auth-bascule-txt">Pas encore de compte ?</span>
-      <button type="button" id="auth-bascule">Créer un compte</button>
-    </p>
-  </form>
+      <p class="auth-bascule">
+        <span id="auth-bascule-txt">Pas encore de compte ?</span>
+        <button type="button" id="auth-bascule">Créer un compte</button>
+      </p>
+    </form>
+  </div>
 </div>
 
 <div class="wrap">
@@ -3529,7 +3582,7 @@ function chargerUsage(){
   const ecran=$('#auth-ecran'), form=$('#auth-form'), titre=$('#auth-titre');
   const email=$('#auth-email'), mdp=$('#auth-mdp'), btn=$('#auth-btn');
   const err=$('#auth-err'), ok=$('#auth-ok'), aide=$('#auth-aide-mdp');
-  const bascule=$('#auth-bascule'), basculeTxt=$('#auth-bascule-txt'), sous=$('#auth-sous');
+  const bascule=$('#auth-bascule'), basculeTxt=$('#auth-bascule-txt');
   const repriseBloc=$('#auth-reprise-bloc'), reprise=$('#auth-reprise');
   const barre=$('#compte-bar'), emailAffiche=$('#compte-email');
   let inscription = false;
@@ -3543,15 +3596,25 @@ function chargerUsage(){
     repriseBloc.hidden = !inscription;
     if(!inscription) reprise.checked = false;
     mdp.autocomplete  = inscription ? 'new-password' : 'current-password';
+    mdp.type = 'password'; $('#auth-voir').textContent = '👁️';
+    $('#auth-voir').setAttribute('aria-pressed', 'false');
     basculeTxt.textContent = inscription ? 'Vous avez déjà un compte ?' : 'Pas encore de compte ?';
     bascule.textContent    = inscription ? 'Se connecter' : 'Créer un compte';
-    sous.textContent = inscription
-      ? "Vos analyses, votre historique et votre consommation seront rattachés à ce compte."
-      : "Vos analyses, votre historique et votre consommation sont rattachés à votre compte.";
     message(err, ''); message(ok, '');
   }
 
   bascule.addEventListener('click', ()=>{ inscription = !inscription; rendre(); });
+
+  // Afficher / masquer le mot de passe : sur un champ de 12 caracteres minimum, une faute de
+  // frappe invisible est la premiere cause d'echec a l'inscription.
+  const voir = $('#auth-voir');
+  voir.addEventListener('click', () => {
+    const visible = mdp.type === 'password';
+    mdp.type = visible ? 'text' : 'password';
+    voir.setAttribute('aria-pressed', String(visible));
+    voir.setAttribute('aria-label', visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+    voir.textContent = visible ? '🙈' : '👁️';
+  });
 
   form.addEventListener('submit', async ev=>{
     ev.preventDefault();
