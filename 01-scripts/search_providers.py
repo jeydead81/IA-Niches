@@ -487,6 +487,42 @@ def parse_bsr_rank(raw) -> tuple[int | None, str | None, bool]:
 
 _PROVIDERS = {"dataforseo": DataForSEOProvider}
 
+_USER_DATA = "https://api.dataforseo.com/v3/appendix/user_data"
+# `post_job` est `async` : un fournisseur qui ne répond pas ne doit pas figer le serveur le temps
+# du délai de `_get` (30 s). Le contrôle du solde porte son propre délai, court.
+SOLDE_DELAI_S = 5
+
+
+def lire_solde(get_json=None, provider=None) -> float | None:
+    """Le solde du compte du fournisseur, en dollars — ou None pour TOUT ce qui n'est pas lisible.
+
+    Endpoint GRATUIT (`appendix/user_data`, relevé le 2026-10-05 : 20000, `money.balance`). None et
+    non 0 quand la réponse est absente, mal formée, refusée ou que le réseau tombe : un solde
+    illisible n'est pas un solde vide (règle 3), et l'appelant ne doit pas bloquer un run sur un
+    contrôle qui n'a pas pu se faire. Ne lève jamais.
+
+    Un solde NÉGATIF est rendu tel quel (−0,049 $ le 2026-10-05) : c'est l'état exact d'un compte
+    qui a dépassé son crédit."""
+    try:
+        if get_json is None:
+            p = provider or DataForSEOProvider()
+            get_json = lambda u: requests.get(u, auth=p.auth,  # noqa: E731
+                                              timeout=SOLDE_DELAI_S).json()
+        r = get_json(_USER_DATA)
+        if not isinstance(r, dict) or r.get("status_code") != 20000:
+            return None
+        tache = (r.get("tasks") or [None])[0]
+        if not isinstance(tache, dict) or tache.get("status_code") != 20000:
+            return None
+        resultat = (tache.get("result") or [None])[0]
+        argent = resultat.get("money") if isinstance(resultat, dict) else None
+        solde = argent.get("balance") if isinstance(argent, dict) else None
+        if isinstance(solde, bool) or not isinstance(solde, (int, float)):
+            return None
+        return float(solde)
+    except Exception:  # noqa: BLE001 — jamais une panne du contrôle ne doit faire échouer un run
+        return None
+
 
 def get_provider(name: str = "dataforseo", **kwargs):
     """Renvoie une instance de provider search (seam). Défaut : dataforseo."""

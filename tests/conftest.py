@@ -16,6 +16,21 @@ sys.path.insert(0, str(_RACINE / "web"))
 MDP_TEST = "un-mot-de-passe-solide"
 
 
+@pytest.fixture(autouse=True)
+def _jamais_le_reseau_pour_le_solde(monkeypatch):
+    """Garde du harnais, posée sur TOUS les tests : sans lecteur injecté, `lire_solde` rend None
+    (« illisible », donc le contrôle laisse passer) au lieu d'appeler DataForSEO avec les
+    identifiants du `.env`. « Aucun test d'intégration réseau » : un test de serveur qui
+    lancerait un travail ne doit pas, en plus, interroger le compte réel de Baptiste."""
+    import search_providers
+    reelle = search_providers.lire_solde
+
+    def gardee(get_json=None, provider=None):
+        return None if get_json is None else reelle(get_json=get_json, provider=provider)
+
+    monkeypatch.setattr(search_providers, "lire_solde", gardee)
+
+
 def isoler_bases(monkeypatch, server, tmp_path) -> None:
     """Toutes les bases en tmp_path — jamais les fichiers réels du dépôt. Le magasin de
     comptes en fait partie : un test qui écrirait dans `99-logs/comptes.db` créerait de
@@ -24,6 +39,9 @@ def isoler_bases(monkeypatch, server, tmp_path) -> None:
                       ("_HISTORY_DB", "history.db"), ("_USERS_DB", "comptes.db")):
         monkeypatch.setattr(server, attr, tmp_path / nom)
     _reinitialiser_creneaux(server)
+    # Etat global de module, comme les chemins de bases et les creneaux : un solde mis en cache par
+    # un test ne doit pas etre lu par le suivant.
+    server._SOLDE_CACHE.update(t=0.0, v=None)
 
 
 def _reinitialiser_creneaux(server) -> None:

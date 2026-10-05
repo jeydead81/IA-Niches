@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-05** (1 779 tests sur 129 fichiers, 52 modules, 34
+> Comptages revérifiés le **2026-10-05** (1 811 tests sur 130 fichiers, 52 modules, 34
 > variables d'env, 22 endpoints, `server.py` 1 380 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -407,7 +407,7 @@ l'exiger).
 | POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. **Quand `inclure_mots_cles` est demandé, c'est un QUATRIÈME chemin payant** : gardé par `_verifier_plafond` **et** `_reserver_appel` (`web/server.py:1076-1077`), il impute `n_analyses=0` — il exige une marge sous le plafond sans la consommer. En low-content c'est `scored.niche` (`LowContentNiche`, qui porte requête, catégorie et satellites) qui part au générateur : le `LowContentScored` entier levait AVANT l'appel, l'exception était avalée, et le dossier sortait sans mots-clés, créneau consommé (corrigé le 2026-09-14). Un dossier sans mots-clés ne dépense rien et n'est pas gardé. `/api/pdf` est conservé comme ALIAS et sert le même document |
 | GET | `/api/fiction/sous-genres` | oui | `[{cle, label}]` triés, lus depuis `data/fiction_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur : jamais de liste dupliquée en dur côté JS |
 | GET | `/api/fiction/taxonomie/{sous_genre}` | oui | `{sous_genre, tropes, decors}` — alimente les menus du compositeur. Sous-genre inconnu → 400 |
-| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
+| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). **Solde du fournisseur** (`_verifier_solde`, §2.19) : **503** avant la réservation si le compte ne couvre pas les recherches du run. Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
 | GET | `/api/jobs/{id}` | oui | État complet : statut, progression, résultat, coût, erreur, dates. **404 — et non 403 — quand le job appartient à quelqu'un d'autre** : distinguer les deux confirmerait que l'identifiant existe |
 | GET | `/api/jobs` | oui | Liste de l'utilisateur de la session, plus récents d'abord. `limit` (20). **Aucun paramètre `user_id`** |
 | POST | `/api/jobs/{id}/annuler` | oui | **Arrête UNE analyse** de la session (2026-10-03 : elle bug ou tourne dans le vide). IMMÉDIAT côté données (statut `annule`), COOPÉRATIF côté thread : on ne tue pas un thread, `annulation.verifier()` lève `Annulation` — une **`BaseException`**, jamais une `Exception` (les `except Exception` « un échec ne coule jamais le run » l'avaleraient ; les moteurs relèvent déjà les `BaseException` en imputant le pire cas) — à chaque message de progression, avant une phase payante (`CostTracker.verifier`) et à chaque cycle d'attente du fournisseur (`search_providers`). Contrôle propre à chaque FIL (`threading.local`), lu en base au plus une fois par demi-seconde. **L'argent déjà engagé reste imputé et l'unité de plafond reste PRISE** : arrêter ne rembourse rien, sinon « lancer puis arrêter » serait gratuit (même règle qu'un échec). Aucune notification. `finish`/`fail`/`start` ne font JAMAIS revenir un travail `annule` à un autre état (le thread peut finir après). 404 — jamais 403 — pour le travail d'un autre compte ; 409 si déjà finie ; `origine_sure`. Marche aussi en `JOBS_MODE=worker` |
@@ -584,7 +584,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1779 tests** sur **129 fichiers** `tests/test_*.py`, **1779 passés, 0 ignoré, 0 échec,
+**1811 tests** sur **130 fichiers** `tests/test_*.py`, **1811 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1130,9 +1130,22 @@ Required ». Deux défauts du produit, corrigés : le refus par tâche n'était 
 de COMPTE (cinq appels au lieu d'un), et un résultat vide n'en disait pas la cause — les
 avertissements vivent dans le panneau de progression, que la fin de l'analyse masque. `videOuRaison`
 (les trois onglets) affiche désormais les avertissements publics quand une analyse ne rend ni carte
-ni erreur ; sans avertissement, l'état vide d'avant. **Non fait, à décider** : le run a quand même
-dépensé l'appel LLM (~0,014 $) et consommé une unité de plafond avant d'échouer ; un contrôle gratuit
-du solde AVANT de lancer éviterait les deux (décision documentée : statut du job et unité inchangés).
+ni erreur ; sans avertissement, l'état vide d'avant. **Contrôle du solde avant lancement** (décision
+de Baptiste, 2026-10-05) : le run avait dépensé l'appel LLM (~0,014 $) et consommé une unité de
+plafond avant d'échouer. `POST /api/jobs` lit désormais le solde du fournisseur (`appendix/user_data`,
+GRATUIT, ~0,5 s, délai propre de 5 s : l'endpoint est `async`) et refuse en **503** AVANT la
+réservation de l'unité et avant tout appel payant quand le solde est inférieur au coût des
+RECHERCHES du run (`ventilation_max_estimee(...)["serp_usd"]`, lu au devis, jamais recopié) : ce qui
+échouera à coup sûr, pas ce qui pourrait échouer (les fiches, que le cache peut servir, ne comptent
+pas). **Un solde ILLISIBLE laisse passer** (règle 3 : un contrôle qui n'a pas pu se faire n'est pas
+un solde vide ; `lire_solde` ne lève jamais). Lecture mise en cache 30 s (`_SOLDE_TTL_S`) : une
+recharge du compte se voit en moins d'une minute. Le client lit « service momentanément
+indisponible, rien n'a été lancé, aucune analyse décomptée » — ni fournisseur ni montant ; hors
+`APP_ENV=prod`, l'opérateur lit en plus « solde épuisé ». Les 400 de saisie passent AVANT ce
+contrôle. Un seul chemin payant à DataForSEO est gardé : `/api/verdict`, `/api/kdp-keywords` et
+`/api/dossier` n'appellent que le LLM. **Limite** : `worker.py` n'a pas ce contrôle (il exécute ce
+que le serveur a empilé) ; un compte vidé ENTRE l'empilement et l'exécution retombe sur le refus par
+tâche (40200) géré plus haut.
 
 **Non corrigé, connu.** (a) Une saturation à 0,00 sur des livres mesurables dont AUCUN n'est classé
 (quatrième de couverture absente) s'affiche « peu couverte » en vert et peut donner « Pépite » ;
@@ -1604,7 +1617,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1779 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1811 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

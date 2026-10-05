@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 import sys
 import tempfile
 import threading
+import asyncio
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -47,7 +48,8 @@ from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
 import storage  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
-from devis import PLAFOND_DEPASSE, verifier_devis  # noqa: E402
+import search_providers as _sp  # noqa: E402
+from devis import PLAFOND_DEPASSE, ventilation_max_estimee, verifier_devis  # noqa: E402
 from notification import notifier_fin_de_job
 from models import FictionNicheReport, LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
@@ -395,6 +397,49 @@ def _erreur_publique(e: BaseException) -> str:
     ref = uuid4().hex[:8]
     _LOG.exception("incident %s", ref, exc_info=e)
     return f"Erreur interne (ref {ref})"
+
+
+# ── Solde du fournisseur de données ─────────────────────────────────────────────────────────────
+# Run fiction du 2026-10-05 : compte à sec (−0,05 $), cinq recherches refusées « 40200 ». Avant
+# d'échouer, le run avait dépensé l'appel de génération des trios et consommé une unité de plafond.
+# Un contrôle GRATUIT (`appendix/user_data`) avant de lancer l'évite — et dit la cause.
+_SOLDE_TTL_S = 30                 # une recharge du compte doit se voir en moins d'une minute
+_SOLDE_CACHE = {"t": 0.0, "v": None}
+
+
+def _lire_solde() -> float | None:
+    """Le solde du fournisseur, mis en cache `_SOLDE_TTL_S` secondes : le contrôle est gratuit
+    mais lance une requête réseau, et une rafale de lancements ne doit pas en faire une chacun.
+    None = illisible (cf. `search_providers.lire_solde`) ; mis en cache aussi, pour qu'un
+    fournisseur lent ne soit pas interrogé à chaque lancement."""
+    maintenant = time.monotonic()
+    if _SOLDE_CACHE["t"] and maintenant - _SOLDE_CACHE["t"] < _SOLDE_TTL_S:
+        return _SOLDE_CACHE["v"]
+    valeur = _sp.lire_solde()
+    _SOLDE_CACHE.update(t=maintenant, v=valeur)
+    return valeur
+
+
+async def _verifier_solde(type_: str, params: dict) -> None:
+    """Refuse (503) AVANT toute dépense quand le solde du fournisseur ne couvre pas les RECHERCHES
+    du run — une par niche, jamais servies par le cache en fiction : ce qui échouera à coup sûr.
+    Les fiches, que le cache peut servir, ne sont pas comptées : on ne refuse pas ce qui pourrait
+    réussir. Un solde ILLISIBLE laisse passer (règle 3 : un contrôle qui n'a pas pu se faire n'est
+    pas un solde vide). Le client ne lit ni le fournisseur ni un montant ; hors production,
+    l'opérateur — seul utilisateur — lit la cause."""
+    solde = await asyncio.to_thread(_lire_solde)      # `post_job` est async : pas de réseau bloquant
+    if solde is None:
+        return
+    besoin = ventilation_max_estimee(type_, params)["serp_usd"]
+    if solde >= besoin:
+        return
+    _LOG.error("solde du compte de données insuffisant : %.4f $ pour des recherches estimées à "
+               "%.4f $ (%s) — lancement refusé, aucune dépense", solde, besoin, type_)
+    detail = ("Le service de données est momentanément indisponible. Rien n'a été lancé : aucune "
+              "analyse n'a été décomptée. Réessayez dans quelques minutes.")
+    if (os.getenv("APP_ENV") or "").strip().lower() != "prod":
+        detail += " (Hors production : le solde du compte de données est épuisé.)"
+    raise HTTPException(status_code=503, detail=detail)
 
 
 def _verifier_plafond(user_id: str, n_analyses: int = 1) -> None:
@@ -893,6 +938,9 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     # Bornes validées AVANT de créer le job : levée depuis le thread détaché, la 400
     # arriverait après un 202 déjà rendu, donc invisible pour le client.
     _valider_volumes(type_, params)
+    # Solde du fournisseur : APRES les refus de saisie (une 400 n'est pas un diagnostic de service),
+    # AVANT la réservation de l'unité de plafond et avant tout appel payant.
+    await _verifier_solde(type_, params)
 
     # RESERVATION ATOMIQUE, et elle vient EN DERNIER. `autorise()` puis imputation a la
     # fin du run laissait entre les deux la duree entiere de l'analyse : une rafale de
