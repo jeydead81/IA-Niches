@@ -38,7 +38,7 @@ def _noop(_msg: str) -> None:
 
 
 def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kindle",
-                      version: str = "fr_v1", n_top: int = 12, depth: int = 30,
+                      version: str = "fr_v1", n_top: int = 10, depth: int = 30,
                       model: str | None = None, contraintes=None,
                       ideate=None, serp_fn=None, enrich_fn=None, classify=None, probe=None,
                       cache=None, use_cache: bool = True, cache_path: str | None = None,

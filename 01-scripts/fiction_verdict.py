@@ -22,6 +22,7 @@ réglementaire (champs low-content) — aucun module du dépôt ne calcule une r
 avancer une serait une devinette (règle 7). Le prix suggéré se pose dans la bande OBSERVÉE.
 """
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -74,9 +75,13 @@ TU PRODUIS (via l'outil rendre_verdict_fiction, OBLIGATOIRE) :
 - verdict « Go » / « Go prudent » / « No-Go », confiance /10, LE facteur décisif en deux ou trois \
 phrases courtes ;
 - UN angle : la promesse du roman dans ce trio (angle), pourquoi elle se différencie, le risque, \
-un titre, un sous-titre, une direction de couverture, un prix, une requête principale et des \
-requêtes secondaires. L'angle GARDE le trio : ce sont les tropes et le décor que l'auteur a \
-choisis ;
+un titre, un sous-titre, une direction de couverture, un PITCH, un prix, une requête principale \
+et des requêtes secondaires. L'angle GARDE le trio : ce sont les tropes et le décor que l'auteur \
+a choisis ;
+- le PITCH : 3 à 4 phrases AU MAXIMUM qui disent ce que RACONTERAIT le roman — le personnage, ce \
+qu'il veut, ce qui l'en empêche, ce qui est en jeu — dans CE trio, avec ses tropes et son décor. \
+Une accroche de quatrième de couverture, pas un synopsis : ne révèle pas la fin, aucun personnage \
+existant, aucune marque, aucun nom d'auteur ;
 - TROIS livres du rayon à étudier (comparables), identifiés par leur ASIN, chacun avec UNE \
 phrase qui dit pourquoi l'étudier. Choisis-les UNIQUEMENT dans la liste fournie, parmi les livres \
 mesurés : un identifiant absent de la liste sera écarté.
@@ -94,12 +99,15 @@ _ANGLE = {
         "titre": {"type": "string"},
         "sous_titre": {"type": "string"},
         "direction_couverture": {"type": "string"},
+        "pitch": {"type": "string",
+                  "description": "3 à 4 phrases au maximum : ce que raconterait le roman, dans ce "
+                                 "trio, sans en révéler la fin"},
         "prix_suggere": {"type": "string",
                          "description": "dans la bande de prix observée sur le rayon"},
         "requete_principale": {"type": "string"},
         "requetes_secondaires": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["angle", "pourquoi", "risque", "titre", "sous_titre"],
+    "required": ["angle", "pourquoi", "risque", "titre", "sous_titre", "pitch"],
     "additionalProperties": False,          # exigé par le mode STRICT sur chaque objet
 }
 
@@ -128,6 +136,46 @@ VERDICT_FIC_SCHEMA = {
     "required": ["verdict", "confiance", "facteur_decisif", "angles", "comparables"],
     "additionalProperties": False,
 }
+
+
+MAX_PHRASES_PITCH = 4
+MAX_CAR_PITCH = 700
+_ABREVIATIONS = ("M.", "Mme.", "Mlle.", "Mr.", "Dr.", "Pr.", "St.", "Ste.")
+
+
+def limiter_pitch(texte, max_phrases: int = MAX_PHRASES_PITCH, max_car: int = MAX_CAR_PITCH) -> str:
+    """Le pitch borné : `max_phrases` phrases au plus, `max_car` caractères au plus.
+
+    On demande « 3 à 4 phrases » au prompt, puis on CONTRÔLE : un modèle déborde, et un pitch de
+    quinze lignes casserait la carte. Le nombre de phrases est un FORMAT, pas un fait : la coupe
+    se fait à la fin d'une phrase, et une seule phrase démesurée est coupée sur un mot, avec une
+    ellipse — jamais au milieu d'un mot. Une abréviation (« M. », « Dr. ») n'est pas une fin de
+    phrase. Un pitch absent, vide ou non textuel vaut « » : rien n'est deviné."""
+    if not isinstance(texte, str):
+        return ""
+    t = " ".join(texte.split())
+    if not t:
+        return ""
+    phrases: list[str] = []
+    for fragment in re.split(r"(?<=[.!?…])\s+(?=[A-ZÀ-ÝÉ«“\"])", t):
+        if phrases and phrases[-1].endswith(_ABREVIATIONS):
+            phrases[-1] += " " + fragment
+        else:
+            phrases.append(fragment)
+    t = " ".join(phrases[:max_phrases])
+    if len(t) > max_car:
+        t = t[:max_car].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+    return t
+
+
+def _pitchs_bornes(brut):
+    """Les angles bruts du modèle, chaque pitch passé par `limiter_pitch`. Un angle qui n'est pas
+    un objet est laissé tel quel : `_angles_lisibles` le comptera illisible."""
+    brut = _json_si_texte(brut)
+    if not isinstance(brut, list):
+        return brut
+    return [{**a, "pitch": limiter_pitch(a.get("pitch"))} if isinstance(a, dict) else a
+            for a in brut]
 
 
 class RayonNonMesure(ValueError):
@@ -315,7 +363,7 @@ def generate_fiction_verdict(report: FictionNicheReport, model: str | None = Non
     if isinstance(confiance, bool) or not isinstance(confiance, int):
         raise ValueError(f"réponse du modèle illisible (confiance : {confiance!r})")
 
-    angles, n_illisibles = _angles_lisibles(d.get("angles"))
+    angles, n_illisibles = _angles_lisibles(_pitchs_bornes(d.get("angles")))
     comparables, n_inconnus = _comparables_verifies(
         d.get("comparables"), {b.asin: b for b in _scorables(report)})
     verdict = _texte(d.get("verdict")) or "Go prudent"

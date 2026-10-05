@@ -23,7 +23,7 @@ def search_param_for_niche(niche: FictionNiche, version: str = "fr_v1") -> str:
     return f"rh=n:{node}" if node else search_param_for(niche.rayon, version)
 
 
-def fetch_shelf_asins(niche: FictionNiche, provider, n_top: int = 12, depth: int = 30,
+def fetch_shelf_asins(niche: FictionNiche, provider, n_top: int = 10, depth: int = 30,
                       cost=None, version: str = "fr_v1") -> tuple[str, list[str]]:
     """Moitié SERP (quelques secondes à quelques minutes ; une requête sans résultat rend un rayon
     vide, `(sp, [])`, dès le premier relevé) : SERP contrainte au rayon -> n_top
@@ -31,7 +31,8 @@ def fetch_shelf_asins(niche: FictionNiche, provider, n_top: int = 12, depth: int
     appeler N fois (une par niche) avant de payer UNE seule fois la file ASIN via
     `enrich_asins` (cf. M6-2 : la file DataForSEO met ~250 s quel que soit le nb d'ASIN).
 
-    n_top=12 par défaut (-40% de coût ASIN vs 20) : le signal concurrentiel de M5 (depth,
+    n_top=10 par défaut (12 jusqu'au 2026-10-05, 20 à l'origine : -50 % de coût ASIN) : le signal
+    concurrentiel de M5 (depth,
     openness, saturation_trio) est porté par les tout premiers résultats, les ASIN 13-20
     coûtent 0,024 $ chacun pour peu d'apport."""
     from search_providers import AucunResultat, TaskPostRefuse
@@ -195,7 +196,7 @@ def enrich_asins(asins: list[str], provider, cache=None, cost=None,
     return out
 
 
-def fetch_fiction_shelf(niche: FictionNiche, provider, n_top: int = 12, depth: int = 30,
+def fetch_fiction_shelf(niche: FictionNiche, provider, n_top: int = 10, depth: int = 30,
                         cache=None, cost=None, version: str = "fr_v1",
                         progress=None) -> FictionShelf:
     """Contrat M2 inchangé pour les appelants existants (tests M2, build_validation_set) :

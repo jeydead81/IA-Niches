@@ -1586,6 +1586,9 @@
     color:#78350F;font-size:13px;line-height:1.45}
 
   /* ── Fiction : combien de livres, et l'état « rien à conclure » ── */
+  .va-pitch{margin:14px 0 2px;padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--border)}
+  .va-pitch-t{margin:0 0 4px;font-size:12.5px;font-weight:600;color:var(--text-muted)}
+  .va-pitch p:last-child{margin:0;font-size:14px;line-height:1.55;color:var(--ink-soft)}
   .fic-mesure{margin:0 0 8px;font-size:12.5px;color:var(--text-muted)}
   .fic-cle.fic-vide b{color:var(--text-muted);font-weight:600}
   .fic-cle.fic-vide .mut{font-size:12px}
@@ -2300,8 +2303,8 @@ function verdictBlock(r){
   // C'est ce qui distingue les deux, et ce qui decide d'offrir les mots-cles KDP : leur
   // endpoint ne valide que la forme non-fiction, un bouton low-content rendrait une 400.
   const lc=!!(r.niche && typeof r.niche==='object');
-  // Fiction : ni PDF ni mots-cles KDP (hors perimetre, leurs endpoints refusent la fiction : un
-  // bouton y serait mort), en revanche trois livres du rayon a etudier.
+  // Fiction : pas de PDF (le dossier n'existe pas pour la fiction : un bouton y serait mort), mais
+  // les mots-cles KDP (2026-10-05), un pitch et trois livres du rayon a etudier.
   const fic=!!r.fiction;
   const conf=Math.max(0, Math.min(10, Math.round(Number(v.confiance)||0)));
   const jauge='<span class="va-jauge" role="img" aria-label="confiance '+conf+' sur 10">'
@@ -2330,6 +2333,13 @@ function verdictBlock(r){
     ].join('');
     // En low-content l'INTERIEUR est le produit : sa specification se lit sans deplier.
     const lignes=ligne('📐','Intérieur',a.spec_interieur)+ligne('🎨','Couverture',a.direction_couverture);
+    // FICTION : ce que pourrait raconter le livre, juste sous la couverture, sans rien deplier.
+    // Une analyse ANTERIEURE n'en porte pas : aucun bloc vide. Texte du modele : echappe, et ses
+    // tirets cadratins deviennent des virgules comme partout dans l'interface.
+    const pitch = fic ? String(a.pitch || '').replace(/\s+[—–]\s+/g, ', ').trim() : '';
+    const pitchHtml = pitch
+      ? '<div class="va-pitch"><p class="va-pitch-t">📖 Ce que pourrait raconter le livre</p><p>'
+        + esc(pitch) + '</p></div>' : '';
     // Format norme : le contenu est impose par un texte externe, un registre incomplet
     // expose l'acheteur (un employeur). Le serveur degrade un « Go » sans source citee ; ce
     // bloc dit POURQUOI, et jamais replie (une mise en garde repliee ne previent personne).
@@ -2350,6 +2360,7 @@ function verdictBlock(r){
         <p class="vangle-sous">${esc(a.sous_titre)}</p>
         ${pastilles ? '<div class="va-pastilles">'+pastilles+'</div>' : ''}
         ${lignes ? '<ul class="va-lignes">'+lignes+'</ul>' : ''}
+        ${pitchHtml}
         ${blocNorme}
         ${a.risque ? '<p class="va-risque">⚠️ <strong>Risque :</strong> '+esc(a.risque)+'</p>' : ''}
         <p class="va-reqs-t">🔎 Requêtes ${fic ? 'à tester' : 'à viser'}</p>
@@ -2402,11 +2413,11 @@ function verdictBlock(r){
   }
   return `<div class="vbox">
       ${angleHtml}
-      ${fic ? '' : `<div class="vactions">
-        <button type="button" class="btn-act btn-pdf">📄 Télécharger le Dossier (PDF)</button>
+      <div class="vactions">
+        ${fic ? '' : '<button type="button" class="btn-act btn-pdf">📄 Télécharger le Dossier (PDF)</button>'}
         <button type="button" class="btn-act btn-kdp">🏷️ Mots-clés KDP</button>
       </div>
-      <div class="kdpslot"></div>`}
+      <div class="kdpslot"></div>
       <div class="vraison">
         <div class="vhead">
           <span class="vconf">Confiance ${conf}/10</span>${jauge}
@@ -2521,9 +2532,17 @@ function brancherCopie(slot){
   });
 }
 
+// Le type d'une niche se lit sur sa FORME : une chaine = non-fiction ; un objet qui porte
+// `sous_genre` = un trio fiction ; tout autre objet = low-content.
+function typeNiche(r){
+  const n = r && r.niche;
+  if(!n || typeof n !== 'object') return 'scout';
+  return n.sous_genre !== undefined ? 'fiction' : 'lowcontent';
+}
+
 async function loadKdp(niche, slot, btn, vue){
   vue = vue || VUE_NF;
-  const lc = !!(niche.niche && typeof niche.niche === 'object');
+  const type = typeNiche(niche);
   // Deja genere (et conserve dans le travail) : on le reaffiche, on ne le repaie pas.
   if(niche.mots_cles){
     slot.innerHTML = kdpBlock(niche.mots_cles); brancherCopie(slot); return;
@@ -2531,10 +2550,12 @@ async function loadKdp(niche, slot, btn, vue){
   btn.disabled = true; btn.textContent = 'Recherche en cours…';
   slot.innerHTML = '';
   try{
-    // `type` est OBLIGATOIRE en low-content : sans lui le serveur valide une ScoredNiche non-fiction.
+    // `type` est OBLIGATOIRE en low-content et en fiction : sans lui le serveur valide une ScoredNiche
+    // non-fiction. En fiction la carte part AVEC son analyse (`analyse`) : c'est elle qui porte le
+    // titre prevu et le pitch que le generateur lit.
     const r = await fetch(urlConservee('/api/kdp-keywords', vue.jobId, niche), {method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(lc ? {type: 'lowcontent', ...niche} : niche)});
+      body: JSON.stringify(type === 'scout' ? niche : {type, ...niche})});
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const mots = await r.json();
     const conserve = mots._conserve;
@@ -3373,6 +3394,15 @@ function brancherActionsFic(r, carte){
   if(vBtn) vBtn.addEventListener('click', ev => {
     ev.stopPropagation(); loadVerdictFic(r, carte, vBtn);
   });
+  const kdpBtn = carte.querySelector('.btn-kdp');
+  if(kdpBtn) kdpBtn.addEventListener('click', ev => {
+    ev.stopPropagation(); loadKdp(r, carte.querySelector('.kdpslot'), kdpBtn, VUE_FIC);
+  });
+  // Mots-cles deja generes pour ce trio (analyse rouverte) : ils sont la, sans rien repayer.
+  const kdpSlot = carte.querySelector('.kdpslot');
+  if(kdpSlot && r.mots_cles && !kdpSlot.innerHTML){
+    kdpSlot.innerHTML = kdpBlock(r.mots_cles); brancherCopie(kdpSlot);
+  }
 }
 
 async function loadVerdictFic(r, carte, btn){
@@ -4568,11 +4598,14 @@ const AIDE = {
       <p>Lisez enfin les <strong>alertes en orange</strong> : elles disent ce qui n'a pas pu
       être mesuré, et elles changent la lecture de toute la carte.</p>
 
-      <h3>Analyser un trio : verdict, titre et livres à étudier</h3>
+      <h3>Analyser un trio : verdict, titre, pitch et livres à étudier</h3>
       <p>Sur une carte mesurée, le bouton <strong>Analyser cette niche</strong> demande à
       l'IA un verdict (Go, Go prudent ou No-Go), <strong>un angle</strong> avec le titre et
-      le sous-titre à écrire, et <strong>trois livres du rayon</strong> à étudier. Ces
+      le sous-titre à écrire, <strong>un pitch</strong> de trois à quatre phrases sur ce que
+      pourrait raconter le roman, et <strong>trois livres du rayon</strong> à étudier. Ces
       livres sont choisis parmi ceux qui ont été mesurés, et l'outil vérifie qu'ils y sont.
+      Le pitch est une piste pour lancer l'écriture, pas une mesure. Le bouton
+      <strong>Mots-clés KDP</strong> propose ensuite les sept emplacements de mots-clés.
       Si le rayon est <strong>incomplet</strong>, un « Go » est ramené à « Go prudent ».
       Si le rayon n'a pas pu être mesuré, le bouton n'apparaît pas : ce n'est pas une niche
       morte, c'est une mesure à relancer. Les requêtes proposées sont des pistes à tester,

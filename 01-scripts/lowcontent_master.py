@@ -42,7 +42,7 @@ from models import LowContentScored
 from niche_validator import validate_niches as _validate_niches
 from search_providers import RefusCompte, TaskPostRefuse, get_provider
 
-_SEARCH_TTL_S = 15 * 24 * 3600
+_SEARCH_TTL_S = 30 * 24 * 3600      # 15 jusqu'au 2026-10-05
 
 
 def _noop(_msg: str) -> None:

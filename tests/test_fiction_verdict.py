@@ -98,6 +98,8 @@ def _payload(verdict="Go", comparables=None, **kw):
                      "titre": "La Librairie des Marées",
                      "sous_titre": "Ils se détestent. La tempête les enferme.",
                      "direction_couverture": "port breton au crépuscule, deux silhouettes",
+                     "pitch": "Léa reprend la librairie de sa grand-mère. Un rival veut les murs. "
+                              "Elle a un hiver pour le convaincre.",
                      "prix_suggere": "4,99 €", "requete_principale": "romance ennemis to lovers",
                      "requetes_secondaires": ["romance bretagne", "petite ville romance"]}],
          "comparables": comparables if comparables is not None else [

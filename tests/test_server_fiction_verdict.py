@@ -190,11 +190,13 @@ def test_le_travail_d_un_autre_compte_n_est_pas_annote(monkeypatch, tmp_path):
     assert "analyse" not in JobStore(server._JOBS_DB).get(jid).resultat[0]
 
 
-# ── Hors périmètre v1 ───────────────────────────────────────────────────────────
+# ── Hors périmètre ──────────────────────────────────────────────────────────────
+# Les mots-clés KDP d'un trio sont offerts depuis le 2026-10-05 (tests/test_fiction_mots_cles.py).
+# Le PDF (dossier) reste hors fiction : `/api/dossier` ne valide que `scout` et `lowcontent`.
 
-def test_les_mots_cles_kdp_ne_sont_pas_offerts_pour_la_fiction(monkeypatch, tmp_path):
+def test_le_dossier_pdf_n_est_pas_offert_pour_la_fiction(monkeypatch, tmp_path):
     c, *_ = _client(monkeypatch, tmp_path)
-    assert c.post("/api/kdp-keywords", json=_corps()).status_code == 400
+    assert c.post("/api/dossier", json={"type": "fiction", "niche": _corps()}).status_code == 400
 
 
 def test_le_rapport_fiction_est_la_forme_que_le_serveur_valide():

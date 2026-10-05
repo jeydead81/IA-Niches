@@ -39,7 +39,7 @@ def _fetch_suggestions(prefixe: str) -> list[str]:
 # 15 jours, comme les autres caches courants. Une traîne de requêtes bouge à l'échelle de
 # la saison, pas de la journée : ce qu'on met en cache ici, c'est ce que les gens
 # CHERCHENT, et ça ne se renouvelle pas en deux semaines.
-AUTOCOMPLETE_TTL_S = 15 * 24 * 3600
+AUTOCOMPLETE_TTL_S = 30 * 24 * 3600     # 15 jusqu'au 2026-10-05
 
 # Plafond par défaut. À 0,4 s de pause, 80 sondes = ~32 s : la limite haute de ce qu'on
 # peut faire attendre avant une phase payante qui, elle, dure des minutes.

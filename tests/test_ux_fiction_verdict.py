@@ -105,9 +105,11 @@ def test_trois_livres_a_etudier_pointent_vers_le_rayon_reel():
     assert "Ennemis à Saint-Malo" in visible, "les comparables se lisent sans déplier"
 
 
-def test_ni_pdf_ni_mots_cles_kdp_en_fiction():
+def test_pas_de_pdf_en_fiction_mais_les_mots_cles_kdp_oui():
+    """Le dossier PDF n'existe pas pour la fiction ; les mots-clés KDP, si (2026-10-05, voir
+    tests/test_ux_fiction_pitch.py pour le clic et la conservation)."""
     html = appeler("verdictSlotFic", _rapport(analyse=_analyse()), dependances=_SLOT)
-    assert "btn-pdf" not in html and "btn-kdp" not in html and "kdpslot" not in html
+    assert "btn-pdf" not in html and "btn-kdp" in html and "kdpslot" in html
 
 
 def test_aucun_comparable_ne_laisse_ni_trou_ni_titre_vide():

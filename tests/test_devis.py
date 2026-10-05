@@ -27,9 +27,17 @@ from devis import PLAFOND_DEPASSE, cout_max_estime, verifier_devis, volume_maxim
     ("fiction", {"n_niches": 3}, 0.153, "MESURÉ en live"),
     ("fiction", {"n_niches": 8}, 0.409, "extrapolé"),
 ])
-def test_le_modele_reproduit_les_mesures_du_depot(type_, params, attendu, source):
+def test_le_modele_reproduit_les_mesures_du_depot(type_, params, attendu, source, monkeypatch):
     """Un modèle qui ne retombe pas sur les chiffres mesurés refuserait des runs au
-    hasard. Tolérance 12 % : le devis vise le PIRE cas, donc il doit majorer un peu."""
+    hasard. Tolérance 12 % : le devis vise le PIRE cas, donc il doit majorer un peu.
+
+    Les mesures fiction ont été prises à 12 fiches par niche ; le défaut est 10 depuis le
+    2026-10-05 (décision de Baptiste). Le modèle doit les retrouver PARAMÉTRÉ à 12 : c'est ce
+    qui prouve qu'il suit la réalité, et non son réglage du jour."""
+    if type_ == "fiction":
+        from devis import _MODELES
+        monkeypatch.setitem(_MODELES["fiction"], "asin_par_unite", 12)
+        monkeypatch.setitem(_MODELES["fiction"], "classif_par_unite", 12)
     estime = cout_max_estime(type_, params)
     assert estime == pytest.approx(attendu, rel=0.12), f"{source} : {attendu} $"
     assert estime >= attendu * 0.95, "le devis ne doit jamais SOUS-estimer"
@@ -78,7 +86,7 @@ def test_le_refus_dit_le_volume_qui_TIENDRAIT():
     with pytest.raises(PLAFOND_DEPASSE) as e:
         verifier_devis("fiction", {"n_niches": 20}, plafond=0.60)
     msg = str(e.value)
-    assert "11" in msg          # le volume maximal qui tient
+    assert str(volume_maximal("fiction", 0.60)) in msg   # le volume maximal qui tient (lu, pas figé)
     assert "20" in msg          # ce qu'il a demandé
 
 

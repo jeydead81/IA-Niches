@@ -7,9 +7,9 @@ import time
 from amazon_product import fetch_bsr_strict as _scrape_bsr
 from marketplace import ACTIF
 
-BSR_TTL_S = 15 * 24 * 3600     # 15 jours. Le cache est MUTUALISE entre tous les comptes : allonger sa duree
+BSR_TTL_S = 30 * 24 * 3600     # 30 jours (15 jusqu'au 2026-10-05). Le cache est MUTUALISE entre tous les comptes : allonger sa duree
 # Duree de memorisation d'une ABSENCE de classement. Bien plus courte que celle d'un
-# rang : un livre peut entrer au classement a tout moment, et figer 15 jours une
+# rang : un livre peut entrer au classement a tout moment, et figer 30 jours une
 # non-mesure nous rendrait aveugles a son arrivee. 3 jours tuent le gaspillage sans
 # transformer « pas encore classe » en « jamais classe ».
 ECHEC_BSR_TTL_S = 3 * 24 * 3600

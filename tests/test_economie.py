@@ -68,7 +68,7 @@ def test_le_cache_livre_est_ecrit_avec_QUINZE_jours():
     espion = _CacheEspion()
     enrich_asins(["A1", "A2"], provider=_P(), cache=espion)
     ttls = {t for kind, _, t in espion.ecritures if kind == "book"}
-    assert ttls == {15 * JOUR}, f"TTL écrits : {ttls}"
+    assert ttls == {30 * JOUR}, f"TTL écrits : {ttls}"
 
 
 def test_il_n_existe_qu_une_seule_definition_du_TTL_livre():

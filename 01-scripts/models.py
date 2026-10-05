@@ -101,6 +101,9 @@ class AngleAttaque(BaseModel):
     # En low-content, l'INTÉRIEUR est le produit : un angle qui ne dit ni le nombre de
     # pages ni la structure d'une page type ne se fabrique pas. En non-fiction la question
     # ne se pose pas — le contenu, c'est le texte.
+    # ── Champ FICTION (vide ailleurs) ──
+    # 3 à 4 phrases de ce que pourrait raconter le roman, bornées côté code (`limiter_pitch`).
+    pitch: str = ""
     spec_interieur: str = ""               # format cm, nb pages, structure d'une page type
     redevance_estimee: str = ""            # ce que l'auteur touche par vente, en clair
     # OBLIGATOIRE sur un format `norme: true`, et VÉRIFIÉ côté code (lowcontent_verdict) :

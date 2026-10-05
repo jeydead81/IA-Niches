@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-05** (1 811 tests sur 130 fichiers, 52 modules, 34
+> Comptages revérifiés le **2026-10-05** (1 877 tests sur 135 fichiers, 52 modules, 34
 > variables d'env, 22 endpoints, `server.py` 1 380 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -138,8 +138,8 @@ construite dessus. Voir §3.
 | 1 — Ideator | `ideate(seed, signals, n=n_ideas)` → **un seul** appel Anthropic en tool-use **forcé** (`tool_choice` figé sur `proposer_niches`, aucun parsing de texte libre). Sortie : `NicheCandidate[]` avec `niche`, `requete_amazon` COURTE (2-4 mots), `satellite_keywords`, `rationale`, `categorie`, `risques` | LLM |
 | 2 — Validation demande | `validate(candidates, pause=0.4, max_queries=3)` — par défaut `niche_validator.validate_niches` — interroge `completion.amazon.fr` sur la requête courte puis les satellites. `demand_score` = nb de suggestions distinctes ; `validated` = au moins une requête auto-complétée. Tri par `(validated, demand_score)` décroissant (`niche_validator.py:153`). **Lit aussi le CONTENU des suggestions** (§2.3) | **gratuit** |
 | — **Gate de coût** | `shortlist = validated[:n_search]` (défaut 6 côté `run_scout`, 4 côté formulaire). **Une niche non validée ne coûte jamais un appel payant.** Shortlist vide → retour `[]` immédiat | — |
-| A — Concurrence | Par niche : cache `search` (clé keyword+location+language, **TTL 15 j**, `scout_master.py:28`), sinon `provider.search()` sur `merchant/amazon/products` en task_post + poll (8 s d'intervalle, 40 polls max, ~320 s), `search_param=i=stripbooks` si `books_only`. **Un échec est attrapé** (`scout_master.py:89-91`) : avertissement en progress, `sr = None`, le run continue — et la niche ressort marquée `concurrence_mesuree=False` (§4.1). On retient les 3 premiers ASIN **organiques** (`n_bsr_per_niche=3`) | DataForSEO |
-| B — BSR batché | `resolve_bsrs()` sur l'**union** des ASIN de toutes les niches : dédup, cache par ASIN — **TTL 15 j pour un RANG** (`BSR_TTL_S`, `bsr_source.py:10`) et **3 j seulement pour une ABSENCE de classement** (`ECHEC_BSR_TTL_S`, `:15`) : un livre peut entrer au classement, figer 15 j une non-mesure nous rendrait aveugles à son arrivée ; une fiche NON LUE (panne, tâche jamais prête) n'est, elle, jamais mémorisée, cf. §5.10 —, puis selon `BSR_SOURCE` (§3) | gratuit ou payant |
+| A — Concurrence | Par niche : cache `search` (clé keyword+location+language, **TTL 30 j**, `scout_master.py:28`), sinon `provider.search()` sur `merchant/amazon/products` en task_post + poll (8 s d'intervalle, 40 polls max, ~320 s), `search_param=i=stripbooks` si `books_only`. **Un échec est attrapé** (`scout_master.py:89-91`) : avertissement en progress, `sr = None`, le run continue — et la niche ressort marquée `concurrence_mesuree=False` (§4.1). On retient les 3 premiers ASIN **organiques** (`n_bsr_per_niche=3`) | DataForSEO |
+| B — BSR batché | `resolve_bsrs()` sur l'**union** des ASIN de toutes les niches : dédup, cache par ASIN — **TTL 30 j pour un RANG** (`BSR_TTL_S`, `bsr_source.py:10`) et **3 j seulement pour une ABSENCE de classement** (`ECHEC_BSR_TTL_S`, `:15`) : un livre peut entrer au classement, figer 30 j une non-mesure nous rendrait aveugles à son arrivée ; une fiche NON LUE (panne, tâche jamais prête) n'est, elle, jamais mémorisée, cf. §5.10 —, puis selon `BSR_SOURCE` (§3) | gratuit ou payant |
 | C — Scoring | `scoring.py`, fonctions pures : `bsr_stats`, `count_targeted`, **`prix_stats`**, `score_niche` (3 axes pondérés 0,4 / 0,4 / 0,2). Tri par `global_score` décroissant. Si `search is None`, aucun bonus ni malus de concurrence n'est appliqué et le verdict devient « Concurrence non mesurée — à relancer » | 0 |
 | D — Verdict IA | `n_verdict=0` **par défaut**, et **aucun appelant ne le remplit** : ni la CLI, ni `_run_scout_job`. Gate de coût assumé (3 verdicts pesaient 78 % du coût d'un run). Le verdict se demande à la pièce via `POST /api/verdict` — mais l'UI ne l'appelle pas, cf. §5.26 | — |
 
@@ -204,9 +204,9 @@ Coût : **0,153 $ pour 3 trios (MESURÉ)**, **0,409 $ pour 8 trios (EXTRAPOLÉ)*
 - **B — N × SERP**, une par niche (payant, rapide, pas de file d'attente) : `fetch_shelf_asins`
   contraint la SERP au browse node du sous-genre (`rh=n:...`) quand il existe, sinon au filtre de
   rayon lu dans la taxonomie (`i=digital-text` kindle, `i=stripbooks` papier). On garde les
-  `n_top=12` premiers ASIN organiques dédupliqués par `dict.fromkeys` (préserve l'ordre : une SERP
-  qui répète un ASIN ne doit ni le facturer deux fois ni écraser sa position). 12 et non 20 :
-  -40 % de coût ASIN. Le docstring (`fiction_serp_provider.py:25-27`) chiffre les positions
+  `n_top=10` premiers ASIN organiques dédupliqués par `dict.fromkeys` (préserve l'ordre : une SERP
+  qui répète un ASIN ne doit ni le facturer deux fois ni écraser sa position). 10 depuis le 2026-10-05
+  (décision de Baptiste ; 12 avant, 20 à l'origine : -50 % de coût ASIN). Le docstring (`fiction_serp_provider.py:25-27`) chiffre les positions
   13-20 à « 0,024 $ chacun » — **lire 0,024 $ pour le bloc de 8, pas par position** :
   `COST_PER_CALL_USD[2] = 0,003 $` par ASIN (`search_providers.py:24`), soit 8 × 0,003 = 0,024 $
   par niche. Formulation encore à corriger dans le docstring.
@@ -221,7 +221,7 @@ Coût : **0,153 $ pour 3 trios (MESURÉ)**, **0,409 $ pour 8 trios (EXTRAPOLÉ)*
   ASIN (`fiction_master.py:109`), passée en un appel `product_raw_batch` (jusqu'à 100 ASIN par
   task_post). La file DataForSEO met ~250 s **quel que soit** le nombre d'ASIN : la payer une fois
   par run au lieu d'une fois par niche fait passer 10 niches de 42 min à 5 min. Bonus : la dédup
-  devient inter-niches, et le nombre d'ASIN économisés est annoncé. Cache livre par ASIN, **TTL 15 j** (`BOOK_TTL_S`, `cache.py:13`, **importé** par `fiction_serp_provider.py:8` — jamais redéfini, cf. §5.32).
+  devient inter-niches, et le nombre d'ASIN économisés est annoncé. Cache livre par ASIN, **TTL 30 j** (`BOOK_TTL_S`, `cache.py:13`, **importé** par `fiction_serp_provider.py:8` — jamais redéfini, cf. §5.32).
   Un payload inexploitable est **absent** du dict rendu, jamais une entrée factice.
 - **D — Classification des quatrièmes de couverture** (payant, poste LLM dominant). Seuls les
   livres AVEC blurb. Cache de classification (TTL **30 jours**, `CLASSIFICATION_TTL_S`,
@@ -382,7 +382,10 @@ grand nombre de trios dont le devis tient sous `PLAFOND_USD_PAR_RUN`. Au-delà, 
 atteindrait le plafond en route et rendrait un rapport PARTIEL à quelqu'un qui a payé son
 plafond entier — ce qui se lit comme une arnaque, pas comme une protection. **Ne pas la
 relever sans relever le plafond** : `tests/test_devis.py` tient les deux ensemble, ainsi
-que les `max` des champs HTML et les presets.
+que les `max` des champs HTML et les presets. **Depuis les 10 fiches par niche (2026-10-05) le plus
+grand volume qui tient serait 13 (`volume_maximal`), et la borne reste 11** : non relevée, personne
+ne l'a demandé. Les 11 tiennent (0,485 $ au pire cas) ; « dérivé » veut dire « jamais au-dessus du
+plafond », plus « le maximum exact ».
 
 ### 2.6 Endpoints (`web/server.py`) — **22**
 
@@ -416,7 +419,7 @@ l'exiger).
 | GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_analyses, cout_usd}`. Le backend rend toujours le coût ; **l'UI n'affiche que le nombre d'analyses** (§5.27) |
 | POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
-| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
+| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18 : le titre et le pitch de l'analyse passent dans `analyse`). Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
 
 ### 2.7 Gardes de sécurité (revue adversariale, commits `d443ba8` + `8d37ab8`)
@@ -584,8 +587,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1811 tests** sur **130 fichiers** `tests/test_*.py`, **1811 passés, 0 ignoré, 0 échec,
-0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
+**1877 tests** sur **135 fichiers** `tests/test_*.py`, **1877 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-05,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
 
@@ -1042,9 +1045,11 @@ et `_verifier_config_prod` refuse de démarrer sans `BSR_SOURCE=dataforseo`.
 « Analyser cette niche » sur une carte fiction, comme en non-fiction et low-content. Accord de
 Baptiste : verdict Go / Go prudent / No-Go, confiance /10, facteur décisif, **UN angle** (titre,
 sous-titre, promesse, couverture, prix, requêtes) et **trois livres du rayon à étudier**. **Hors
-périmètre v1** : PDF, mots-clés KDP (`/api/kdp-keywords` refuse `type: fiction` en 400),
-redevance, spécification d'intérieur — aucun module ne calcule une redevance fiction, en avancer
-une serait une devinette (règle 7).
+périmètre** : PDF (dossier), redevance, spécification d'intérieur — aucun module ne calcule une
+redevance fiction, en avancer une serait une devinette (règle 7). **Ajoutés le 2026-10-05, sur
+demande de Baptiste** : un **PITCH** de 3 à 4 phrases au maximum (ce que raconterait le roman, dans
+CE trio, sans en révéler la fin), affiché sous la couverture, et les **mots-clés KDP** (même bouton
+et même endpoint que la non-fiction, voir ci-dessous).
 
 Même sortie que les deux autres (`NicheVerdict`) pour que l'interface rende les trois avec le
 même bloc, plus UN champ propre à la fiction : `comparables` (`LivreComparable`). Outil
@@ -1070,6 +1075,21 @@ page renvoie la carte telle quelle (`autocomplete_score`, `analyse`) : l'endpoin
 champs du modèle. (3) La clé de la niche dans le travail est `niche.query` ; **une clé vide ne
 désigne aucune niche** (`JobStore._est_la_niche`). (4) Les requêtes proposées sont des PISTES non
 vérifiées : l'écran dit « à tester », pas « à viser ».
+
+**Le pitch** (`AngleAttaque.pitch`, requis par le schéma strict, vide ailleurs) est BORNÉ côté code
+(`limiter_pitch` : 4 phrases au plus, 700 caractères, coupe à la fin d'une phrase, une phrase unique
+démesurée coupée sur un mot avec une ellipse ; les abréviations « M. », « Dr. » ne terminent pas une
+phrase). Un pitch absent ou non textuel vaut « » — jamais deviné. Une analyse ANTÉRIEURE n'en porte
+pas : elle s'affiche sans bloc vide, et il faut la supprimer puis la refaire pour en obtenir un.
+
+**Les mots-clés KDP d'un trio** : `POST /api/kdp-keywords` accepte `type: fiction`, mêmes gardes
+(plafond, débit à la pièce, coût soldé dans un `finally`, 502 neutre) et même conservation dans le
+travail (champ `mots_cles`, clé = `FictionNicheReport.niche.cle`, §2.19). Le générateur lit le TRIO
+(sous-genre, tropes, décor en clair), le TITRE prévu et le PITCH de l'analyse — que la page renvoie
+dans `analyse`, bornés côté serveur (titre 200 caractères, pitch comme ci-dessus) : « n'en reprends
+pas les mots du titre ». `kdp_keywords.candidat_fiction` fait l'adaptation ; le prompt et les règles
+KDP (50 caractères, 7 emplacements, termes proscrits) sont ceux de la non-fiction, vérifiés côté code.
+Aucune mesure de qualité sur un roman : fixtures inventées.
 
 **Non vérifié** : l'acceptation du mode strict par l'API avec ce schéma (propriétés
 facultatives), comme pour les quatre autres outils passés en strict le 2026-09-14 (§2.8) ; la
@@ -1147,6 +1167,27 @@ contrôle. Un seul chemin payant à DataForSEO est gardé : `/api/verdict`, `/ap
 que le serveur a empilé) ; un compte vidé ENTRE l'empilement et l'exécution retombe sur le refus par
 tâche (40200) géré plus haut.
 
+**5. Audit de facturation (2026-10-05, après un run fiction jugé « cher »).** Lu GRATUITEMENT chez
+DataForSEO (`appendix/user_data`, `merchant/id_list` : journal des tâches avec leur `cost`) : **64
+tâches facturées, toutes à 0,003 $** (52 fiches = 0,156 $, 12 recherches = 0,036 $), 0,192 $ au
+total = exactement la baisse du solde (0,319 → 0,127 $). **Aucune surtaxe** selon la profondeur
+(30 ou 100) ni la priorité ; une recherche sans résultat (40102) ou refusée (40200) coûte 0. Le run
+fiction de 5 niches est enregistré à **0,3295 $** dans `usage.db` : 0,171 $ DataForSEO (5 recherches +
+52 fiches) et 0,158 $ LLM (idéation + classification). Il coûte plus qu'avant (~0,08 $ DataForSEO)
+parce que les recherches rendent désormais ~10 livres par niche au lieu de 0 à 3 : on paie les
+fiches qu'on utilise. **Écart de 0,021 $ NON EXPLIQUÉ** : 7 recherches (4 « roman feel good… » et 3 de
+non-fiction), postées dans la même minute que le run, absentes de `usage.db` et de `jobs.db`, dont 4
+jamais relues. Ce n'étaient pas des appels de l'agent (lectures gratuites seulement). Le journal des
+tâches (`merchant/id_list`) est l'outil d'audit : à relire avant de conclure à un coût caché.
+**Réglages décidés le même jour (Baptiste)** : **10 fiches par niche** (au lieu de 12 : devis,
+orchestrateur et fournisseur tenus ensemble par `tests/test_reglage_10_fiches_30_jours.py`) et
+**cache à 30 jours** (fiches, rangs BSR, recherches non-fiction et low-content, autocomplete ;
+une absence de classement reste à 3 jours, la classification des quatrièmes à 30, le cache du
+classement low-content à 15). **Prix de la fraîcheur** : un BSR ou un prix lu dans une fiche peut
+avoir un mois. Les lignes DÉJÀ en cache gardent leur date d'expiration d'origine (le TTL s'applique à
+l'ÉCRITURE) ; la purge ciblée date désormais une fiche par `expires − TTL de son époque`
+(`_ttl_livre_de_l_epoque`).
+
 **Non corrigé, connu.** (a) Une saturation à 0,00 sur des livres mesurables dont AUCUN n'est classé
 (quatrième de couverture absente) s'affiche « peu couverte » en vert et peut donner « Pépite » ;
 l'avertissement « N/M livres non classés » est visible à côté, mais la tuile ne le dit pas
@@ -1163,8 +1204,8 @@ SERP vide en non-fiction comme mesurée donnerait le bonus « moins de 10 concur
 | Source | Usage | Coût |
 |---|---|---|
 | **API Anthropic** | Ideator non-fiction, ideator fiction, classifieur de blurbs, verdict éditorial, mots-clés KDP | Payant au token. Grille dans `cost_tracker.py:8-14` — les **quatre clés portent le préfixe `claude-`** : `claude-sonnet-5` (défaut partout) 2 $/10 $ par million in/out en tarif intro **jusqu'au 31/08/2026**, puis 3 $/15 $ ; `claude-opus-4-8` 5 $/25 $ ; `claude-fable-5` 10 $/50 $ ; `claude-haiku-4-5` 1 $/5 $. **Un identifiant absent de la grille est facturé 0,00 $** (`cost_tracker.py:22-24`, `if not p: return 0.0`) : un coût invisible, pas nul. Écrire `opus-4-8` sans le préfixe dans `IDEATOR_MODEL` suffit à faire disparaître la dépense des rapports sans lever la moindre erreur |
-| **DataForSEO — Amazon Products** (`/v3/merchant/amazon/products`) | SERP : organiques vs sponsorisés, ASIN, prix, note, avis, badges | 0,003 $/appel en priority 2 (file rapide ~1-4 min, **défaut**), 0,0015 $ en priority 1 (jusqu'à ~45 min). Cache **15 j** |
-| **DataForSEO — Amazon ASIN** (`/v3/merchant/amazon/asin`) | BSR, rayon, blurb, série, éditeur, date, langue. Batché jusqu'à 100 ASIN | Même tarif par ASIN. **La file met ~250 s quel que soit le lot** → batch unique par run. Cache livre **15 j**, cache BSR **15 j** (3 j pour une absence de classement) |
+| **DataForSEO — Amazon Products** (`/v3/merchant/amazon/products`) | SERP : organiques vs sponsorisés, ASIN, prix, note, avis, badges | 0,003 $/appel en priority 2 (file rapide ~1-4 min, **défaut**), 0,0015 $ en priority 1 (jusqu'à ~45 min). Cache **30 j** |
+| **DataForSEO — Amazon ASIN** (`/v3/merchant/amazon/asin`) | BSR, rayon, blurb, série, éditeur, date, langue. Batché jusqu'à 100 ASIN | Même tarif par ASIN. **La file met ~250 s quel que soit le lot** → batch unique par run. Cache livre **30 j**, cache BSR **30 j** (3 j pour une absence de classement) |
 | **Classification de blurbs** (dérivée, pas une source réseau) | Étiquettes tropes/décor/`est_roman` produites par le LLM et remises en cache | **TTL 30 j** (`CLASSIFICATION_TTL_S`, `cache.py:17`) — le plus long des quatre, parce que la clé porte déjà tout ce qui peut invalider le résultat (§2.4 D) |
 | **Amazon autocomplete** (`completion.amazon.fr/api/2017/suggestions`, marketplace `A13V1IB3VIYZZH`) | Validation de la demande non-fiction **et lecture du contenu des suggestions** (§2.3), sonde fiction, confirmation des mots-clés KDP | **Gratuit.** Endpoint public, aucune clé. Pause 0,4 s entre requêtes |
 | **Fiche `amazon.fr/dp/{asin}` scrapée** | BSR, source par défaut en local | **Gratuit — mais IP résidentielle uniquement** (voir piège ci-dessous) |
@@ -1352,7 +1393,7 @@ Section critique. Chacun a coûté un bug réel.
     (`TropeClassification`, `:144`). `clf:` porte **en plus** la version de taxonomie, le modèle
     et un SHA1 du prompt système (`_prompt_tag()`) : ce qui change le raisonnement, là où
     l'empreinte de champs couvre ce qui change la forme du résultat. Sans elles, ajouter un champ
-    (le blurb l'a été en M4) sert des objets amputés en silence — 15 jours pour `book:`,
+    (le blurb l'a été en M4) sert des objets amputés en silence — 30 jours pour `book:`,
     **30 jours pour `clf:`** — et durcir le prompt n'a aucun effet sur les livres déjà vus.
     **Limite assumée** : l'empreinte suit les noms, pas les types ni la sémantique — changer le
     sens d'un champ sans le renommer exige de vider le cache à la main. Ni la logique du PARSEUR :
@@ -1524,7 +1565,7 @@ Section critique. Chacun a coûté un bug réel.
 38. **Le cache garde des objets ANALYSÉS : corriger un parseur ne rattrape rien.** `book:` et
     `search:` stockent l'`EnrichedBook` et le `SearchResult` déjà parsés. Leur empreinte suit
     les NOMS des champs (§5.14), pas la logique du parseur. Le parseur corrigé laisse donc le
-    cache MUTUALISÉ resservir, 15 jours et à tous les comptes, les fiches qu'il avait mal lues.
+    cache MUTUALISÉ resservir, 30 jours et à tous les comptes, les fiches qu'il avait mal lues.
     Le rapport conseillait pourtant de « relancer ». **Voie retenue par Baptiste : la purge
     ciblée à la main** (§2.14), avec sauvegarde et date butoir. Une empreinte du source du
     parseur dans la clé aurait invalidé aussi le cache FICTION à chaque retouche de
@@ -1617,7 +1658,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1811 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1877 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

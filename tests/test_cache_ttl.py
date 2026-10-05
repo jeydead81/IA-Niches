@@ -19,7 +19,7 @@ import pytest
 
 RACINE = Path(__file__).resolve().parent.parent
 JOURS = 24 * 3600
-TTL_COMMUN_J = 15
+TTL_COMMUN_J = 30      # 15 jusqu'au 2026-10-05, 30 sur décision de Baptiste
 
 
 def _const(fichier: str, nom: str) -> float:
@@ -35,12 +35,12 @@ def _const(fichier: str, nom: str) -> float:
     ("01-scripts/bsr_source.py", "BSR_TTL_S"),
     ("01-scripts/autocomplete_expand.py", "AUTOCOMPLETE_TTL_S"),
 ])
-def test_les_caches_courants_tiennent_15_jours(fichier, nom):
+def test_les_caches_courants_tiennent_30_jours(fichier, nom):
     assert _const(fichier, nom) == TTL_COMMUN_J
 
 
 @pytest.mark.parametrize("module", ["scout_master", "lowcontent_master"])
-def test_le_cache_de_serp_tient_15_jours(module):
+def test_le_cache_de_serp_tient_30_jours(module):
     assert _const(f"01-scripts/{module}.py", "_SEARCH_TTL_S") == TTL_COMMUN_J
 
 

@@ -52,7 +52,7 @@ import sys
 import time
 import traceback
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -273,15 +273,33 @@ def _imprimer_devis(d: DevisCalibration) -> None:
 
 # ── Purge ciblée (R2, voie A) ──────────────────────────────────────────────────
 
+# Le TTL des fiches est passé de 15 à 30 jours le 2026-10-05 (décision de Baptiste). Une ligne écrite
+# avant porte `now + 15 j`, une ligne écrite après `now + 30 j` : lire les premières avec 30 j les
+# datait 15 jours trop TÔT, donc une purge `--ecrites-avant` pouvait viser une fiche écrite jusqu'à
+# 15 jours APRÈS la date butoir — le sens imprudent. Les deux époques se séparent sans ambiguïté : une
+# ligne ancienne expire au plus tard 15 jours après le changement, une ligne récente au plus tôt 30.
+_TTL_LIVRE_ANCIEN_S = 15 * 24 * 3600
+_CHANGEMENT_TTL_LIVRE = datetime(2026, 10, 5, tzinfo=timezone.utc).timestamp()
+
+
+def _ttl_livre_de_l_epoque(expires: float) -> float:
+    """Le TTL sous lequel une fiche d'`expires` donné a été écrite."""
+    return (_TTL_LIVRE_ANCIEN_S
+            if expires <= _CHANGEMENT_TTL_LIVRE + _TTL_LIVRE_ANCIEN_S + 24 * 3600
+            else BOOK_TTL_S)
+
+
 def _date_ecriture(cache, cle: str) -> float | None:
-    """`expires - BOOK_TTL_S` : `set_book` n'a qu'un appelant (`enrich_asins`), qui passe
-    toujours `BOOK_TTL_S`. `None` si la ligne est illisible — la fiche n'est alors pas visée."""
+    """`expires - TTL de son époque` : `set_book` n'a qu'un appelant (`enrich_asins`), qui passe
+    toujours `BOOK_TTL_S` (15 j avant le 2026-10-05, 30 j depuis : `_ttl_livre_de_l_epoque`).
+    `None` si la ligne est illisible — la fiche n'est alors pas visée. Les lignes prolongées
+    (`--prolonger-cache`, `expires` en 2030) restent illisibles par ce calcul, comme avant."""
     try:
         with closing(cache._conn()) as cx:
             row = cx.execute("SELECT expires FROM kv WHERE key=?", (cle,)).fetchone()
     except Exception:                                # noqa: BLE001
         return None
-    return None if row is None else row[0] - BOOK_TTL_S
+    return None if row is None else row[0] - _ttl_livre_de_l_epoque(row[0])
 
 
 def fiches_sans_pages(requetes: list[str], cache, n_asin: int | None = None,
@@ -367,7 +385,7 @@ def purger_fiches_sans_pages(requetes: list[str], chemin_cache, confirmer: bool 
         for k in visees:
             ligne = cx.execute("SELECT value, expires FROM kv WHERE key=?", (k,)).fetchone()
             if (ligne is None or ligne[1] < maintenant
-                    or ligne[1] - BOOK_TTL_S >= ecrites_avant
+                    or ligne[1] - _ttl_livre_de_l_epoque(ligne[1]) >= ecrites_avant
                     or json.loads(ligne[0]).get("pages") is not None):
                 raise RuntimeError(f"la clé {k} a changé depuis l'aperçu : rien n'est supprimé.")
         for k in visees:

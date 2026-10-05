@@ -15,7 +15,7 @@ import unicodedata
 
 from dotenv import load_dotenv
 
-from models import MotsClesKDP, ScoredNiche
+from models import MotsClesKDP, NicheCandidate, ScoredNiche
 
 DEFAULT_MODEL = os.getenv("KDP_KEYWORDS_MODEL", "claude-sonnet-5")
 
@@ -141,7 +141,33 @@ def _json_si_texte(v):
     return v
 
 
-def build_user_prompt(scored: ScoredNiche, titre: str = "") -> str:
+def _lib(cle) -> str:
+    return str(cle or "").replace("_", " ")
+
+
+def candidat_fiction(report, pitch: str = "") -> tuple[NicheCandidate, str]:
+    """Le trio d'un roman, présenté au générateur comme une niche, plus son CONTEXTE en clair.
+
+    Les clés de taxonomie se lisent en français (« enemies to lovers », jamais le tiret bas) : le
+    modèle en tire des expressions qu'un lecteur tape. Le pitch donne l'ambiance, pas la lettre —
+    le prompt dit de ne pas en recopier les phrases. Les mots-clés d'un roman sont le genre et ses
+    ressorts, le décor, la situation de lecture : jamais un titre de roman existant."""
+    n = report.niche
+    tropes = [_lib(t) for t in n.tropes]
+    label = " × ".join([_lib(n.sous_genre)] + tropes + ([_lib(n.decor)] if n.decor else []))
+    contexte = [f"ROMAN de fiction : sous-genre « {_lib(n.sous_genre)} »"
+                + (" · tropes : " + ", ".join(f"« {t} »" for t in tropes) if tropes else "")
+                + (f" · décor : « {_lib(n.decor)} »" if n.decor else ""),
+                "Vise le genre et ses ressorts reconnaissables, le décor, l'ambiance et la "
+                "situation de lecture. Jamais un titre de roman existant."]
+    if pitch:
+        contexte.append("PITCH (donne l'ambiance, ne recopie pas ses phrases) : " + pitch)
+    cand = NicheCandidate(niche=label, requete_amazon=n.query, categorie=f"Fiction · {_lib(n.sous_genre)}",
+                          rationale="")
+    return cand, "\n".join(contexte)
+
+
+def build_user_prompt(scored: ScoredNiche, titre: str = "", contexte: str = "") -> str:
     lignes = [f"NICHE : {scored.niche}"]
     if scored.requete_amazon:
         lignes.append(f"Requête Amazon principale : {scored.requete_amazon}")
@@ -150,6 +176,8 @@ def build_user_prompt(scored: ScoredNiche, titre: str = "") -> str:
     if scored.satellite_keywords:
         lignes.append("Requêtes satellites déjà repérées : "
                       + ", ".join(scored.satellite_keywords))
+    if contexte:
+        lignes.append(contexte)
     if titre:
         lignes.append(f"TITRE PRÉVU (n'en reprends pas les mots) : {titre}")
     lignes.append("\nPropose les expressions via l'outil proposer_mots_cles.")
@@ -184,7 +212,7 @@ def _default_sonde(prefixe: str) -> list[str]:
 
 
 def generer_mots_cles(scored: ScoredNiche, titre: str = "", client=None, sonde=None,
-                      model: str | None = None, on_usage=None) -> MotsClesKDP:
+                      model: str | None = None, on_usage=None, contexte: str = "") -> MotsClesKDP:
     """7 mots-clés backend, dont les confirmés par Amazon en priorité.
 
     La sonde autocomplete est GRATUITE : on ne se contente donc pas de faire confiance au
@@ -206,7 +234,7 @@ def generer_mots_cles(scored: ScoredNiche, titre: str = "", client=None, sonde=N
             "input_schema": CANDIDATS_INPUT_SCHEMA,
         }],
         tool_choice={"type": "tool", "name": "proposer_mots_cles"},
-        messages=[{"role": "user", "content": build_user_prompt(scored, titre)}],
+        messages=[{"role": "user", "content": build_user_prompt(scored, titre, contexte)}],
     )
     if on_usage is not None and getattr(resp, "usage", None) is not None:
         on_usage(getattr(resp.usage, "input_tokens", 0),

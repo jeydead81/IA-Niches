@@ -58,8 +58,8 @@ _MODELES = {
     },
     "fiction": {
         "cle": "n_niches", "defaut": 8,
-        "asin_par_unite": 12,         # fiction_serp_provider.n_top
-        "classif_par_unite": 12,      # une classification par livre du rayon
+        "asin_par_unite": 10,         # fiction_serp_provider.n_top (tests/test_reglage_10_fiches_30_jours.py)
+        "classif_par_unite": 10,      # une classification par livre du rayon
     },
     "lowcontent": {
         "cle": "n_search", "defaut": 6,

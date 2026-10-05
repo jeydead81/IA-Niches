@@ -133,13 +133,14 @@ class _ProvLarge(_Prov):
         return SearchResult(keyword=keyword, organic=items, sponsored=[])
 
 
-def test_fetch_shelf_n_top_vaut_12_par_defaut():
-    """Le signal concurrentiel est dans les 12 premiers ; les ASIN 13-20 coûtent 0,024 $
-    et n'apportent presque rien (perf(fiction): rayon top 12 par défaut)."""
+def test_fetch_shelf_n_top_vaut_10_par_defaut():
+    """Le signal concurrentiel est dans les premiers résultats ; les suivants coûtent 0,003 $
+    chacun pour peu d'apport. 12 jusqu'au 2026-10-05, 10 sur décision de Baptiste (un run de 5
+    niches : 52 fiches, 81 % du coût DataForSEO)."""
     cost = CostTracker()
     shelf = fetch_fiction_shelf(_niche(), provider=_ProvLarge(), cost=cost, cache=None)
-    assert shelf.asins_demandes == 12
-    assert len(shelf.books) == 12
+    assert shelf.asins_demandes == 10
+    assert len(shelf.books) == 10
 
 
 def test_fetch_shelf_n_top_20_reste_possible():

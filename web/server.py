@@ -40,9 +40,10 @@ from lowcontent_master import run_lowcontent_scout  # noqa: E402
 from lowcontent_taxonomy import (load_taxonomy as load_taxonomy_lc,  # noqa: E402
                                  valid_formats as valid_formats_lc)
 from niche_verdict import generate_verdict  # noqa: E402
-from fiction_verdict import generate_fiction_verdict, raison_non_mesure  # noqa: E402
+from fiction_verdict import (generate_fiction_verdict, limiter_pitch,  # noqa: E402
+                             raison_non_mesure)
 from lowcontent_verdict import generate_lowcontent_verdict  # noqa: E402
-from kdp_keywords import generer_mots_cles  # noqa: E402
+from kdp_keywords import candidat_fiction, generer_mots_cles  # noqa: E402
 from fiction_scoring import NON_CONCLUANTES, relire_resultat_fiction  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
@@ -1267,6 +1268,19 @@ def history(niche: str = "", user_id: str = Depends(utilisateur_courant)):
             "delta": d.model_dump() if d else None}
 
 
+def _titre_et_pitch(analyse) -> tuple[str, str]:
+    """Le titre prévu (titre + sous-titre) et le pitch du premier angle d'une analyse fiction
+    renvoyée par la page. Illisible, partielle ou absente : « » — jamais une exception, jamais un
+    texte deviné. BORNÉS : la page est le client, et le plafond compte des analyses, pas des
+    jetons (titre 200 caractères, pitch comme `limiter_pitch`)."""
+    try:
+        a = analyse["angles"][0]
+        titre = " ".join(str(x) for x in (a.get("titre"), a.get("sous_titre")) if isinstance(x, str))
+        return titre[:200].strip(), limiter_pitch(a.get("pitch"))
+    except Exception:  # noqa: BLE001 — une analyse qu'on ne sait pas lire n'empêche pas les mots-clés
+        return "", ""
+
+
 @app.post("/api/kdp-keywords")
 async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_courant)):
     """Les 7 mots-clés backend KDP d'une niche, à la demande (sans état, ~0,006 $).
@@ -1279,18 +1293,32 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
     # elle qui part au generateur, comme pour le dossier -- le LowContentScored entier leve avant
     # l'appel.
     type_ = (body.pop("type", None) or "scout").strip().lower()
-    if type_ not in ("scout", "lowcontent"):
+    if type_ not in ("scout", "lowcontent", "fiction"):
         raise HTTPException(status_code=400, detail=f"type de mots-clés inconnu : « {type_} »")
+    analyse = None
+    if type_ == "fiction":
+        # La page renvoie la carte telle qu'elle l'a reçue. `analyse` (le verdict déjà payé) donne le
+        # TITRE prévu et le PITCH, que le générateur lit ; elle et `autocomplete_score` ne sont pas
+        # des champs du rapport, que le modèle REFUSE (extra="forbid") : on ne garde que ses champs.
+        analyse = body.pop("analyse", None)
+        body = {k: v for k, v in body.items() if k in FictionNicheReport.model_fields}
     try:
-        scored = (LowContentScored if type_ == "lowcontent" else ScoredNiche).model_validate(body)
+        scored = {"lowcontent": LowContentScored, "fiction": FictionNicheReport,
+                  "scout": ScoredNiche}[type_].model_validate(body)
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
+    if type_ == "fiction":
+        titre, pitch = _titre_et_pitch(analyse)
+        candidat, contexte = candidat_fiction(scored, pitch)
+    elif type_ == "lowcontent":
+        candidat, titre, contexte = scored.niche, scored.niche.niche, ""
+    else:
+        candidat, titre, contexte = scored, scored.niche, ""
     _verifier_plafond(user_id)
     ligne = _reserver_appel(user_id, "kdp_keywords")          # même raisonnement que /api/verdict
     cost = CostTracker()
     try:
-        mots = generer_mots_cles(scored.niche if type_ == "lowcontent" else scored,
-                                 titre=(scored.niche.niche if type_ == "lowcontent" else scored.niche),
+        mots = generer_mots_cles(candidat, titre=titre, contexte=contexte,
                                  on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     except Exception as e:  # noqa: BLE001 — même raisonnement que /api/verdict
         raise HTTPException(status_code=502, detail=_erreur_publique(e)) from None
