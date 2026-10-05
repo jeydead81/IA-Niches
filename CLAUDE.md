@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-05** (1 766 tests sur 128 fichiers, 52 modules, 34
+> Comptages revérifiés le **2026-10-05** (1 779 tests sur 129 fichiers, 52 modules, 34
 > variables d'env, 22 endpoints, `server.py` 1 380 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -584,7 +584,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1766 tests** sur **128 fichiers** `tests/test_*.py`, **1766 passés, 0 ignoré, 0 échec,
+**1779 tests** sur **129 fichiers** `tests/test_*.py`, **1779 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -832,7 +832,7 @@ repayant le classement. Le brut de ces fiches est perdu. Ce qui est désormais c
 | **Cache du classement** (`lowcontent_ideator`, mode classement SEULEMENT) | Clé `llmlc:` + SHA1 de modèle, consigne système, prompt utilisateur et outils (`strict` compris) — une empreinte, jamais un compteur. TTL 15 j, **mutualisé** : les requêtes sont des complétions publiques d'Amazon (§1). On garde la réponse BRUTE de l'outil, relue par la logique courante. Écrite seulement si complète : ni `max_tokens`, ni entrée illisible, ni requête hors liste, ni omise en `classer_toutes`. Jamais en idéation, où une relance est voulue. Le premier run paie le classement de toute façon |
 | **Garde prédictif du batch ASIN** | Il comptait l'union ENTIÈRE : un plafond calé au plus juste refusait un batch à 0 $, puis le canal BSR repartait scraper chaque ASIN. Seules les fiches absentes du cache sont vérifiées, et le garde est AUSSI dans `enrich_asins`, juste avant l'envoi : les 185 fiches du run 4 expirent dans la même seconde, une phase 4 à cheval sur cet instant achetait 0,555 $ (calculé) sans vérification. Refus → les fiches du cache sont rendues, rien ne lève |
 | **Tâches facturées non imputées** | `TaskPostRefuse` est la SEULE panne de SERP non imputée : poll épuisé, relecture illisible et Ctrl-C surviennent APRÈS la création de la tâche (5 SERP créées imputées 0 $ au rejeu), sur les trois moteurs. Une relecture illisible pendant le poll du batch ne jette plus le lot (`lectures_en_echec`, tâche relue au cycle suivant). Un Ctrl-C impute le pire cas (`enrich_asins`, `resolve_bsrs`, phase 3 : 185 tâches créées imputées 0 $ au rejeu) ; la CLI écrit « au moins X $ engagés » et ne prétend plus que les fiches d'un batch interrompu sont en cache. Une écriture de cache refusée ne jette plus un batch payé. **Depuis le 2026-09-29** (pré-mortem du run 6) : un lot ASIN dont le `task_post` LÈVE est imputé au PIRE cas (`taches_incertaines`, `lots_exception`) et annoncé « peut-être facturés », au lieu d'être compté « ni facturé » — un `ReadTimeout` à 30 s veut dire que la requête est partie, pas qu'elle n'a rien créé, et le chemin SERP des trois moteurs codait déjà ce pire cas sur le MÊME `_post`. Seul un refus EXPLICITE (`TaskPostRefuse`, `RefusCompte`) reste non imputé, des deux côtés |
-| **Refus de COMPTE** (`RefusCompte`, sous-classe de `TaskPostRefuse`) | Refus posé à la RACINE sans aucune tâche, sans liste de codes. Au premier : plus aucun appel au fournisseur, le cache CONTINUE de servir, les niches restantes sortent ⚪ et comptées (31 `task_post` en rafale au premier run). Même traitement sur les trois moteurs. Côté batch ASIN (`product_raw_batch`), les lots suivants ne partent plus : ils sont comptés, pas envoyés (relevé au rejeu final, 100 + 85) ; une exception à l'envoi, elle, n'arrête rien. **Statut du job produit et remboursement de l'unité de plafond : inchangés** (décision). Non couvert : un refus de solde posé PAR TÂCHE (forme jamais capturée) |
+| **Refus de COMPTE** (`RefusCompte`, sous-classe de `TaskPostRefuse`) | Refus posé à la RACINE sans aucune tâche, sans liste de codes. Au premier : plus aucun appel au fournisseur, le cache CONTINUE de servir, les niches restantes sortent ⚪ et comptées (31 `task_post` en rafale au premier run). Même traitement sur les trois moteurs. Côté batch ASIN (`product_raw_batch`), les lots suivants ne partent plus : ils sont comptés, pas envoyés (relevé au rejeu final, 100 + 85) ; une exception à l'envoi, elle, n'arrête rien. **Statut du job produit et remboursement de l'unité de plafond : inchangés** (décision). **Solde épuisé posé PAR TÂCHE (40200 « Payment Required »)** : reconnu comme refus de COMPTE depuis le 2026-10-05 (`STATUT_PAIEMENT_REQUIS`, SERP seulement ; forme DÉDUITE du message d'un run réel, jamais capturée brute) — les cinq recherches partaient toutes, refusées une à une. Un autre code par tâche reste un refus de requête. Non couvert : le lot ASIN (`product_raw_batch`) traite ce refus par tâche comme les autres |
 | **Avertissements et conseils** (`_conseil_indecidable`, `n_pages_mesurees`) | « aucune fiche exploitable » quand l'éditeur était lu sur 31 niches, et « le cache ne repaiera que ce qui manque » alors qu'il resservait les fiches mal lues : faux tous deux. Le conseil suit désormais la cause (SERP tombées → compte ; redevance jamais calculée avec éditeur lu → LECTURE, rejeu du brut, purge) |
 | **Progression** | « N/M recherche(s) Amazon servie(s) par le cache — non relue(s) » et « N/M fiche(s) servie(s) par le cache » : c'était exactement l'alerte qui manquait. Jamais « à payer » (§5.27) |
 | **Diagnostics par étiquette** dans `signaux` | Compteurs `n_bonus_part_indie`, `part_indie_min`/`max`, `n_crit3`, `n_malus_recents` et médianes des QUATRE axes. Sans seuil, sans effet sur la porte : c'est Baptiste qui juge |
@@ -1122,6 +1122,17 @@ saturée »). Gain : 640 s sur 915 s au run observé. **Le parallélisme n'est P
 choix : hors ce défaut, le run sans incident durait 597 s dont ~250 s de file ASIN ; le gain d'un
 envoi groupé des recherches n'est pas mesuré, et il toucherait le plafond, l'annulation et
 l'imputation du coût. À reprendre si un run reste lent.
+
+**4. Solde épuisé, et un écran qui se tait** (même jour). Le test suivant de Baptiste : « direct
+erreur, pas de résultats en 30 s ». Cause : le compte DataForSEO était à sec (solde −0,05 $, 1,01 $
+déposé au total, lu gratuitement par `appendix/user_data`) ; cinq recherches refusées « 40200 Payment
+Required ». Deux défauts du produit, corrigés : le refus par tâche n'était pas reconnu comme un refus
+de COMPTE (cinq appels au lieu d'un), et un résultat vide n'en disait pas la cause — les
+avertissements vivent dans le panneau de progression, que la fin de l'analyse masque. `videOuRaison`
+(les trois onglets) affiche désormais les avertissements publics quand une analyse ne rend ni carte
+ni erreur ; sans avertissement, l'état vide d'avant. **Non fait, à décider** : le run a quand même
+dépensé l'appel LLM (~0,014 $) et consommé une unité de plafond avant d'échouer ; un contrôle gratuit
+du solde AVANT de lancer éviterait les deux (décision documentée : statut du job et unité inchangés).
 
 **Non corrigé, connu.** (a) Une saturation à 0,00 sur des livres mesurables dont AUCUN n'est classé
 (quatrième de couverture absente) s'affiche « peu couverte » en vert et peut donner « Pépite » ;
@@ -1593,7 +1604,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1766 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1779 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

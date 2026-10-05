@@ -1560,6 +1560,7 @@
   .hist-ligne .arret-confirm{grid-column:1 / -1;justify-self:end}
   .errbox.info{background:var(--muted);color:var(--ink-soft);border-color:var(--border)}
   .errbox.info.on::before{content:"⏹️ "}
+  .errbox.info.raison.on::before{content:"ℹ️ "}
   @media (max-width:700px){.btn-arreter{grid-column:1 / -1;justify-self:end}}
 
   /* ── Fiction : « Analyser cette niche » ── */
@@ -2155,6 +2156,29 @@ function progressionEtat(type, messages){
     }
   });
   return {pct: fini ? 100 : Math.min(99, Math.round(pct)), phase, alertes};
+}
+
+// Pourquoi une analyse ne rend RIEN : les avertissements de sa progression, sans leur symbole.
+// Run du 2026-10-05, solde du fournisseur epuise : cinq recherches refusees, un travail
+// « termine » et un ecran vide qui disait « lancez une analyse ». Les avertissements vivent dans
+// le panneau de progression, que la fin de l'analyse masque : sans cette ligne, la cause
+// disparait avec lui. Chaine vide = rien a dire (aucune raison n'est inventee).
+function raisonSansResultat(type, msgs){
+  const vus = [];
+  progressionEtat(type, msgs).alertes.forEach(a => {
+    const t = a.replace(/^[\s⚠️]+/, '').trim();
+    if(t && vus.indexOf(t) < 0) vus.push(t);
+  });
+  const s = vus.join(' ');
+  return s.length > 480 ? s.slice(0, 477) + '…' : s;
+}
+
+// Fin d'analyse sans carte ni erreur : la raison si la progression en a une, sinon l'etat vide.
+function videOuRaison(type, panneau, errbox, vide, nCartes){
+  if(nCartes || errbox.classList.contains('on')) return;
+  const raison = raisonSansResultat(type, (panneau && panneau._msgs) || []);
+  if(raison){ errbox.textContent = raison; errbox.classList.add('on', 'info', 'raison'); }
+  else vide.style.display = 'block';
 }
 
 function majProg(panneau, type, msg){
@@ -2976,7 +3000,7 @@ form.addEventListener('submit',e=>{
   if(es) es.close();
   steps.innerHTML=''; $('#cartes-nf').innerHTML=''; results.classList.remove('on');
   fermerFiche();
-  errbox.classList.remove('on'); errbox.textContent='';
+  errbox.classList.remove('on', 'raison'); errbox.textContent='';
   empty.style.display='none'; progress.classList.add('on');
   runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
   runBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
@@ -3386,7 +3410,7 @@ const VUE_LC = {
   avant(){
     if(esLc) esLc.close();
     stepsLc.innerHTML=''; viderProg(progressLc); gridLc.innerHTML=''; resultsLc.classList.remove('on');
-    errboxLc.classList.remove('on'); errboxLc.textContent='';
+    errboxLc.classList.remove('on', 'raison'); errboxLc.textContent='';
     emptyLc.style.display='none'; progressLc.classList.add('on');
     runLcBtn.disabled=true; runLcLabel.textContent='Analyse en cours…';
     const ic=runLcBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
@@ -3402,8 +3426,7 @@ const VUE_LC = {
     runLcBtn.disabled=false; runLcLabel.textContent='Trouver les niches';
     const sp=runLcBtn.querySelector('.spin');
     if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
-    if(!gridLc.children.length && !errboxLc.classList.contains('on'))
-      emptyLc.style.display='block';
+    videOuRaison('lowcontent', progressLc, errboxLc, emptyLc, gridLc.children.length);
   },
 };
 
@@ -4067,7 +4090,7 @@ formFic.addEventListener('submit', e=>{
   if(!sgSelect.value) return;
   if(esFic) esFic.close();
   stepsFic.innerHTML=''; gridFic.innerHTML=''; resultsFic.classList.remove('on');
-  errboxFic.classList.remove('on'); errboxFic.textContent='';
+  errboxFic.classList.remove('on', 'raison'); errboxFic.textContent='';
   emptyFic.style.display='none'; progressFic.classList.add('on');
   runFicBtn.disabled=true; runFicLabel.textContent='Analyse en cours…';
   runFicBtn.querySelector('svg').outerHTML='<span class="spin"></span>';
@@ -4092,7 +4115,7 @@ const VUE_NF = {
     if(es) es.close();
     steps.innerHTML=''; viderProg(progress); $('#cartes-nf').innerHTML=''; results.classList.remove('on');
   fermerFiche();
-    errbox.classList.remove('on'); errbox.textContent='';
+    errbox.classList.remove('on', 'raison'); errbox.textContent='';
     empty.style.display='none'; progress.classList.add('on');
     runBtn.disabled=true; runLabel.textContent='Analyse en cours…';
     const ic=runBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
@@ -4107,7 +4130,7 @@ const VUE_NF = {
     progress.classList.remove('on');
     runBtn.disabled=false; runLabel.textContent='Trouver les niches';
     const sp=runBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
-    if(!$('#cartes-nf').children.length && !errbox.classList.contains('on')) empty.style.display='block';
+    videOuRaison('scout', progress, errbox, empty, $('#cartes-nf').children.length);
   },
 };
 
@@ -4116,7 +4139,7 @@ const VUE_FIC = {
   avant(){
     if(esFic) esFic.close();
     stepsFic.innerHTML=''; viderProg(progressFic); gridFic.innerHTML=''; resultsFic.classList.remove('on');
-    errboxFic.classList.remove('on'); errboxFic.textContent='';
+    errboxFic.classList.remove('on', 'raison'); errboxFic.textContent='';
     emptyFic.style.display='none'; progressFic.classList.add('on');
     runFicBtn.disabled=true; runFicLabel.textContent='Analyse en cours…';
     const ic=runFicBtn.querySelector('svg'); if(ic) ic.outerHTML='<span class="spin"></span>';
@@ -4131,7 +4154,7 @@ const VUE_FIC = {
     progressFic.classList.remove('on');
     runFicBtn.disabled=false; runFicLabel.textContent='Trouver les trios';
     const sp=runFicBtn.querySelector('.spin'); if(sp) sp.outerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3v4M3 5h4M6 17v4M4 19h4"/><path d="M13 3 15 9l6 2-6 2-2 6-2-6-6-2 6-2Z"/></svg>';
-    if(!gridFic.children.length && !errboxFic.classList.contains('on')) emptyFic.style.display='block';
+    videOuRaison('fiction', progressFic, errboxFic, emptyFic, gridFic.children.length);
   },
 };
 

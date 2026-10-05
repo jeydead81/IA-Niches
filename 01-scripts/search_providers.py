@@ -66,6 +66,12 @@ class AucunResultat(RuntimeError):
 # d'être attendus, on ne reconnaît que ce qu'on a vu.
 STATUT_AUCUN_RESULTAT = 40102
 
+# Solde épuisé, posé PAR TÂCHE (relevé le 2026-10-05 : compte à −0,05 $, cinq recherches refusées
+# « 40200 Payment Required »). C'est un refus de COMPTE, pas de requête : toutes les suivantes
+# seront refusées de même. Reconnu seul, comme 40102 — un code jamais vu ne doit pas relancer la
+# rafale ni la faire cesser.
+STATUT_PAIEMENT_REQUIS = 40200
+
 
 class RefusCompte(TaskPostRefuse):
     """Refus posé à la RACINE, sans aucune tâche : c'est le COMPTE qui est refusé (non
@@ -250,6 +256,8 @@ class DataForSEOProvider:
             motif = f"task_post refusé : {_motif_refus(d, task)}"
             if not taches and d.get("status_code") not in (None, 20000, 20100):
                 raise RefusCompte(motif)
+            if task.get("status_code") == STATUT_PAIEMENT_REQUIS:
+                raise RefusCompte(motif)      # solde épuisé : le compte, pas la requête
             raise TaskPostRefuse(motif)
         tid = task.get("id")
         for _ in range(max_polls):
