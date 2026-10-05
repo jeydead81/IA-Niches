@@ -7,8 +7,8 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-03** (1 578 tests sur 118 fichiers, 49 modules, 34
-> variables d'env, 18 endpoints, `server.py` 1 171 lignes). Références de ligne revérifiées le **2026-08-22**
+> Comptages revérifiés le **2026-10-03** (1 643 tests sur 121 fichiers, 52 modules, 34
+> variables d'env, 22 endpoints, `server.py` 1 380 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
@@ -71,7 +71,7 @@ externe ».
 
 **Cinq** bases SQLite : `df-cache.db`, `jobs.db`, `usage.db`, `history.db`, **`comptes.db`**.
 Elles vivent dans `99-logs/` par défaut, et dans **`DATA_DIR`** dès qu'elle est définie —
-`storage.py` en est la source unique (§2.17). **49 fichiers `.py`** dans `01-scripts/`.
+`storage.py` en est la source unique (§2.17). **52 fichiers `.py`** dans `01-scripts/`.
 
 **TROIS** moteurs indépendants coexistent désormais : le **scout non-fiction**, le **scout
 fiction** et le **scout low-content** (§2.11, livré les 2026-08-18/19). Les trois ne se
@@ -409,7 +409,7 @@ l'exiger).
 | DELETE | `/api/jobs/{id}` | oui | **Supprime UNE analyse** de la session (« Mes analyses », 2026-10-03). **404** — jamais 403 — pour le travail d'un autre compte ; **409** pour une analyse pas finie (son thread écrirait dans le vide) ; 204 sinon ; `origine_sure`. Supprime le travail (étapes, résultat, verdicts et mots-clés rangés dedans) et **RIEN d'autre** : ni `usage.db` (supprimer de l'écran ne rembourse rien et ne libère aucune unité de plafond, sinon « supprimer puis relancer » contournerait le plafond mensuel), ni l'historique d'évolution des niches (`history.db`, série partagée par toutes les analyses d'une même niche) |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
 | GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_analyses, cout_usd}`. Le backend rend toujours le coût ; **l'UI n'affiche que le nombre d'analyses** (§5.27) |
-| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
+| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
 | POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
@@ -463,7 +463,7 @@ pagination sous « Nombre de pages de l'édition imprimée », §5.37) ·
 `fiction_autocomplete.py` (sonde à deux barreaux).
 
 **LLM** — `niche_ideator.py` · `niche_verdict.py` · `kdp_keywords.py` · `fiction_ideator.py` ·
-`fiction_classifier.py` · `lowcontent_ideator.py` · `lowcontent_verdict.py`. Tous en **tool-use
+`fiction_classifier.py` · `lowcontent_ideator.py` · `lowcontent_verdict.py` · `fiction_verdict.py` (§2.18). Tous en **tool-use
 forcé**, jamais de parsing de texte libre. **Cinq sont en mode STRICT** (`strict: true` et
 `additionalProperties: false` sur CHAQUE objet) : `lowcontent_ideator` depuis le 2026-09-13
 (§2.14), puis `lowcontent_verdict`, `fiction_ideator`, `kdp_keywords` et `fiction_classifier`
@@ -539,7 +539,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
   `EventSource` sur `/api/jobs/{id}/stream`. L'id est mémorisé en `localStorage` par onglet —
   **trois clés** : `ia-niches-job-scout`, `ia-niches-job-fiction`, `ia-niches-job-lowcontent` — et
   `reprendreTravail` s'y raccroche au chargement — **un rechargement reprend le run en cours**, et
-  un run terminé pendant l'absence est retrouvé et affiché.
+  un run terminé pendant l'absence est retrouvé et affiché — **et `vue.jobId` est posé dans les DEUX cas** (travail en cours repris, travail terminé retrouvé) : c'est là que se range l'analyse payée à la pièce, et le chemin « terminé » l'oubliait (rechargement après la fin d'un run = analyse suivante non conservée ; corrigé le 2026-10-03, `tests/test_conservation_analyses.py`).
   **Les trois appels doivent vivre dans `entrer()`, jamais au niveau module** : celui du
   low-content y était, donc il partait AVANT que la session soit confirmée, se prenait un 401 et
   ne reprenait rien — un run de neuf minutes perdu à chaque rechargement, en silence, l'onglet
@@ -579,7 +579,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1578 tests** sur **118 fichiers** `tests/test_*.py`, **1578 passés, 0 ignoré, 0 échec,
+**1643 tests** sur **121 fichiers** `tests/test_*.py`, **1643 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1032,6 +1032,45 @@ suivant. Aucun balayage périodique n'existe.
 `X-Forwarded-Proto` que tout proxy TLS envoie, `origine_sure` fonctionne derrière ce proxy,
 et `_verifier_config_prod` refuse de démarrer sans `BSR_SOURCE=dataforseo`.
 
+### 2.18 Verdict FICTION — `fiction_verdict.py` (2026-10-03)
+
+« Analyser cette niche » sur une carte fiction, comme en non-fiction et low-content. Accord de
+Baptiste : verdict Go / Go prudent / No-Go, confiance /10, facteur décisif, **UN angle** (titre,
+sous-titre, promesse, couverture, prix, requêtes) et **trois livres du rayon à étudier**. **Hors
+périmètre v1** : PDF, mots-clés KDP (`/api/kdp-keywords` refuse `type: fiction` en 400),
+redevance, spécification d'intérieur — aucun module ne calcule une redevance fiction, en avancer
+une serait une devinette (règle 7).
+
+Même sortie que les deux autres (`NicheVerdict`) pour que l'interface rende les trois avec le
+même bloc, plus UN champ propre à la fiction : `comparables` (`LivreComparable`). Outil
+`rendre_verdict_fiction`, **tool-use forcé, `strict: true`**, lecture défensive (confiance
+illisible LÈVE, jamais 0/10 ; angle illisible compté). Modèle : `VERDICT_MODEL` (celui du
+verdict non-fiction, importé — pas de variable nouvelle). Les quatrièmes de couverture ne partent
+PAS au modèle : texte tiers, long, surface d'injection ; la classification porte déjà tropes et
+décor, et le prompt est borné quelle que soit la taille du rayon reçu (`MAX_LIVRES_PROMPT`).
+**Coût : non mesuré** (aucun run live) ; ordre de grandeur des autres verdicts, ~0,03 $.
+
+**Trois gardes, côté CODE** (`tests/test_fiction_verdict.py`) :
+
+| Garde | Règle |
+|---|---|
+| **Rayon non mesuré** (`rayon_non_mesure` : matrice `non_mesurable`, ou aucun livre, ou aucun livre scorable) | `generate_fiction_verdict` LÈVE `RayonNonMesure` AVANT l'appel, et l'endpoint rend **400 AVANT toute réservation** : rien dépensé, rien décompté du débit horaire. Ni « Go » ni **« No-Go »** : non mesuré n'est pas mort (règle 3, §5.2). L'interface n'offre pas le bouton sur une telle carte |
+| **Rayon incomplet** (`rayon_incomplet` : `n_echecs > 0`, OU le mot « incomplet » dans le texte du moteur) | « Go » ramené à « Go prudent », raison écrite en tête du facteur décisif. **Ne fait que DÉGRADER** : un « No-Go » ne remonte jamais. Le texte du moteur double le compteur parce qu'un travail enregistré AVANT l'ajout de `FictionNicheReport.n_echecs` vaut `0` — « complet » par défaut, optimiste donc faux |
+| **Comparables vérifiés** | Un ASIN que le modèle n'a pas pu lire dans le rayon MESURÉ est écarté et COMPTÉ (écrit dans le facteur) ; le titre affiché est celui du rayon, jamais celui du modèle ; doublons et excédent au-delà de trois passés sans compte |
+
+**Pièges propres à ce verdict.** (1) `verdict` est déjà une chaîne sur un résultat fiction : le
+verdict du modèle se range sous **`analyse`** (`JobStore.CHAMPS_ANNOTABLES`), l'écraser aurait
+effacé de l'écran les réserves du moteur. (2) `FictionNicheReport` interdit les champs extra et la
+page renvoie la carte telle quelle (`autocomplete_score`, `analyse`) : l'endpoint ne garde que les
+champs du modèle. (3) La clé de la niche dans le travail est `niche.query` ; **une clé vide ne
+désigne aucune niche** (`JobStore._est_la_niche`). (4) Les requêtes proposées sont des PISTES non
+vérifiées : l'écran dit « à tester », pas « à viser ».
+
+**Non vérifié** : l'acceptation du mode strict par l'API avec ce schéma (propriétés
+facultatives), comme pour les quatre autres outils passés en strict le 2026-09-14 (§2.8) ; la
+qualité réelle des angles et des comparables — aucune réponse live capturée, fixtures inventées
+et déclarées comme telles.
+
 ---
 
 ## 3. SOURCES DE DONNÉES ET COÛTS
@@ -1468,7 +1507,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1578 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1643 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

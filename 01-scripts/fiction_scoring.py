@@ -243,6 +243,8 @@ def build_report(niche: FictionNiche, shelf: FictionShelf,
         price_band=price_band(ok),
         verdict=verdict,
         cost_run=cost.total_usd() if cost is not None else 0.0,
+        n_echecs=shelf.n_echecs,
+        asins_demandes=shelf.asins_demandes,
     )
 
 

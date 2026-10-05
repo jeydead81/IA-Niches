@@ -1561,6 +1561,28 @@
   .errbox.info{background:var(--muted);color:var(--ink-soft);border-color:var(--border)}
   .errbox.info.on::before{content:"⏹️ "}
   @media (max-width:700px){.btn-arreter{grid-column:1 / -1;justify-self:end}}
+
+  /* ── Fiction : « Analyser cette niche » ── */
+  .fic-card .verdictslot:not(:empty){margin-top:14px}
+  .fic-card .vask{display:block;padding:0;margin:0;border:none;background:none}
+  .fic-card .vask p,.fic-card .vask-ico{display:none}
+  .fic-card .vask .btn-act{display:block;width:100%;margin:0;padding:11px 14px;text-align:center}
+  .fic-card .vask .btn-act::before{content:"✨ "}
+  .fic-card .vask p.vask-err{display:block;margin:8px 0 0;font-size:12.5px;color:var(--low-ink)}
+  .fic-card .vbox{margin-top:0}
+  .fic-card .vangle{font-size:21px}
+  .fic-card .vangle-bloc{padding:16px 16px 14px}
+  .fic-card .vraison{padding:12px 16px}
+  .fic-card .va-lignes li{grid-template-columns:22px minmax(0,1fr)}
+  .fic-card .va-lignes li .va-k,.fic-card .va-lignes li .va-v{grid-column:2}
+  .va-comp{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-direction:column;gap:6px}
+  .va-comp li{display:flex;flex-direction:column;gap:1px;font-size:13.5px;line-height:1.4}
+  .va-comp a{font-weight:600;color:var(--heading);text-decoration:none;overflow-wrap:anywhere}
+  .va-comp a:hover{text-decoration:underline}
+  .va-comp span{color:var(--ink-soft)}
+  /* Une réserve du code (rayon incomplet) n'est pas une note de bas de page : jamais grisée. */
+  .vraison .vf-note[data-alerte]{margin:8px 0 0;padding:8px 12px;border-radius:10px;background:var(--amber-bg);
+    color:#78350F;font-size:13px;line-height:1.45}
 </style>
 </head>
 <body>
@@ -2177,10 +2199,20 @@ function verdictSlot(r){
   // freine l'exploration, alors que la duree fixe une attente.
   return '<div class="vask">'
     + '<span class="vask-ico" aria-hidden="true">✨</span>'
-    + '<p><strong>Obtenir le titre à écrire</strong>L\'IA propose un angle, un sous-titre et les '
-    + 'requêtes à viser.</p>'
+    + '<p><strong>Obtenir le titre à écrire</strong>'
+    + (r && r.fiction ? 'L’IA propose un angle, un titre et trois livres du rayon à étudier.'
+                      : 'L’IA propose un angle, un sous-titre et les requêtes à viser.') + '</p>'
     + '<button type="button" class="btn-act btn-verdict">Analyser cette niche (~10 s)</button>'
     + '</div>';
+}
+
+// FICTION : le meme bloc, sur le meme gabarit. L'analyse vit sous `analyse` et NON sous `verdict`,
+// qui est deja le TEXTE du moteur (ses reserves : rayon incomplet, sous-genre fantome) : la lire
+// comme l'analyse rendrait un bloc vide a la place du bouton. Rayon non mesure : AUCUN bouton, le
+// serveur le refuse (400) et la carte dit deja « a relancer ».
+function verdictSlotFic(r){
+  if(!r || r.demand_matrix === 'non_mesurable' || !(r.books || []).length) return '';
+  return verdictSlot({niche: r.niche, fiction: true, verdict: r.analyse || null});
 }
 
 // Les concurrents du top, avec de quoi les juger. top_asins n'affichait que des
@@ -2239,6 +2271,9 @@ function verdictBlock(r){
   // C'est ce qui distingue les deux, et ce qui decide d'offrir les mots-cles KDP : leur
   // endpoint ne valide que la forme non-fiction, un bouton low-content rendrait une 400.
   const lc=!!(r.niche && typeof r.niche==='object');
+  // Fiction : ni PDF ni mots-cles KDP (hors perimetre, leurs endpoints refusent la fiction : un
+  // bouton y serait mort), en revanche trois livres du rayon a etudier.
+  const fic=!!r.fiction;
   const conf=Math.max(0, Math.min(10, Math.round(Number(v.confiance)||0)));
   const jauge='<span class="va-jauge" role="img" aria-label="confiance '+conf+' sur 10">'
     +Array.from({length:10},(_,i)=>'<i'+(i<conf?' class="on"':'')+'></i>').join('')+'</span>';
@@ -2246,7 +2281,16 @@ function verdictBlock(r){
     ? '<li><span class="va-ico" aria-hidden="true">'+ico+'</span><span class="va-k">'+lib
       +'</span><span class="va-v">'+esc(txt)+'</span></li>' : '';
 
-  let angleHtml='';
+  // Les livres a etudier : leur titre vient du RAYON (le serveur l'ecrit, le modele ne le
+  // recopie pas). Visibles sans deplier, comme le prix et le risque.
+  const comp=fic ? (v.comparables||[]).filter(c=>c && c.asin) : [];
+  const compHtml = comp.length
+    ? '<p class="va-reqs-t">📚 Livres à étudier dans le rayon</p><ul class="va-comp">'
+      + comp.map(c=>'<li><a href="https://www.amazon.fr/dp/'+esc(c.asin)+'" target="_blank" rel="noopener">'
+        +esc(c.titre||c.asin)+'</a>'+(c.pourquoi?'<span>'+esc(c.pourquoi)+'</span>':'')+'</li>').join('')
+      + '</ul>' : '';
+
+  let angleHtml = compHtml ? '<div class="vangle-bloc">'+compHtml+'</div>' : '';
   if(a){
     const reqs=[a.requete_principale,...(a.requetes_secondaires||[])].filter(Boolean)
       .map(k=>`<span class="chip">${esc(k)}</span>`).join('')||'<span class="mut">—</span>';
@@ -2279,8 +2323,9 @@ function verdictBlock(r){
         ${lignes ? '<ul class="va-lignes">'+lignes+'</ul>' : ''}
         ${blocNorme}
         ${a.risque ? '<p class="va-risque">⚠️ <strong>Risque :</strong> '+esc(a.risque)+'</p>' : ''}
-        <p class="va-reqs-t">🔎 Requêtes à viser</p>
+        <p class="va-reqs-t">🔎 Requêtes ${fic ? 'à tester' : 'à viser'}</p>
         <div class="chips">${reqs}</div>
+        ${compHtml}
         <details class="va-pli"><summary>💬 Pourquoi cet angle</summary><p>${esc(a.pourquoi)}</p></details>
       </div>`;
   }
@@ -2306,9 +2351,13 @@ function verdictBlock(r){
   const nette = t => String(t || '').replace(/\s+[—–]\s+/g, ', ').trim();
   let facteurHtml = '';
   {
-    const morceaux = nette(v.facteur_decisif).split(/(?<=[.!?])\s+(?=[A-ZÀ-ÝÉ«])|\s*;\s+/)
+    const morceaux = nette(v.facteur_decisif).split(/(?<=[.!?])\s+(?=[A-ZÀ-ÝÉ«0-9])|\s*;\s+/)
       .map(x => x.trim()).filter(Boolean);
-    const note = morceaux.length && /^\d+ angle\(s\) écarté/.test(morceaux[0]) ? morceaux.shift() : '';
+    // Les constats du CODE (angle ou livre ecarte, rayon incomplet) prefixent le raisonnement du
+    // modele : ils se lisent a part, jamais comme l'accroche.
+    const notes = [];
+    while(morceaux.length && /^(\d+ angle\(s\) écarté|\d+ livre\(s\) cité|Rayon incomplet)/.test(morceaux[0]))
+      notes.push(morceaux.shift());
     const accroche = morceaux.shift() || '';
     const points = morceaux;
     const li = x => '<li>' + esc(x) + '</li>';
@@ -2317,16 +2366,18 @@ function verdictBlock(r){
       + (points.length ? '<ul class="vf-points">' + points.slice(0, 3).map(li).join('') + '</ul>' : '')
       + (points.length > 3 ? '<details class="va-pli"><summary>Voir le reste du raisonnement</summary><ul class="vf-points">'
           + points.slice(3).map(li).join('') + '</ul></details>' : '')
-      + (note ? '<p class="vf-note">' + esc(note) + '</p>' : '')
+      + notes.map(n => /^Rayon incomplet/.test(n)
+          ? '<p class="vf-note" data-alerte>⚠️ ' + esc(n) + '</p>'
+          : '<p class="vf-note">' + esc(n) + '</p>').join('')
       + '</div>';
   }
   return `<div class="vbox">
       ${angleHtml}
-      <div class="vactions">
+      ${fic ? '' : `<div class="vactions">
         <button type="button" class="btn-act btn-pdf">📄 Télécharger le Dossier (PDF)</button>
         <button type="button" class="btn-act btn-kdp">🏷️ Mots-clés KDP</button>
       </div>
-      <div class="kdpslot"></div>
+      <div class="kdpslot"></div>`}
       <div class="vraison">
         <div class="vhead">
           <span class="vconf">Confiance ${conf}/10</span>${jauge}
@@ -2345,7 +2396,7 @@ function verdictBlock(r){
 // resultat paye a la bonne place (jobs.annoter_resultat).
 function cleNiche(r){
   const n = r && r.niche;
-  return n && typeof n === 'object' ? (n.requete_amazon || n.niche || '') : (n || '');
+  return n && typeof n === 'object' ? (n.requete_amazon || n.niche || n.query || '') : (n || '');
 }
 
 // L'analyse editoriale et les mots-cles sont des appels PAYANTS a la piece. Avec `?job=`, le
@@ -3285,6 +3336,44 @@ async function loadVerdictLc(r, carte, btn){
   }
 }
 
+// Fiction : meme discipline, UN SEUL site de branchement. Pas de PDF ni de mots-cles ici (v1).
+function brancherActionsFic(r, carte){
+  const vBtn = carte.querySelector('.btn-verdict');
+  if(vBtn) vBtn.addEventListener('click', ev => {
+    ev.stopPropagation(); loadVerdictFic(r, carte, vBtn);
+  });
+}
+
+async function loadVerdictFic(r, carte, btn){
+  btn.disabled = true; btn.setAttribute('aria-busy','true');
+  btn.textContent = 'Analyse en cours…';
+  try{
+    // `type` est OBLIGATOIRE : sans lui le serveur valide le corps comme une ScoredNiche.
+    const rep = await fetch(urlConservee('/api/verdict', VUE_FIC.jobId, r), {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type: 'fiction', ...r})});
+    if(!rep.ok){
+      const d = await rep.json().catch(()=>({}));
+      throw new Error(rep.status===429
+        ? 'Limite d’analyses atteinte pour ce mois-ci. Rien n’a été lancé.'
+        : (d.detail || 'Analyse indisponible.'));
+    }
+    const v = await rep.json();
+    const conserve = v._conserve;
+    delete v._cout; delete v._conserve;
+    r.analyse = v;
+    carte.querySelector('.verdictslot').innerHTML = verdictSlotFic(r) + (conserve === false ? noteNonConservee() : '');
+    brancherActionsFic(r, carte);
+    const vb = carte.querySelector('.vbox');
+    if(vb && vb.scrollIntoView) vb.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }catch(e){
+    btn.disabled = false; btn.removeAttribute('aria-busy');
+    btn.textContent = 'Analyser cette niche (~10 s)';
+    const p = carte.querySelector('.vask p');
+    if(p){ p.classList.add('vask-err'); p.setAttribute('role','alert'); p.textContent = String(e.message || e); }
+  }
+}
+
 const VUE_LC = {
   cle: 'ia-niches-job-lowcontent',
   avant(){
@@ -3396,6 +3485,10 @@ function reprendreTravail(vue){
     if(job.statut === 'termine' || job.statut === 'echec'){
       // Terminé pendant l'absence : on montre le résultat sans rouvrir de flux.
       try{ localStorage.removeItem(vue.cle); }catch(e){}
+      // Le travail AFFICHÉ doit être connu : c'est là que se range l'analyse payée à la pièce
+      // (verdict, mots-clés). Sans cette ligne, recharger la page après la fin d'un run — le
+      // chemin le plus ordinaire — faisait partir l'analyse suivante sans `?job=`.
+      vue.jobId = id;
       vue.viderEtapes();
       (job.progression || []).forEach(m => vue.etape(m));
       if(job.resultat) vue.resultat(job.resultat);
@@ -3881,6 +3974,7 @@ function renderFic(rows){
         <div class="fic-cle"><span class="fic-cle-k">🚪 Ouverture${glossBtn('Ouverture')}</span><b>${fmtDec(r.openness_score)}</b><span class="verdict ${openGrade}">${esc(openLabel)}</span></div>
         <div class="fic-cle"><span class="fic-cle-k">💰 Prix médian</span><b>${fmtEur(pmed)}</b><span class="mut">${pmin==null?'':fmtEur(pmin)+' – '+fmtEur(pmax)}</span></div>
       </div>
+      <div class="verdictslot" aria-live="polite">${verdictSlotFic(r)}</div>
       <details class="avance pli fic-livres"><summary>📚 Les livres qui occupent le rayon${nLivres ? ' (' + nLivres + ')' : ''}</summary>
         ${blocLivresFic(r)}</details>
       <details class="avance pli fic-detail"><summary>🔍 Le rayon en détail</summary>
@@ -3891,6 +3985,7 @@ function renderFic(rows){
         </div>
         <div class="histslot"></div>
       </details>`;
+    brancherActionsFic(r, card);
     // L'historique fiction etait ECRIT a chaque run (_consigner_fiction) et JAMAIS lu :
     // la carte n'avait ni emplacement ni appel. L'auteur accumulait une serie qu'aucun
     // ecran ne lui montrait, et la seule fonction capable de repondre a « est-ce que ca
@@ -4386,6 +4481,16 @@ const AIDE = {
       <p>Lisez enfin les <strong>alertes en orange</strong> : elles disent ce qui n'a pas pu
       être mesuré, et elles changent la lecture de toute la carte.</p>
 
+      <h3>Analyser un trio : verdict, titre et livres à étudier</h3>
+      <p>Sur une carte mesurée, le bouton <strong>Analyser cette niche</strong> demande à
+      l'IA un verdict (Go, Go prudent ou No-Go), <strong>un angle</strong> avec le titre et
+      le sous-titre à écrire, et <strong>trois livres du rayon</strong> à étudier. Ces
+      livres sont choisis parmi ceux qui ont été mesurés, et l'outil vérifie qu'ils y sont.
+      Si le rayon est <strong>incomplet</strong>, un « Go » est ramené à « Go prudent ».
+      Si le rayon n'a pas pu être mesuré, le bouton n'apparaît pas : ce n'est pas une niche
+      morte, c'est une mesure à relancer. Les requêtes proposées sont des pistes à tester,
+      pas des mesures.</p>
+
       <h3>Composer le trio vous-même</h3>
       <p>Par défaut vous ne remplissez rien et l'IA propose librement : c'est le mode
       conseillé pour découvrir un sous-genre. Sinon, ouvrez « Composer moi-même le trio »
@@ -4475,7 +4580,7 @@ function emojiAide(titre){
   const t = String(titre).toLowerCase();
   const table = [['à quoi sert','🎯'], ['bon résultat','✅'], ['thématique','✍️'], ['niches à analyser','🎚️'],
     ['sous-genre','🎚️'], ['lire','👀'], ['par quoi commencer','🚦'], ['compter','⏱️'], ['composer','🧩'],
-    ['pourquoi','💡'], ['trio','🎭'], ['axes','⚖️'], ['signaux','📡'], ['marques','🛡️']];
+    ['analyser','✨'], ['pourquoi','💡'], ['trio','🎭'], ['axes','⚖️'], ['signaux','📡'], ['marques','🛡️']];
   for(const [cle, emo] of table) if(t.indexOf(cle) >= 0) return emo;
   return '📌';
 }

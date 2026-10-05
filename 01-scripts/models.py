@@ -109,6 +109,17 @@ class AngleAttaque(BaseModel):
     source_reglementaire: str = ""
 
 
+class LivreComparable(BaseModel):
+    """Un livre du rayon que l'auteur devrait étudier (verdict FICTION).
+
+    L'ASIN et le TITRE viennent du rayon réel, jamais du modèle : `fiction_verdict` écarte un
+    identifiant qu'il n'a pas vu et réécrit le titre depuis le rayon. Seule `pourquoi` est le
+    texte du modèle."""
+    asin: str
+    titre: str
+    pourquoi: str = ""
+
+
 class NicheVerdict(BaseModel):
     """Verdict éditorial d'une niche (directeur éditorial §7-8, sur données du scout)."""
     verdict: str                           # "Go" | "Go prudent" | "No-Go"
@@ -118,6 +129,8 @@ class NicheVerdict(BaseModel):
     saturation: str = ""                   # critique stratégique Q1
     faux_concurrent: str = ""              # Q2 ("aucun" si pas de faux concurrent)
     differenciation: str = ""             # Q3 (exécution / angle / autorité)
+    # FICTION seulement (vide ailleurs) : trois livres du rayon à étudier, vérifiés côté code.
+    comparables: list[LivreComparable] = Field(default_factory=list)
 
 
 class TopBook(BaseModel):
@@ -471,6 +484,12 @@ class FictionNicheReport(BaseModel):
     seasonality: str | None = None
     verdict: str = ""
     cost_run: float = 0.0
+    # Le rayon était-il COMPLET ? Recopiés de `FictionShelf` pour que le verdict éditorial
+    # puisse refuser un « Go » sur un rayon amputé sans relire le texte du moteur. Le défaut 0
+    # dit « complet » : un résultat ANTÉRIEUR à ces champs doit donc aussi être lu dans le
+    # texte de `verdict` (cf. `fiction_verdict.rayon_incomplet`).
+    n_echecs: int = 0
+    asins_demandes: int = 0
 
     @property
     def autocomplete_score(self) -> float | None:

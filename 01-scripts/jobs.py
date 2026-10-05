@@ -118,7 +118,9 @@ class JobStore:
 
     # Les SEULS champs qu'un appel payant « a la piece » peut ranger dans une niche d'un
     # resultat. Une liste fermee : le client choisit la niche, jamais le nom du champ ecrit.
-    CHAMPS_ANNOTABLES = ("verdict", "mots_cles")
+    # `analyse` : l'analyse éditoriale d'un trio FICTION. Pas `verdict` — un résultat fiction
+    # porte déjà ce nom, pour le texte du moteur et ses réserves.
+    CHAMPS_ANNOTABLES = ("verdict", "mots_cles", "analyse")
 
     def annoter_resultat(self, job_id: str, user_id: str, cle: str, champ: str, valeur) -> bool:
         """Range `valeur` sous `champ` dans la niche `cle` du resultat d'un travail TERMINE.
@@ -165,9 +167,11 @@ class JobStore:
 
     @staticmethod
     def _est_la_niche(entree: dict, cle: str) -> bool:
+        if not cle:                    # une clé vide ne désigne AUCUNE niche (un trio sans requête)
+            return False
         niche = entree.get("niche")
-        if isinstance(niche, dict):                  # low-content : requete Amazon d'abord
-            return cle in (niche.get("requete_amazon"), niche.get("niche"))
+        if isinstance(niche, dict):    # low-content : requête Amazon d'abord ; fiction : `query`
+            return cle in (niche.get("requete_amazon"), niche.get("niche"), niche.get("query"))
         return niche == cle                          # non-fiction : le nom de la niche
 
     def fail(self, job_id: str, erreur: str, cout: dict | None = None) -> None:

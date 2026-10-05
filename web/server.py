@@ -39,6 +39,7 @@ from lowcontent_master import run_lowcontent_scout  # noqa: E402
 from lowcontent_taxonomy import (load_taxonomy as load_taxonomy_lc,  # noqa: E402
                                  valid_formats as valid_formats_lc)
 from niche_verdict import generate_verdict  # noqa: E402
+from fiction_verdict import generate_fiction_verdict, rayon_non_mesure  # noqa: E402
 from lowcontent_verdict import generate_lowcontent_verdict  # noqa: E402
 from kdp_keywords import generer_mots_cles  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
@@ -47,7 +48,7 @@ import storage  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from devis import PLAFOND_DEPASSE, verifier_devis  # noqa: E402
 from notification import notifier_fin_de_job
-from models import LowContentScored, ScoredNiche  # noqa: E402
+from models import FictionNicheReport, LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
 from categories import suggerer_categories  # noqa: E402
@@ -1143,22 +1144,36 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
     # champ et doit continuer a fonctionner. UN SEUL endpoint pour les deux verdicts --
     # en creer un seccond ferait diverger les gardes de plafond, comme l'a montre 5257323.
     type_ = (body.pop("type", None) or "scout").strip().lower()
-    if type_ not in ("scout", "lowcontent"):
+    if type_ not in ("scout", "lowcontent", "fiction"):
         raise HTTPException(status_code=400,
                             detail=f"type de verdict inconnu : « {type_} »")
+    if type_ == "fiction":
+        # La page renvoie la carte telle qu'elle l'a reçue : `autocomplete_score` (propriété
+        # ré-injectée par _run_fiction_job) et `analyse` (déjà rangée) ne sont pas des champs du
+        # rapport, que le modèle REFUSE (extra="forbid"). On ne garde que ses champs : un corps
+        # forgé n'a de toute façon aucun moyen d'y glisser autre chose.
+        body = {k: v for k, v in body.items() if k in FictionNicheReport.model_fields}
     try:
-        scored = (LowContentScored if type_ == "lowcontent" else ScoredNiche
-                  ).model_validate(body)
+        scored = {"lowcontent": LowContentScored, "fiction": FictionNicheReport,
+                  "scout": ScoredNiche}[type_].model_validate(body)
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
+    if type_ == "fiction" and rayon_non_mesure(scored):
+        # AVANT toute réservation : rien n'est dépensé ni décompté du débit horaire, et surtout
+        # aucun verdict ne sort d'une absence de mesure — « non mesuré » n'est pas « mort »
+        # (règle 3). La carte masque déjà le bouton ; ceci tient pour un client hors page.
+        raise HTTPException(
+            status_code=400,
+            detail="Le rayon de ce trio n'a pas été mesuré : relancez l'analyse avant de "
+                   "demander un verdict. Rien n'a été dépensé.")
     # Appel LLM facturé. Il ne CONSOMME pas d'unité d'analyse (il complète une analyse
     # déjà payée, d'où n_analyses=0 à l'imputation) mais il EXIGE une marge : un compte au
     # plafond ne doit pas pouvoir continuer à faire tourner le LLM indéfiniment.
     _verifier_plafond(user_id)
     ligne = _reserver_appel(user_id, "verdict")
     cost = CostTracker()
-    fabrique = (generate_lowcontent_verdict if type_ == "lowcontent"
-                else generate_verdict)
+    fabrique = {"lowcontent": generate_lowcontent_verdict, "fiction": generate_fiction_verdict,
+                "scout": generate_verdict}[type_]
     try:
         verdict = fabrique(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
     except Exception as e:  # noqa: BLE001 — la réponse a pu être PAYÉE avant de lever
@@ -1168,7 +1183,11 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
         # une réservation laissée à 0 $ effaçait la dépense d'usage.db (§5.29).
         UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
     reponse = {**verdict.model_dump(), "_cout": cost.breakdown()}
-    conserve = _conserver_dans_travail(request, user_id, "verdict", verdict.model_dump())
+    # Un résultat fiction porte DÉJÀ un `verdict` : le texte du moteur et ses réserves (rayon
+    # incomplet, sous-genre fantôme). L'objet du modèle se range à côté, sous `analyse`.
+    conserve = _conserver_dans_travail(request, user_id,
+                                       "analyse" if type_ == "fiction" else "verdict",
+                                       verdict.model_dump())
     if conserve is not None:
         reponse["_conserve"] = conserve
     return reponse

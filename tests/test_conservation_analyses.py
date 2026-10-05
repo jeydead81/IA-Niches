@@ -240,3 +240,46 @@ def test_un_type_de_mots_cles_inconnu_rend_400(monkeypatch, tmp_path):
 def test_sans_type_les_mots_cles_non_fiction_sont_inchanges(monkeypatch, tmp_path):
     c, server, uid = _client(monkeypatch, tmp_path)
     assert c.post("/api/kdp-keywords", json=_NICHE_NF).status_code == 200
+
+
+# ── Côté page : le travail AFFICHÉ doit être connu, quel que soit le chemin d'affichage ──
+
+def _jouer_reprise(statut: str) -> dict:
+    """Exécute `reprendreTravail` (node) avec un `localStorage` et un `fetch` factices."""
+    import json
+    import shutil
+    import subprocess
+    from tests.js_harness import _source_js, extraire_fonction
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node absent")
+    prog = ("const store = {cle: 'job-9'};\n"
+            "globalThis.localStorage = {getItem: k => store[k] ?? null, "
+            "removeItem: k => { delete store[k]; }, setItem(){}};\n"
+            "globalThis.fetch = async () => ({ok: true, json: async () => ({statut: '" + statut
+            + "', progression: [], resultat: [{niche: 'x'}]})});\n"
+            "globalThis.suivreTravail = (id, vue) => { vue.jobId = id; vue.suivi = true; };\n"
+            + extraire_fonction("reprendreTravail", _source_js()) + "\n"
+            "const vue = {cle: 'cle', avant(){}, viderEtapes(){}, etape(){}, "
+            "resultat(r){ this.res = r; }, erreur(){}, apres(){}};\n"
+            "reprendreTravail(vue);\n"
+            "setTimeout(() => process.stdout.write(JSON.stringify("
+            "{jobId: vue.jobId || null, affiche: !!vue.res, suivi: !!vue.suivi})), 50);")
+    out = subprocess.run([node, "-e", prog], capture_output=True, text=True, encoding="utf-8",
+                         timeout=30)
+    assert out.returncode == 0, out.stderr
+    return json.loads(out.stdout)
+
+
+def test_une_analyse_terminee_pendant_l_absence_garde_son_identifiant():
+    """Rechargement de page APRÈS la fin d'un run : `reprendreTravail` rend le résultat sans
+    rouvrir de flux. Il ne posait pas `vue.jobId` : l'analyse demandée ensuite partait sans
+    `?job=` et n'était conservée nulle part — la panne exacte que cette conservation devait
+    fermer, par le chemin le plus ordinaire (recharger la page)."""
+    r = _jouer_reprise("termine")
+    assert r["affiche"] is True and r["jobId"] == "job-9"
+
+
+def test_une_analyse_toujours_en_cours_est_suivie_avec_son_identifiant():
+    r = _jouer_reprise("en_cours")
+    assert r["suivi"] is True and r["jobId"] == "job-9"

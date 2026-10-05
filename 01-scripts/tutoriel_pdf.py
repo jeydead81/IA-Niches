@@ -67,6 +67,8 @@ COUTS = [
     ("Consultation d'un job / historique", "0 $", "0 $", "lecture"),
     ("Set de validation du classifieur (50 livres)", "0,32 $", "-", "one-shot"),
     ("Mots-cles backend KDP (1 niche)", "0,006 $", "0,006 $", "estime"),
+    # Par analogie avec les deux autres verdicts : aucun run live de fiction_verdict.
+    ("Analyse editoriale fiction (1 trio, a la demande)", "0,03 $", "0,03 $", "estime"),
 ]
 
 ENV_VARS = [
