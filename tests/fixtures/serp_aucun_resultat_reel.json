@@ -1,0 +1,129 @@
+{
+ "capture": "REELLE : reponses de GET task_get/advanced capturees le 2026-10-05 sur les deux recherches Amazon du run fiction db2b601c (feel_good, rayon papier) qui avaient « expire » apres 320 s. DataForSEO avait repondu en quelques centiemes de seconde : statut de tache 40102 « No Search Results », cost 0. Aucun identifiant de compte ni secret : seulement les ids de tache et la reponse du fournisseur.",
+ "reponses": [
+  {
+   "version": "0.1.20260917",
+   "status_code": 20000,
+   "status_message": "Ok.",
+   "time": "0.0563 sec.",
+   "cost": 0,
+   "tasks_count": 1,
+   "tasks_error": 1,
+   "tasks": [
+    {
+     "id": "10051020-2523-0209-0000-64b1acabfbeb",
+     "status_code": 40102,
+     "status_message": "No Search Results.",
+     "time": "0.0181 sec.",
+     "cost": 0,
+     "result_count": 0,
+     "path": [
+      "v3",
+      "merchant",
+      "amazon",
+      "products",
+      "task_get",
+      "advanced",
+      "10051020-2523-0209-0000-64b1acabfbeb"
+     ],
+     "data": {
+      "se_type": "products",
+      "se": "amazon",
+      "api": "merchant",
+      "function": "products",
+      "keyword": "roman reprise ferme famille",
+      "location_code": 2250,
+      "language_code": "fr_FR",
+      "depth": 30,
+      "priority": 2,
+      "search_param": "i=stripbooks",
+      "device": "desktop",
+      "os": "windows"
+     },
+     "result": [
+      {
+       "keyword": "roman reprise ferme famille",
+       "type": "organic",
+       "se_domain": "amazon.fr",
+       "location_code": 2250,
+       "language_code": "fr_FR",
+       "check_url": "https://www.amazon.fr/s?k=roman+reprise+ferme+famille&crid=A0M0SLCN432Q&sprefix=roman%2Breprise%2Bferme%2Bfamille%2Caps%2C185&language=fr_FR&i=stripbooks&ref=nb_sb_noss",
+       "datetime": "2026-10-05 10:20:40 +00:00",
+       "spell": {
+        "keyword": "Aucun résultat pour votre recherche dans Livres. \n            \n        \n        \n            Essayez de vérifier votre orthographe ou d’utiliser des termes plus généraux",
+        "type": "no_results_found_for"
+       },
+       "item_types": null,
+       "se_results_count": 0,
+       "categories": null,
+       "items_count": 0,
+       "items": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "version": "0.1.20260917",
+   "status_code": 20000,
+   "status_message": "Ok.",
+   "time": "0.0470 sec.",
+   "cost": 0,
+   "tasks_count": 1,
+   "tasks_error": 1,
+   "tasks": [
+    {
+     "id": "10051026-2523-0209-0000-07004c55d1a1",
+     "status_code": 40102,
+     "status_message": "No Search Results.",
+     "time": "0.0110 sec.",
+     "cost": 0,
+     "result_count": 0,
+     "path": [
+      "v3",
+      "merchant",
+      "amazon",
+      "products",
+      "task_get",
+      "advanced",
+      "10051026-2523-0209-0000-07004c55d1a1"
+     ],
+     "data": {
+      "se_type": "products",
+      "se": "amazon",
+      "api": "merchant",
+      "function": "products",
+      "keyword": "roman nouvelle vie île recommencer",
+      "location_code": 2250,
+      "language_code": "fr_FR",
+      "depth": 30,
+      "priority": 2,
+      "search_param": "i=stripbooks",
+      "device": "desktop",
+      "os": "windows"
+     },
+     "result": [
+      {
+       "keyword": "roman nouvelle vie île recommencer",
+       "type": "organic",
+       "se_domain": "amazon.fr",
+       "location_code": 2250,
+       "language_code": "fr_FR",
+       "check_url": "https://www.amazon.fr/s?k=roman+nouvelle+vie+%C3%AEle+recommencer&crid=T0U2KZS7IESM&sprefix=roman%2Bnouvelle%2Bvie%2B%C3%AEle%2Brecommencer%2Caps%2C252&language=fr_FR&i=stripbooks&ref=nb_sb_noss",
+       "datetime": "2026-10-05 10:27:08 +00:00",
+       "spell": {
+        "keyword": "Aucun résultat pour votre recherche dans Livres. \n            \n        \n        \n            Essayez de vérifier votre orthographe ou d’utiliser des termes plus généraux",
+        "type": "no_results_found_for"
+       },
+       "item_types": null,
+       "se_results_count": 0,
+       "categories": null,
+       "items_count": 0,
+       "items": null
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

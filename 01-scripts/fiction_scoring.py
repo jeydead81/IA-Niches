@@ -30,7 +30,20 @@ SEUILS = {
     "depth_haute": 0.6,
     "openness_haute": 0.5,
     "saturation_haute": 0.6,           # recouvrement moyen du trio : sujet déjà traité partout
+    # --- Mesure suffisante : sous ce nombre de livres MESURABLES, aucune conclusion de marché.
+    # HYPOTHÈSE posée le 2026-10-05, pas une mesure : relevé sur les deux runs fiction enregistrés
+    # (8 niches, rayon papier), 7 livres scorables sur 47 payés, jamais plus de 4 par niche — et
+    # « Mur installé » rendu sur UN livre, « Mort » sur un livre, deux fois. 3 est le plus petit
+    # nombre pour lequel « la médiane » (depth_score) et « le leader » (openness_score) désignent
+    # des livres différents ; aucun jeu étiqueté ne l'a confronté. À discuter, pas à citer.
+    "livres_mesures_min": 3,
 }
+
+# Les deux états où rien ne se conclut : zéro livre mesurable, ou trop peu pour que les chiffres
+# veuillent dire quoi que ce soit. L'écran, le tri, l'historique et le verdict éditorial les
+# traitent ENSEMBLE — un état oublié dans une de ces listes laisserait un zéro, ou un livre
+# unique, se lire comme une mesure.
+NON_CONCLUANTES = ("non_mesurable", "mesure_mince")
 
 
 def livres_scorables(livres: list[EnrichedBook], classifications: dict[str, TropeClassification],
@@ -156,12 +169,20 @@ def price_band(livres: list[EnrichedBook]) -> list[float]:
 
 
 def _demand_matrix(depth: float, openness: float, saturation: float,
-                   n_scorables: int = 1) -> str:
+                   n_scorables: int | None = None) -> str:
     """Aucun livre scorable -> `non_mesurable`, JAMAIS « mort » : les deux se ressemblent
     dans les chiffres (tout à zéro) mais disent le contraire à l'utilisateur — l'un
-    l'invite à écarter la niche, l'autre à re-mesurer."""
-    if n_scorables == 0:
-        return "non_mesurable"
+    l'invite à écarter la niche, l'autre à re-mesurer.
+
+    Trop peu de livres (sous `SEUILS["livres_mesures_min"]`) -> `mesure_mince`, pour la même
+    raison : « mort » ou « mur installé » rendu sur un livre unique est une conclusion de marché
+    tirée d'une absence de mesure. Le seuil est lu ICI, à chaque appel, dans `SEUILS`.
+    `n_scorables=None` = nombre inconnu de l'appelant : aucune de ces deux gardes ne joue."""
+    if n_scorables is not None:
+        if n_scorables == 0:
+            return "non_mesurable"
+        if n_scorables < SEUILS["livres_mesures_min"]:
+            return "mesure_mince"
     return _matrix_mesuree(depth, openness, saturation)
 
 
@@ -203,6 +224,9 @@ def _verdict(shelf: FictionShelf, ok: list[EnrichedBook],
             bits.append(f"AUCUN livre scorable sur {len(shelf.books)} au rayon : tous "
                         f"écartés (titre gratuit, non-roman, ou rang d'un autre rayon) — "
                         f"niche NON MESURÉE, pas une niche morte.")
+    if ok and len(ok) < SEUILS["livres_mesures_min"]:
+        bits.append(f"Mesure TROP MINCE : {len(ok)} livre(s) mesuré(s) sur {len(shelf.books)} — "
+                    f"aucune conclusion de marché, ce n'est pas une niche morte.")
     if shelf.n_echecs > 0:
         bits.append(f"Rayon INCOMPLET : {shelf.n_echecs}/{shelf.asins_demandes} ASIN non "
                     f"enrichis — ne pas lire comme un désert.")
@@ -245,6 +269,49 @@ def build_report(niche: FictionNiche, shelf: FictionShelf,
         cost_run=cost.total_usd() if cost is not None else 0.0,
         n_echecs=shelf.n_echecs,
         asins_demandes=shelf.asins_demandes,
+        n_livres_mesures=len(ok),
     )
 
 
+
+
+def _relire_une(entree):
+    """Une entrée de résultat sous la règle d'aujourd'hui, ou elle-même si rien n'est à changer.
+    Ne lève jamais : une entrée illisible est rendue telle quelle."""
+    if not isinstance(entree, dict) or entree.get("n_livres_mesures") is not None:
+        return entree
+    niche = entree.get("niche")
+    livres = entree.get("books")
+    if not isinstance(niche, dict) or not isinstance(livres, list):
+        return entree
+    try:
+        books = [EnrichedBook.model_validate(b) for b in livres]
+        classes = {c["asin"]: TropeClassification.model_validate(c)
+                   for c in (entree.get("classifications") or [])}
+        n = len(livres_scorables(books, classes, niche.get("rayon", "kindle")))
+    except (ValueError, TypeError, KeyError):
+        return entree
+    relu = dict(entree)
+    relu["n_livres_mesures"] = n
+    if relu.get("demand_matrix") not in NON_CONCLUANTES:
+        etat = _demand_matrix(0.0, 0.0, 0.0, n)
+        if etat in NON_CONCLUANTES:                 # ne fait que DÉGRADER, jamais remonter
+            relu["demand_matrix"] = etat
+    return relu
+
+
+def relire_resultat_fiction(resultat):
+    """Un résultat fiction ENREGISTRÉ avant `mesure_mince`, relu sous la règle d'aujourd'hui.
+
+    Un travail déjà dans `jobs.db` porte `demand_matrix = "mort"` ou `"mur_installe"` bâti sur UN
+    livre, et pas de `n_livres_mesures` (les deux runs réels de Baptiste, au 2026-10-05). Rouvert,
+    il affichait la conclusion rouge et un bouton d'analyse que le serveur refusait ensuite. On le
+    relit donc À LA LECTURE avec la MÊME fonction que le moteur (`livres_scorables`) : une seconde
+    définition de « mesuré » côté JS divergerait (§5.32). Le brut reste en base.
+
+    Ne fait que DÉGRADER (jamais un état non concluant remonté), ne touche pas un résultat qui
+    porte déjà son compteur, rend une copie, et ne lève jamais : ce qui n'est pas une liste, ou
+    n'a pas la forme d'un rapport, est rendu tel quel."""
+    if not isinstance(resultat, list):
+        return resultat
+    return [_relire_une(e) for e in resultat]

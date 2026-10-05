@@ -86,19 +86,22 @@ def test_rapports_tries_par_interet():
                              query=f"requete {i}") for i in range(3)]
 
     def serp3(niche, **kw):
+        # TROIS livres par niche : sous `livres_mesures_min`, une niche sort « mesure_mince » et
+        # ne se classe plus par profondeur. Avec un livre chacune, ce test passait pour une
+        # AUTRE raison que celle qu'il annonce (revue adverse du 2026-10-05).
         i = niche.query.rsplit(" ", 1)[-1]
-        return "rh=n:1", [f"A{i}"]
+        return "rh=n:1", [f"A{i}{x}" for x in "abc"]
 
     bsr_par_niche = {"0": 3000, "1": 50000, "2": 3000}   # niche 1 nettement moins profonde
 
     def enrich3(asins, **kw):
-        return {a: EnrichedBook(asin=a, title="T", blurb="b", bsr=bsr_par_niche[a[1:]],
+        return {a: EnrichedBook(asin=a, title="T", blurb="b", bsr=bsr_par_niche[a[1]],
                                 bsr_rayon="Boutique Kindle") for a in asins}
 
     def classify3(books, sous_genre_cle, **kw):
         # seule la niche 2 est déjà couverte par son propre trope -> saturation haute
         return [TropeClassification(asin=b.asin, taxonomy_version="fr_v1",
-                                    tropes=[f"t{b.asin[1:]}"] if b.asin[1:] == "2" else [],
+                                    tropes=[f"t{b.asin[1]}"] if b.asin[1] == "2" else [],
                                     est_roman=True) for b in books]
 
     rapports = run_fiction_scout("cosy_mystery", n_niches=3, ideate=ideate3, serp_fn=serp3,
@@ -108,6 +111,7 @@ def test_rapports_tries_par_interet():
     # niche 0 (depth haute, non saturée) avant niche 2 (depth haute, saturée) avant
     # niche 1 (depth basse) : la profondeur prime, la saturation ne départage qu'à égalité.
     assert [r.niche.tropes[0] for r in rapports] == ["t0", "t2", "t1"]
+    assert all(r.demand_matrix not in ("mesure_mince", "non_mesurable") for r in rapports),         "fixture : les trois niches doivent être MESURÉES, sinon le tri ne prouve rien"
 
 
 def test_une_niche_en_echec_ne_coule_pas_le_run():

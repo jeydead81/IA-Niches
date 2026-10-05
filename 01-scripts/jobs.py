@@ -170,8 +170,12 @@ class JobStore:
         if not cle:                    # une clé vide ne désigne AUCUNE niche (un trio sans requête)
             return False
         niche = entree.get("niche")
-        if isinstance(niche, dict):    # low-content : requête Amazon d'abord ; fiction : `query`
-            return cle in (niche.get("requete_amazon"), niche.get("niche"), niche.get("query"))
+        if isinstance(niche, dict):
+            # low-content : requête Amazon d'abord. Fiction : la CLÉ du trio — plusieurs trios
+            # partagent la même requête courte, et `query` rangerait l'analyse sous le premier —,
+            # puis `query` pour un résultat ANTÉRIEUR, qui n'en portait pas.
+            return cle in (niche.get("requete_amazon"), niche.get("niche"), niche.get("cle"),
+                           niche.get("query"))
         return niche == cle                          # non-fiction : le nom de la niche
 
     def fail(self, job_id: str, erreur: str, cout: dict | None = None) -> None:

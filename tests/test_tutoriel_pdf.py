@@ -25,8 +25,9 @@ def test_non_mesure_est_distingue_de_mort():
     assert "absence" in conseil.lower()
 
 
-def test_les_six_verdicts_sont_couverts():
-    assert len(VERDICTS) == 6
+def test_les_sept_etats_de_carte_sont_couverts():
+    """Six conclusions de marché + « mesure trop mince » (2026-10-05)."""
+    assert len(VERDICTS) == 7
 
 
 def test_chaque_cout_declare_son_origine():

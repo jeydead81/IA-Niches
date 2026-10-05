@@ -25,7 +25,7 @@ import os
 
 from dotenv import load_dotenv
 
-from fiction_scoring import livres_scorables
+from fiction_scoring import NON_CONCLUANTES, SEUILS, livres_scorables
 from lowcontent_verdict import _angles_lisibles, _json_si_texte, _texte
 from models import EnrichedBook, FictionNicheReport, LivreComparable, NicheVerdict
 from niche_verdict import DEFAULT_MODEL, _borner_texte
@@ -150,16 +150,36 @@ def _scorables(report: FictionNicheReport) -> list[EnrichedBook]:
     return livres_scorables(report.books, _classes(report), report.niche.rayon)
 
 
-def rayon_non_mesure(report: FictionNicheReport) -> bool:
-    """Vrai quand rien n'a été mesuré. La matrice du moteur est la source, doublée d'un test
-    sur le rayon lui-même : un résultat forgé ou ancien dont la matrice est vide, et qui ne
-    porte aucun livre, ne doit pas se lire comme « mesuré »."""
-    if report.demand_matrix == "non_mesurable" or not report.books:
-        return True
+def raison_non_mesure(report: FictionNicheReport) -> str | None:
+    """Pourquoi aucun verdict ne peut sortir de ce rayon, ou None s'il est assez mesuré.
+
+    Deux cas, deux phrases : « pas mesuré » (zéro livre mesurable) et « trop peu de livres »
+    (sous `SEUILS["livres_mesures_min"]`, lu à chaque appel). La matrice du moteur est la source,
+    DOUBLÉE d'un décompte sur les livres eux-mêmes : un résultat ancien dont l'étiquette dit
+    « mort » mais qui ne tient que sur deux livres, ou un résultat forgé à matrice vide, ne doit
+    pas se lire « mesuré ». Aucune des deux phrases ne dit « mort » ni « No-Go » (règle 3)."""
     try:
-        return not _scorables(report)
+        n = len(_scorables(report)) if report.books else 0
     except ValueError:                      # rayon inconnu de la taxonomie : rien de mesurable
-        return True
+        n = 0
+    minimum = SEUILS["livres_mesures_min"]
+    if report.demand_matrix == "non_mesurable" or n == 0:
+        return ("Le rayon de ce trio n'a pas été mesuré : relancez l'analyse avant de demander "
+                "un verdict.")
+    if report.demand_matrix in NON_CONCLUANTES or n < minimum:
+        # Le conseil « essayez Kindle » n'a de sens que depuis le papier : donné à un run déjà en
+        # Kindle (le défaut du formulaire), il serait circulaire (revue adverse du 2026-10-05).
+        conseil = ("élargissez la requête (moins de mots), ou essayez le rayon Kindle"
+                   if report.niche.rayon == "papier" else "élargissez la requête (moins de mots)")
+        return (f"Trop peu de livres mesurés pour analyser ce trio ({n} livre(s) mesuré(s) sur "
+                f"{len(report.books)}, il en faut au moins {minimum}). Ce n'est pas un rayon "
+                f"mort : {conseil}, puis relancez.")
+    return None
+
+
+def rayon_non_mesure(report: FictionNicheReport) -> bool:
+    """Vrai quand rien ne peut se conclure de ce rayon (voir `raison_non_mesure`)."""
+    return raison_non_mesure(report) is not None
 
 
 def rayon_incomplet(report: FictionNicheReport) -> bool:
@@ -263,9 +283,9 @@ def generate_fiction_verdict(report: FictionNicheReport, model: str | None = Non
     """Verdict éditorial d'UN trio fiction. Tool-use forcé, outil STRICT, lecture défensive.
 
     Lève `RayonNonMesure` AVANT tout appel quand le rayon n'a pas été mesuré."""
-    if rayon_non_mesure(report):
-        raise RayonNonMesure("le rayon de ce trio n'a pas été mesuré : relancez l'analyse "
-                             "avant de demander un verdict")
+    raison = raison_non_mesure(report)
+    if raison is not None:
+        raise RayonNonMesure(raison)
     client = client or _default_client()
     model = model or DEFAULT_MODEL
     resp = client.messages.create(

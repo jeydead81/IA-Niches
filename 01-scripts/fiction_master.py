@@ -1,7 +1,7 @@
 """fiction_master.py — run_fiction_scout : orchestrateur fiction en 6 étapes.
 
 A. ideator            -> N trios                       (1 appel LLM)
-B. N x SERP           -> ASIN par niche                (rapide, pas de file)
+B. N x SERP           -> ASIN par niche                (une recherche par requête DISTINCTE)
 C. UN batch ASIN      -> tous les livres, dédupliqués  (la file, payée UNE fois)
 D. classification     -> groupée (un seul sous-genre pour tout le run)
 E. sonde autocomplete -> par niche                      (gratuit)
@@ -23,9 +23,10 @@ from cost_tracker import CostTracker, PlafondCoutAtteint, dataforseo_cost_usd
 from fiction_autocomplete import probe_niche as _probe_niche
 from fiction_classifier import DEFAULT_MODEL as _CLASSIFIER_MODEL
 from fiction_classifier import classify_books as _classify_books
+from fiction_ideator import cle_requete
 from fiction_ideator import (contraintes_impossibles as _contraintes_impossibles,
                              generate_trios as _generate_trios)
-from fiction_scoring import build_report
+from fiction_scoring import NON_CONCLUANTES, build_report
 from fiction_serp_provider import enrich_asins as _enrich_asins
 from fiction_serp_provider import fetch_shelf_asins as _fetch_shelf_asins
 from models import FictionNicheReport, FictionShelf
@@ -94,7 +95,27 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     # un refus par trio, et on les COMPTE : écartés faute de mesure, pas sur mesure.
     compte_refuse: str | None = None
     n_non_mesurees_compte = 0
+    # Une requête = un rayon = UNE recherche payée. Des requêtes courtes (« roman feel good
+    # village ») décrivent un rayon, pas un trio : plusieurs trios de même décor tombent
+    # légitimement dessus (revue du 2026-10-05). Ils gardent chacun leur carte — leur saturation
+    # dépend de LEURS tropes — mais ne repaient pas la recherche, et un échec vaut pour tous.
+    partages: dict[str, tuple] = {}      # cle_requete -> ("ok", sp, asins) | ("echec",)
     for i, niche in enumerate(niches, 1):
+        cle_q = cle_requete(niche.query)
+        if cle_q in partages:
+            etat = partages[cle_q]
+            if etat[0] == "ok":
+                progress(f"[{i}/{len(niches)}] Rayon déjà lu pour « {niche.query} », réutilisé "
+                         f"pour ce trio.")
+                par_niche.append((niche, etat[1], etat[2]))
+                if not etat[2]:
+                    progress(f"  ⚠ « {niche.query} » : Amazon ne rend aucun livre pour cette "
+                             f"requête — niche non mesurée, pas une niche morte.")
+            else:
+                n_niches_echouees += 1
+                progress(f"  ⚠ « {niche.query} » : même requête qu'un trio déjà en échec — niche "
+                         f"écartée, la recherche n'est pas repayée.")
+            continue
         # Plafond vérifié AVANT de payer, et prédictivement : le tarif d'une SERP est
         # connu (COST_PER_CALL_USD), donc rien n'oblige à la payer pour découvrir
         # qu'elle franchissait la ligne.
@@ -114,10 +135,19 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
             break
         except Exception as e:  # noqa: BLE001 — une niche en échec ne coule pas le run
             n_niches_echouees += 1
+            partages[cle_q] = ("echec",)
             progress(f"  ⚠ échec SERP sur « {niche.query} » : {e} — niche écartée, "
                      f"rayons déjà payés conservés.")
             continue
+        partages[cle_q] = ("ok", sp, asins)
         par_niche.append((niche, sp, asins))
+        if not asins:
+            # Amazon ne rend aucun livre pour cette requête (statut « aucun résultat », relevé
+            # le 2026-10-05 : deux niches sur cinq, requêtes trop précises). Ce n'est PAS un
+            # échec ni une niche morte : un rayon vide, qui ressort en carte « non mesuré » —
+            # l'auteur en demande N, il en voit N, avec la raison.
+            progress(f"  ⚠ « {niche.query} » : Amazon ne rend aucun livre pour cette requête — "
+                     f"niche non mesurée, pas une niche morte.")
 
     if n_non_mesurees_compte:
         progress(f"⚠ {n_non_mesurees_compte} niche(s) non mesurée(s) : compte DataForSEO "
@@ -131,12 +161,15 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
     all_asins = list(dict.fromkeys(a for _, _, asins in par_niche for a in asins))
     total_demande = sum(len(asins) for _, _, asins in par_niche)
     economises = total_demande - len(all_asins)
-    progress(f"Enrichissement de {len(all_asins)} ASIN uniques en UN seul batch "
-             f"({economises} économisé(s) par dédup inter-niches, sur {total_demande} "
-             f"demandés)…")
-    # `cache_seul` n'est passé QUE sur refus : les `enrich_fn` injectés gardent leur signature.
-    enriched = enrich_fn(all_asins, cache=cache, cost=cost, progress=progress,
-                         **({"cache_seul": True} if compte_refuse else {}))
+    if all_asins:
+        progress(f"Enrichissement de {len(all_asins)} ASIN uniques en UN seul batch "
+                 f"({economises} économisé(s) par dédup inter-niches, sur {total_demande} "
+                 f"demandés)…")
+        # `cache_seul` n'est passé QUE sur refus : les `enrich_fn` injectés gardent leur signature.
+        enriched = enrich_fn(all_asins, cache=cache, cost=cost, progress=progress,
+                             **({"cache_seul": True} if compte_refuse else {}))
+    else:
+        enriched = {}        # tous les rayons sont vides : rien à enrichir, rien à payer
 
     # D) Classification groupée — un seul sous-genre pour tout le run, donc un seul appel
     # (par lots de LOT_MAX côté classify_books), pas un groupement par sous-genre comme
@@ -193,8 +226,12 @@ def run_fiction_scout(sous_genre_cle: str, n_niches: int = 8, rayon: str = "kind
         rapports.append(build_report(niche, shelf, classifications, signal,
                                      version=version, cost=cost))
 
-    # Tri par intérêt : profondeur décroissante, saturation croissante à profondeur égale.
-    rapports.sort(key=lambda r: (r.depth_score, -r.saturation_trio), reverse=True)
+    # Tri par intérêt : les niches MESURÉES d'abord, puis profondeur décroissante, saturation
+    # croissante à profondeur égale. Une mesure mince (un livre au meilleur rang) a une profondeur
+    # flatteuse qui la ferait passer devant une mesure solide : elle ne se classe pas, elle se
+    # range en bas, comme le non mesurable (profondeur 0, qui y tombait déjà par hasard).
+    rapports.sort(key=lambda r: (r.demand_matrix not in NON_CONCLUANTES,
+                                 r.depth_score, -r.saturation_trio), reverse=True)
 
     if n_niches_echouees:
         progress(f"{n_niches_echouees} niche(s) en échec sur {len(niches)} — rayons déjà "

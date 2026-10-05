@@ -44,6 +44,29 @@ class TaskPostRefuse(RuntimeError):
     changent pas."""
 
 
+class AucunResultat(RuntimeError):
+    """La tâche est TERMINÉE et la recherche n'a rendu AUCUN résultat (statut de tâche 40102).
+
+    Relevé le 2026-10-05 : deux recherches fiction « expirées après 320 s — file saturée » avaient
+    en réalité été terminées en quelques centièmes de seconde, `No Search Results`, `cost` 0 —
+    Amazon répondait « Aucun résultat pour votre recherche dans Livres », la requête étant trop
+    précise. La boucle d'attente n'acceptait que « 20000 avec résultat » et pollait donc 40 fois
+    une tâche déjà finie : 640 s perdus sur un run de 915 s, puis un message FAUX.
+
+    Ce n'est NI un refus de compte (`RefusCompte` : on cesserait d'appeler le fournisseur pour
+    toutes les niches suivantes sur la foi d'UNE requête vide), NI un timeout. La tâche a été
+    créée : l'appelant l'impute, par prudence — DataForSEO rapporte `cost` 0, mais rien ne mesure
+    ce qui est facturé. Hérite de RuntimeError : les appelants qui attrapent `Exception` (le
+    scout non-fiction, qui marque alors la niche « concurrence non mesurée », et le low-content)
+    ne changent pas de comportement, ils obtiennent seulement la réponse 320 s plus tôt."""
+
+
+# Statut TERMINAL observé en live (fixture réelle : tests/fixtures/serp_aucun_resultat_reel.json).
+# Les statuts « en cours » (file, tâche prise) n'ont jamais été capturés ici : ils continuent
+# d'être attendus, on ne reconnaît que ce qu'on a vu.
+STATUT_AUCUN_RESULTAT = 40102
+
+
 class RefusCompte(TaskPostRefuse):
     """Refus posé à la RACINE, sans aucune tâche : c'est le COMPTE qui est refusé (non
     vérifié 40104, identifiants, solde), pas la requête. Toutes les requêtes suivantes
@@ -234,6 +257,11 @@ class DataForSEOProvider:
             verifier_annulation()      # point d'arret : ici une analyse « tourne dans le vide »
             reponse = get_json(f"{_BASE}/task_get/advanced/{tid}")
             t = (reponse.get("tasks") or [{}])[0]
+            if t.get("status_code") == STATUT_AUCUN_RESULTAT:
+                # Tâche TERMINÉE, sans résultat : inutile d'attendre un 20000 qui ne viendra pas.
+                self._journaliser({"type": "serp_get", "keyword": keyword, "tache": tid,
+                                   "reponse": reponse})
+                raise AucunResultat(f"Amazon ne rend aucun résultat pour « {keyword} »")
             if t.get("status_code") == 20000 and t.get("result"):
                 self._journaliser({"type": "serp_get", "keyword": keyword, "tache": tid,
                                    "reponse": reponse})

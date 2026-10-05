@@ -4,7 +4,7 @@ import unicodedata
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BsrInfo(BaseModel):
@@ -313,14 +313,36 @@ class MotsClesKDP(BaseModel):
     sonde_indisponible: bool = False
 
 
+def cle_trio(sous_genre: str, tropes: list[str], decor: str | None, query: str) -> str:
+    """Identité STABLE d'un trio : sous-genre, requête (sans casse ni diacritiques), tropes (sans
+    ordre) et décor. Source UNIQUE de la clé d'historique, de la clé de conservation de l'analyse
+    éditoriale dans le travail et de la clé que l'écran lit : trois recalculs divergeraient."""
+    plat = "".join(c for c in unicodedata.normalize("NFKD", query or "")
+                   if not unicodedata.combining(c))
+    return "|".join([sous_genre or "", " ".join(plat.split()).casefold(),
+                     ",".join(sorted(tropes or [])), decor or ""])
+
+
 class FictionNiche(BaseModel):
-    """Un trio fiction : sous-genre × trope(s) × décor, sur un marketplace et un rayon."""
+    """Un trio fiction : sous-genre × trope(s) × décor, sur un marketplace et un rayon.
+
+    `query` est la RECHERCHE Amazon du trio — courte, ancrée sur la requête de référence du
+    sous-genre — et plusieurs trios d'un même décor la PARTAGENT : elle décrit un rayon, pas un
+    trio. L'identité du trio est `cle`, calculée à la construction (`cle_trio`) si elle n'est pas
+    fournie : un résultat ANTÉRIEUR, qui n'en portait pas, la reçoit à la validation."""
     sous_genre: str
     tropes: list[str] = Field(default_factory=list)     # 1..3 clés de la taxonomie
     decor: str | None = None
     marketplace: str = "fr"                             # paramètre de premier rang
     rayon: str = "kindle"                               # "kindle" | "papier" — commutable
     query: str = ""                                     # requête naturelle dérivée
+    cle: str = ""                                       # identité du trio (cf. `cle_trio`)
+
+    @model_validator(mode="after")
+    def _poser_la_cle(self):
+        if not self.cle:
+            self.cle = cle_trio(self.sous_genre, self.tropes, self.decor, self.query)
+        return self
 
 
 class AutocompleteProbe(BaseModel):
@@ -490,6 +512,10 @@ class FictionNicheReport(BaseModel):
     # texte de `verdict` (cf. `fiction_verdict.rayon_incomplet`).
     n_echecs: int = 0
     asins_demandes: int = 0
+    # Combien de livres ont réellement été MESURÉS (ceux de `livres_scorables`). `None` = inconnu :
+    # un résultat antérieur au compteur ne doit pas se lire « 0 livre mesuré ». L'écran n'affiche
+    # alors aucune ligne de mesure.
+    n_livres_mesures: int | None = None
 
     @property
     def autocomplete_score(self) -> float | None:

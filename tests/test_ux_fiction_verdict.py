@@ -21,7 +21,8 @@ import pytest
 
 from tests.js_harness import _source_js, appeler, extraire_fonction
 
-_SLOT = ("esc", "verdictGrade", "verdictBlock", "verdictSlot", "verdictSlotFic")
+_SLOT = ("esc", "verdictGrade", "verdictBlock", "verdictSlot", "ETATS_NON_CONCLUANTS_FIC",
+         "verdictSlotFic")
 
 _TRIO = {"sous_genre": "romance_contemporaine", "tropes": ["enemies_to_lovers"],
          "decor": "small_town", "query": "romance ennemis to lovers petite ville bretonne"}
@@ -152,7 +153,7 @@ def _jouer(corps_js: str) -> dict:
         pytest.skip("node absent")
     src = _source_js()
     morceaux = [extraire_fonction(d, src) for d in
-                ("esc", "verdictGrade", "verdictBlock", "verdictSlot", "verdictSlotFic",
+                ("esc", "verdictGrade", "verdictBlock", "verdictSlot", "ETATS_NON_CONCLUANTS_FIC", "verdictSlotFic",
                  "cleNiche", "urlConservee", "noteNonConservee", "brancherActionsFic",
                  "loadVerdictFic")]
     # Les doublures vivent au NIVEAU DU PROGRAMME : les fonctions testées lisent `VUE_FIC` et

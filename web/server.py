@@ -39,9 +39,10 @@ from lowcontent_master import run_lowcontent_scout  # noqa: E402
 from lowcontent_taxonomy import (load_taxonomy as load_taxonomy_lc,  # noqa: E402
                                  valid_formats as valid_formats_lc)
 from niche_verdict import generate_verdict  # noqa: E402
-from fiction_verdict import generate_fiction_verdict, rayon_non_mesure  # noqa: E402
+from fiction_verdict import generate_fiction_verdict, raison_non_mesure  # noqa: E402
 from lowcontent_verdict import generate_lowcontent_verdict  # noqa: E402
 from kdp_keywords import generer_mots_cles  # noqa: E402
+from fiction_scoring import NON_CONCLUANTES, relire_resultat_fiction  # noqa: E402
 from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
 import storage  # noqa: E402
@@ -682,7 +683,14 @@ def _consigner_lowcontent(results, user_id: str) -> None:
 def _consigner_fiction(rapports, user_id: str) -> None:
     h = NicheHistory(_HISTORY_DB)
     for r in rapports:
-        h.enregistrer(user_id, "fiction", r.niche.query, {
+        # Un point qu'on sait faux n'entre pas dans la série : des zéros (non mesurable) ou un
+        # livre unique (mesure mince), enregistrés, feraient lire au passage suivant un delta
+        # spectaculaire et mensonger — même règle que la non-fiction (`concurrence_mesuree`).
+        if r.demand_matrix in NON_CONCLUANTES:
+            continue
+        # Cle du TRIO, pas sa requete : plusieurs trios d'un meme decor partagent la meme requete
+        # courte, et leurs series ne se comparent pas (saturation_trio depend de LEURS tropes).
+        h.enregistrer(user_id, "fiction", r.niche.cle, {
             "depth_score": r.depth_score, "openness_score": r.openness_score,
             "saturation_trio": r.saturation_trio, "series_share": r.series_share,
         })
@@ -993,6 +1001,9 @@ def _job_public(job) -> dict:
     d = job.model_dump()
     d["progression"] = liste_publique(job.progression)
     d["erreur"] = texte_public(job.erreur)       # meme frontiere : jamais le nom du fournisseur
+    if job.type == "fiction":
+        # Un resultat enregistre AVANT « mesure mince » est relu sous la regle d'aujourd'hui.
+        d["resultat"] = relire_resultat_fiction(d.get("resultat"))
     return d
 
 
@@ -1083,7 +1094,8 @@ def stream_job(job_id: str, user_id: str = Depends(utilisateur_courant)):
                 yield _sse("progress", msg)
             envoyes = len(publique)
             if job.statut == "termine":
-                yield _sse("result", job.resultat)
+                yield _sse("result", relire_resultat_fiction(job.resultat)
+                           if job.type == "fiction" else job.resultat)
                 yield _sse("cost", job.cout)
                 yield _sse("done", {})
                 return
@@ -1158,14 +1170,14 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
                   "scout": ScoredNiche}[type_].model_validate(body)
     except Exception:  # noqa: BLE001 — body invalide -> 400 propre (jamais un 500)
         raise HTTPException(status_code=400, detail="niche invalide")
-    if type_ == "fiction" and rayon_non_mesure(scored):
+    raison = raison_non_mesure(scored) if type_ == "fiction" else None
+    if raison is not None:
         # AVANT toute réservation : rien n'est dépensé ni décompté du débit horaire, et surtout
         # aucun verdict ne sort d'une absence de mesure — « non mesuré » n'est pas « mort »
-        # (règle 3). La carte masque déjà le bouton ; ceci tient pour un client hors page.
-        raise HTTPException(
-            status_code=400,
-            detail="Le rayon de ce trio n'a pas été mesuré : relancez l'analyse avant de "
-                   "demander un verdict. Rien n'a été dépensé.")
+        # (règle 3). Zéro livre OU trop peu : deux phrases. La carte masque déjà le bouton ;
+        # ceci tient pour un client hors page, et pour un résultat ancien dont la carte n'a pas
+        # l'état « mesure mince ».
+        raise HTTPException(status_code=400, detail=f"{raison} Rien n'a été dépensé.")
     # Appel LLM facturé. Il ne CONSOMME pas d'unité d'analyse (il complète une analyse
     # déjà payée, d'où n_analyses=0 à l'imputation) mais il EXIGE une marge : un compte au
     # plafond ne doit pas pouvoir continuer à faire tourner le LLM indéfiniment.

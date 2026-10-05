@@ -209,6 +209,10 @@ VERDICTS = [
     ("Non mesuré (non_mesurable)", _GREY,
      "Rayon vide ou tous les livres écartés. ABSENCE de résultat, PAS un mauvais "
      "résultat : à afficher en neutre, jamais en rouge."),
+    ("Mesure trop mince (mesure_mince)", _GREY,
+     "Moins de SEUILS['livres_mesures_min'] livres mesurables (3, hypothèse non calibrée). "
+     "Aucun chiffre, aucune conclusion de marché, aucune analyse éditoriale : même "
+     "traitement que non_mesurable (neutre, hors historique, en bas du tri)."),
 ]
 
 PIEGES = [
@@ -398,7 +402,7 @@ def build_tutoriel_pdf(out_path) -> Path:
     _titre(pdf, "5. Glossaire métier (nécessaire pour construire l'interface)")
     _paires(pdf, GLOSSAIRE)
 
-    _titre(pdf, "6. Les six verdicts")
+    _titre(pdf, "6. Les sept états d'une carte")
     for nom, couleur, sens in VERDICTS:
         pdf.set_fill_color(*couleur)
         pdf.rect(pdf.l_margin, pdf.get_y(), 2.2, 8.4, style="F")
@@ -484,6 +488,9 @@ U_VERDICTS = [
                           "livres ont été écartés. Reformulez votre requête ou changez de "
                           "rayon. Ce n'est PAS un mauvais résultat, c'est une ABSENCE de "
                           "résultat — la niche peut très bien être excellente."),
+    ("Mesure trop mince", _GREY, "Trop peu de livres mesurés (moins de trois) pour conclure. "
+                                 "Ce n'est pas un rayon mort : élargissez votre requête ou "
+                                 "essayez le rayon Kindle."),
 ]
 
 U_ETAPES_NF = [
@@ -590,7 +597,7 @@ def build_guide_utilisateur_pdf(out_path) -> Path:
         pdf.ln(1.2)
 
     pdf.add_page()
-    _titre(pdf, "5. Les six conclusions possibles, et quoi faire")
+    _titre(pdf, "5. Les sept conclusions possibles, et quoi faire")
     for nom, couleur, conseil in U_VERDICTS:
         pdf.set_fill_color(*couleur)
         pdf.rect(pdf.l_margin, pdf.get_y(), 2.2, 9, style="F")

@@ -3,6 +3,8 @@
 La contrainte taxonomie est vérifiée CÔTÉ CODE : on demande au LLM, puis on contrôle."""
 import json
 import os
+import re
+import unicodedata
 
 from dotenv import load_dotenv
 
@@ -54,8 +56,13 @@ RAISONNEMENT ATTENDU :
   la rationale.
 
 REQUÊTE AMAZON : la 'query' doit être ce qu'un lecteur TAPE réellement dans la barre de \
-recherche Amazon (3 à 6 mots, langage naturel), jamais un titre de roman ni un slogan. \
-Test simple : si tu ne la taperais pas toi-même, elle est mauvaise.
+recherche Amazon : 2 à 4 mots AU TOTAL, qui COMMENCE par la requête de référence du rayon \
+(donnée dans le message), suivie d'UN ou deux mots concrets — le décor, ou l'ancrage le plus \
+reconnaissable, tel qu'il figurerait dans un titre. Jamais un titre de roman ni un slogan. \
+Plus la requête est longue, moins Amazon rend de livres : au-delà de quatre mots, ou sans la \
+requête de référence, la recherche ne rend souvent aucun résultat. Les ressorts du trio \
+(« reconstruction », « héritage », « deuil ») sont mesurés par la lecture des quatrièmes de \
+couverture : ils n'ont pas à figurer dans la requête.
 
 Une 'rationale' TRANCHÉE d'une phrase par trio : pourquoi ça se vendrait.
 """
@@ -82,6 +89,79 @@ TRIOS_INPUT_SCHEMA = {
     "required": ["trios"],
     "additionalProperties": False,
 }
+
+
+# Une requête de trio rend des livres si elle COMMENCE par la requête de référence du rayon et
+# reste courte. Mesuré le 2026-10-05 sur les deux runs fiction enregistrés : les deux requêtes
+# écrites hors de cette tête (« roman reprise ferme famille », « roman nouvelle vie île
+# recommencer ») n'ont rendu AUCUN résultat sur Amazon (statut 40102) ; celles de 5 à 6 mots en
+# ont rendu 0, 2, 3 ou 9, dont 8 hors sujet ; et sur l'autocomplete seule la tête est tapée par
+# de vrais lecteurs. Le prompt le demande, le CODE le garantit.
+MAX_MOTS_REQUETE = 4
+
+_MOTS_VIDES = frozenset({
+    "a", "au", "aux", "avec", "ce", "cette", "d", "dans", "de", "des", "du", "en", "et", "l",
+    "la", "le", "les", "ou", "par", "pour", "qui", "que", "sa", "sans", "ses", "son", "sur",
+    "un", "une"})
+
+
+def _plat(mot: str) -> str:
+    """Casse et diacritiques dépouillés : le modèle écrit « Académie », la clé dit « academie »."""
+    decompose = unicodedata.normalize("NFKD", mot or "")
+    return "".join(c for c in decompose if not unicodedata.combining(c)).casefold()
+
+
+def _mots(texte: str) -> list[str]:
+    return re.findall(r"\w+", texte or "")
+
+
+def cle_requete(query: str) -> str:
+    """Identité d'une REQUÊTE : mots sans casse ni diacritiques. Deux requêtes qui n'en font
+    qu'une pour Amazon n'en font qu'une pour nous — c'est la clé qui permet à `fiction_master`
+    de ne payer qu'une recherche pour tous les trios qui la partagent."""
+    return " ".join(_plat(m) for m in _mots(query))
+
+
+def requete_courte(query: str, tete: str, decor: str | None = None,
+                   max_mots: int = MAX_MOTS_REQUETE) -> str:
+    """La requête du trio, ramenée à `max_mots` mots AU PLUS et COMMENÇANT par `tete` (la
+    requête de référence du sous-genre).
+
+    Une requête déjà conforme est rendue TELLE QUELLE. Sinon on la reconstruit : la tête, puis
+    les mots concrets du modèle (sans mots vides, sans doublon, sans les mots de la tête), ceux
+    qui recoupent le DÉCOR du trio d'abord — c'est le mot le plus concret et le plus conforme au
+    trio, celui qu'un titre porte —, puis les autres dans l'ordre d'origine, dans la limite de
+    la place laissée par la tête (au moins un mot). Idempotente. Une tête vide ne change rien.
+
+    Deux trios de même décor obtiennent la MÊME requête, et c'est voulu : une requête courte
+    décrit un rayon, pas un trio. Revue adverse du 2026-10-05 : les rendre uniques — en écartant le
+    trio (11 demandés, 7 rendus), ou en glissant sur un mot de ressort (un rayon sans rapport avec
+    le décor) — était pire. L'identité d'un trio est `FictionNiche.cle`, la recherche payée est
+    partagée par l'orchestrateur.
+
+    Le choix des mots gardés est une HEURISTIQUE, pas une mesure : elle ne dit pas que la
+    requête rendue ramène plus de livres (non mesuré, aucune recherche payée pour le vérifier),
+    seulement qu'elle n'a plus les deux défauts observés — trop longue, sans la tête."""
+    tete_mots = _mots(tete)
+    if not tete_mots:
+        return query
+    tete_plat = [_plat(m) for m in tete_mots]
+    q_mots = _mots(query)
+    if len(q_mots) <= max_mots and [_plat(m) for m in q_mots[:len(tete_mots)]] == tete_plat:
+        return query
+    place = max(1, max_mots - len(tete_mots))
+    mots_decor = {_plat(m) for m in _mots((decor or "").replace("_", " "))
+                  if _plat(m) not in _MOTS_VIDES and len(m) > 2}
+    vus, extras = set(tete_plat), []
+    for m in q_mots:
+        n = _plat(m)
+        if n in vus or n in _MOTS_VIDES or len(n) < 2:
+            continue
+        vus.add(n)
+        extras.append(m)
+    choisis = ([m for m in extras if _plat(m) in mots_decor]
+               + [m for m in extras if _plat(m) not in mots_decor])[:place]
+    return " ".join(tete_mots + choisis)
 
 
 def _json_si_texte(v):
@@ -183,6 +263,7 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
         on_usage(getattr(resp.usage, "input_tokens", 0),
                  getattr(resp.usage, "output_tokens", 0), model)
     tropes_ok, decors_ok = valid_keys(sous_genre_cle, version)
+    tete_requete = _sous_genre(sous_genre_cle, version).get("query_fr", "")
     c = contraintes or ContraintesTrio()
     out: list[FictionNiche] = []
     for block in resp.content:
@@ -213,6 +294,9 @@ def generate_trios(sous_genre_cle: str, n: int = 8, rayon: str = "kindle",
                 continue                       # trope imposé absent -> écarté
             if c.decor and dec != c.decor:
                 continue                       # décor imposé non respecté -> écarté
+            # Court et ancré sur la requête de référence : on corrige la requête, on ne jette pas
+            # le trio (c'est elle qui était mal écrite, pas la combinaison).
+            query = requete_courte(query, tete_requete, dec)
             out.append(FictionNiche(sous_genre=sous_genre_cle, tropes=tr[:3], decor=dec,
                                     marketplace="fr", rayon=rayon,
                                     query=query))

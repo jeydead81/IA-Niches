@@ -25,7 +25,8 @@ def search_param_for_niche(niche: FictionNiche, version: str = "fr_v1") -> str:
 
 def fetch_shelf_asins(niche: FictionNiche, provider, n_top: int = 12, depth: int = 30,
                       cost=None, version: str = "fr_v1") -> tuple[str, list[str]]:
-    """Moitié SERP (rapide, pas de file d'attente) : SERP contrainte au rayon -> n_top
+    """Moitié SERP (quelques secondes à quelques minutes ; une requête sans résultat rend un rayon
+    vide, `(sp, [])`, dès le premier relevé) : SERP contrainte au rayon -> n_top
     premiers ASIN dédupliqués. AUCUN enrichissement ici — c'est cette moitié qu'on veut
     appeler N fois (une par niche) avant de payer UNE seule fois la file ASIN via
     `enrich_asins` (cf. M6-2 : la file DataForSEO met ~250 s quel que soit le nb d'ASIN).
@@ -33,11 +34,18 @@ def fetch_shelf_asins(niche: FictionNiche, provider, n_top: int = 12, depth: int
     n_top=12 par défaut (-40% de coût ASIN vs 20) : le signal concurrentiel de M5 (depth,
     openness, saturation_trio) est porté par les tout premiers résultats, les ASIN 13-20
     coûtent 0,024 $ chacun pour peu d'apport."""
-    from search_providers import TaskPostRefuse
+    from search_providers import AucunResultat, TaskPostRefuse
     sp = search_param_for_niche(niche, version)
     prio = getattr(provider, "priority", 2)
     try:
         sr = provider.search(niche.query, depth=depth, search_param=sp)
+    except AucunResultat:
+        # Amazon ne rend RIEN pour cette requête : un rayon VIDE, pas un échec. L'orchestrateur
+        # en fait une carte « non mesuré » (« la requête ne rend aucun livre, ce n'est pas une
+        # niche morte ») au lieu de la laisser disparaître. La tâche a été créée : imputée.
+        if cost is not None:
+            cost.add_dataforseo(1, prio)
+        return sp, []
     except BaseException as e:
         # Une tâche CRÉÉE puis non lue (poll épuisé, relecture illisible, Ctrl-C) est
         # facturée : seul un refus explicite ne l'est pas. On impute, puis on relance —

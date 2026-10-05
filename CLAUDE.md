@@ -7,7 +7,7 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-03** (1 643 tests sur 121 fichiers, 52 modules, 34
+> Comptages revérifiés le **2026-10-05** (1 766 tests sur 128 fichiers, 52 modules, 34
 > variables d'env, 22 endpoints, `server.py` 1 380 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
@@ -212,6 +212,11 @@ Coût : **0,153 $ pour 3 trios (MESURÉ)**, **0,409 $ pour 8 trios (EXTRAPOLÉ)*
   par niche. Formulation encore à corriger dans le docstring.
   **Chaque niche est isolée par try/except** (`fiction_master.py:96-100`) : une niche qui lève est
   écartée et comptée, les rayons déjà payés sont conservés. Aucune survivante → retour `[]`.
+  **Une recherche peut se terminer SANS résultat** (statut de tâche 40102, §5.40) : elle rend un
+  rayon VIDE `(sp, [])`, jamais une exception — la niche ressort en carte « non mesuré » avec sa
+  raison, et l'enrichissement est sauté si tous les rayons sont vides. **Une requête = UNE
+  recherche payée** : les trios qui partagent la même requête courte (même décor, §2.19) gardent
+  chacun leur carte mais ne repaient pas la recherche, et un échec vaut pour tous.
 - **C — UN SEUL batch ASIN global.** C'est le point du module : union dédupliquée de tous les
   ASIN (`fiction_master.py:109`), passée en un appel `product_raw_batch` (jusqu'à 100 ASIN par
   task_post). La file DataForSEO met ~250 s **quel que soit** le nombre d'ASIN : la payer une fois
@@ -579,7 +584,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1643 tests** sur **121 fichiers** `tests/test_*.py`, **1643 passés, 0 ignoré, 0 échec,
+**1766 tests** sur **128 fichiers** `tests/test_*.py`, **1766 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-03,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1054,7 +1059,7 @@ décor, et le prompt est borné quelle que soit la taille du rayon reçu (`MAX_L
 
 | Garde | Règle |
 |---|---|
-| **Rayon non mesuré** (`rayon_non_mesure` : matrice `non_mesurable`, ou aucun livre, ou aucun livre scorable) | `generate_fiction_verdict` LÈVE `RayonNonMesure` AVANT l'appel, et l'endpoint rend **400 AVANT toute réservation** : rien dépensé, rien décompté du débit horaire. Ni « Go » ni **« No-Go »** : non mesuré n'est pas mort (règle 3, §5.2). L'interface n'offre pas le bouton sur une telle carte |
+| **Rayon non mesuré OU mesure trop mince** (`raison_non_mesure` : matrice `non_mesurable` / `mesure_mince`, ou aucun livre, ou moins de `SEUILS["livres_mesures_min"]` livres scorables recomptés sur les livres eux-mêmes — un résultat ancien étiqueté « mort » sur 2 livres est refusé) | `generate_fiction_verdict` LÈVE `RayonNonMesure` AVANT l'appel, et l'endpoint rend **400 AVANT toute réservation** : rien dépensé, rien décompté du débit horaire. Ni « Go » ni **« No-Go »** : non mesuré n'est pas mort (règle 3, §5.2). Deux phrases distinctes (« pas mesuré » / « trop peu de livres », le conseil « essayez Kindle » seulement depuis le papier). L'interface n'offre pas le bouton sur une telle carte |
 | **Rayon incomplet** (`rayon_incomplet` : `n_echecs > 0`, OU le mot « incomplet » dans le texte du moteur) | « Go » ramené à « Go prudent », raison écrite en tête du facteur décisif. **Ne fait que DÉGRADER** : un « No-Go » ne remonte jamais. Le texte du moteur double le compteur parce qu'un travail enregistré AVANT l'ajout de `FictionNicheReport.n_echecs` vaut `0` — « complet » par défaut, optimiste donc faux |
 | **Comparables vérifiés** | Un ASIN que le modèle n'a pas pu lire dans le rayon MESURÉ est écarté et COMPTÉ (écrit dans le facteur) ; le titre affiché est celui du rayon, jamais celui du modèle ; doublons et excédent au-delà de trois passés sans compte |
 
@@ -1070,6 +1075,62 @@ vérifiées : l'écran dit « à tester », pas « à viser ».
 facultatives), comme pour les quatre autres outils passés en strict le 2026-09-14 (§2.8) ; la
 qualité réelle des angles et des comparables — aucune réponse live capturée, fixtures inventées
 et déclarées comme telles.
+
+### 2.19 Mesure suffisante, requêtes de trio, fin d'attente (2026-10-05)
+
+Né d'un test réel de Baptiste (feel_good, papier, 5 trios demandés : 3 rendus, 2 « non mesuré »),
+puis d'une revue adverse du correctif (5 relecteurs, 35 constats, 24 confirmés, tous traités ou
+écrits ici). **Mesuré sur les deux runs fiction enregistrés** (8 niches, tous en papier) : **7 livres
+scorables sur 47 payés**, jamais plus de 4 par niche (4, 1, 1, 0, 0, 1, 0, 0) ; 28 % des livres ont un
+rang « Livres », 32 % un rang Kindle, 34 % aucun rang, 4 % audio.
+
+**1. Mesure trop mince** (`fiction_scoring`). Sous `SEUILS["livres_mesures_min"]` = **3** livres
+mesurables, la niche sort `mesure_mince` : aucun chiffre (tuiles « — »), aucune conclusion de marché,
+aucune analyse éditoriale, hors historique, en bas du tri, conclusion neutre. Même famille que
+`non_mesurable` (zéro livre) : `NON_CONCLUANTES` en est la liste unique, miroir JS
+`ETATS_NON_CONCLUANTS_FIC` tenu par un test. **LE SEUIL EST UNE HYPOTHÈSE posée de notre propre chef,
+confrontée à aucun jeu étiqueté** (§4.2) ; l'aide le dit. Avant : « Mur installé » rendu sur UN livre
+(les sept autres étaient du développement personnel classé hors roman), « Mort » sur un livre, deux
+fois, sans que rien en dise la fragilité. `FictionNicheReport.n_livres_mesures` (défaut `None` =
+inconnu) alimente la ligne « 📏 N livres mesurés sur M ». **Les résultats ANTÉRIEURS** (sans ce
+compteur — les runs réels déjà en base) sont relus **à la lecture** (`relire_resultat_fiction`, dans
+`_job_public` et le flux SSE) avec la MÊME fonction que le moteur : ils ne font que dégrader, le brut
+reste en base. **Non rattrapés** : les points d'historique fiction déjà écrits (zéros, un livre) ;
+un nouveau passage sur une même clé peut encore afficher un delta fabriqué.
+
+**2. Requêtes de trio courtes.** Le prompt autorisait « 3 à 6 mots » ; les deux requêtes écrites hors
+de la requête de référence (« roman reprise ferme famille », « roman nouvelle vie île recommencer »)
+ont rendu **aucun résultat** sur Amazon, celles de 5 à 6 mots 0, 2, 3 ou 9 livres (dont 8 hors
+sujet). Sur l'autocomplete (gratuit), seule la TÊTE du rayon est tapée : ajouter « librairie » ou
+« boulangerie » ne rend plus rien (un prédicteur de la richesse d'une SERP ? **non** : une requête à
+12 livres avait 0 complétion à chaque préfixe). `fiction_ideator.requete_courte` garantit côté code
+**4 mots au plus, commençant par la requête de référence du sous-genre** (le mot concret du décor
+d'abord) ; prompt réécrit (« 2 à 4 mots »). **Que cela fasse rendre plus de livres est une HYPOTHÈSE,
+non mesurée** : aucune recherche payée pour le vérifier. **Conséquence assumée, trouvée en revue :
+des trios de même décor partagent désormais la MÊME requête**, donc le même rayon — première version :
+écarter le trio en collision (11 demandés → 7 rendus ; décor imposé 8 → 2) ; deuxième : glisser sur un
+mot de ressort (un rayon sans rapport avec le décor). Les deux écartées. Retenu : **l'identité d'un
+trio est `FictionNiche.cle`** (sous-genre + requête + tropes sans ordre + décor, calculée UNE fois, lue
+telle quelle par l'historique, l'écran et la conservation de l'analyse — `_est_la_niche` la teste
+avant `query`, qui reste le repli des résultats antérieurs), et **la recherche payée est partagée**
+entre trios de même requête (`fiction_master`, clé `cle_requete`). Cartes au même rayon : mêmes
+livres, profondeur et ouverture identiques, saturation propre à chaque trio.
+
+**3. Fin d'attente sur « aucun résultat »** (§5.40). Remplace le « lancer les recherches en
+parallèle et relire plus tard celles qui ont expiré », proposé sur un diagnostic FAUX (« file
+saturée »). Gain : 640 s sur 915 s au run observé. **Le parallélisme n'est PAS fait**, et c'est un
+choix : hors ce défaut, le run sans incident durait 597 s dont ~250 s de file ASIN ; le gain d'un
+envoi groupé des recherches n'est pas mesuré, et il toucherait le plafond, l'annulation et
+l'imputation du coût. À reprendre si un run reste lent.
+
+**Non corrigé, connu.** (a) Une saturation à 0,00 sur des livres mesurables dont AUCUN n'est classé
+(quatrième de couverture absente) s'affiche « peu couverte » en vert et peut donner « Pépite » ;
+l'avertissement « N/M livres non classés » est visible à côté, mais la tuile ne le dit pas
+(antérieur à ce lot). (b) Le scout non-fiction et le low-content traitent une recherche sans
+résultat comme « Amazon n'a pas répondu — à relancer » : l'exception change (320 s plus tôt, message
+brut véridique), le texte d'écran non, parce que `concurrence_mesuree` est un booléen. Traiter la
+SERP vide en non-fiction comme mesurée donnerait le bonus « moins de 10 concurrents » (§5.36).
+(c) Un statut de tâche terminal autre que 40102 serait encore attendu 40 fois : aucun n'a été vu.
 
 ---
 
@@ -1184,6 +1245,7 @@ Les `REDDIT_*` **ne sont plus lues nulle part** : les modules qui les lisaient o
 | Bonus « expertise pharmacien » (santé/nutrition/bien-être) | **Non codé et délibérément contredit** : `niche_ideator.py:47-50` impose au contraire au modèle de ne privilégier aucun domaine et de ne rien supposer de l'expertise de l'auteur |
 | Malus pour risque KDP TOS | **Non codé.** `NicheCandidate.risques` (`models.py:24`) est rempli par le LLM (champ `required` dans le schéma d'outil) mais n'est propagé nulle part : ni `NicheValidation`, ni `ScoredNiche`, ni le scoring, ni l'affichage. **Champ mort** |
 | « Nombre de résultats de recherche Amazon inférieur à 10 000 » | **Non codé et non mesurable en l'état** : la donnée n'est pas collectée. `SearchResult.total_items` vaut `len(items)` de la page de SERP (`search_providers.py:86`), pas le total annoncé par Amazon, et n'entre dans aucun calcul |
+| Seuil `SEUILS["livres_mesures_min"]` = 3 livres mesurables (fiction) | **CODÉ mais HYPOTHÈSE** : posé le 2026-10-05, jamais confronté à un jeu étiqueté. À citer comme tel (§2.19) |
 | `IDEES_PAR_RUN = 10` | **Constante morte** (`web/server.py:134`, zéro référence ailleurs). Le vivier réellement appliqué est de **12**. Ne pas documenter 10 comme le comportement du produit — cf. §2.2 |
 
 ---
@@ -1480,6 +1542,30 @@ Section critique. Chacun a coûté un bug réel.
     mesure un chiffre déjà stocké.
 
 
+40. **Une tâche TERMINÉE sans résultat n'est pas une file saturée.** Run fiction du 2026-10-05 :
+    deux recherches « non prêtes après 320 s — file DataForSEO probablement saturée ». Relues
+    gratuitement (`task_get`) : terminées en 0,03 s, statut de tâche **40102 « No Search
+    Results »**, `cost` 0, Amazon répondant « Aucun résultat pour votre recherche dans Livres ».
+    `DataForSEOProvider.search` n'acceptait que « 20000 + résultat » et pollait 40 fois une tâche
+    déjà finie (640 s sur 915 s), puis écartait la niche SANS carte. Désormais `AucunResultat`
+    (RuntimeError) au premier relevé ; fiction en fait un rayon vide, les autres moteurs gardent leur
+    branche d'échec. **Le diagnostic précédent — écrit dans le message d'erreur lui-même — était
+    faux, et on s'apprêtait à construire un correctif dessus.** Règle : avant de conclure à la
+    lenteur d'un fournisseur, relire la tâche (gratuit). Fixture réelle :
+    `tests/fixtures/serp_aucun_resultat_reel.json`. La tâche reste imputée (borne haute : le
+    fournisseur rapporte `cost` 0, rien ne mesure ce qui est facturé — règle 2).
+
+41. **Un chiffre calculé sur zéro ou sur un livre n'est pas une mesure** (§2.19). Une carte « Non
+    mesuré » affichait Saturation 0,00 « peu couvert » en VERT : les zéros d'un calcul sur AUCUN livre
+    lus comme « rayon vierge ». Les tuiles sont remplacées par « — » dans les deux états non
+    concluants, la note de saturation et la part de séries aussi. Famille de §5.2, §5.10, règle 3.
+
+42. **Une requête n'est pas l'identité d'un trio.** Dès que les requêtes sont courtes, des trios
+    partagent un rayon. Toute clé construite sur `query` (historique, rangement de l'analyse dans le
+    travail) devient ambiguë : deux runs, deux trios différents au même décor, mêmes livres, et
+    `delta()` annonçait « la niche s'est dégagée » (saturation 1,0 puis 0,0, seule dépendante des
+    tropes). Clé = `FictionNiche.cle`, jamais `query`.
+
 **Invariant transversal**
 
 29. **Un échec n'interrompt jamais un run, mais il est toujours compté — et il ne doit jamais se
@@ -1507,7 +1593,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1643 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 1766 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

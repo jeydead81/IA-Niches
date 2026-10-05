@@ -1583,6 +1583,11 @@
   /* Une réserve du code (rayon incomplet) n'est pas une note de bas de page : jamais grisée. */
   .vraison .vf-note[data-alerte]{margin:8px 0 0;padding:8px 12px;border-radius:10px;background:var(--amber-bg);
     color:#78350F;font-size:13px;line-height:1.45}
+
+  /* ── Fiction : combien de livres, et l'état « rien à conclure » ── */
+  .fic-mesure{margin:0 0 8px;font-size:12.5px;color:var(--text-muted)}
+  .fic-cle.fic-vide b{color:var(--text-muted);font-weight:600}
+  .fic-cle.fic-vide .mut{font-size:12px}
 </style>
 </head>
 <body>
@@ -2211,7 +2216,7 @@ function verdictSlot(r){
 // comme l'analyse rendrait un bloc vide a la place du bouton. Rayon non mesure : AUCUN bouton, le
 // serveur le refuse (400) et la carte dit deja « a relancer ».
 function verdictSlotFic(r){
-  if(!r || r.demand_matrix === 'non_mesurable' || !(r.books || []).length) return '';
+  if(!r || ETATS_NON_CONCLUANTS_FIC.indexOf(r.demand_matrix) >= 0 || !(r.books || []).length) return '';
   return verdictSlot({niche: r.niche, fiction: true, verdict: r.analyse || null});
 }
 
@@ -2396,7 +2401,9 @@ function verdictBlock(r){
 // resultat paye a la bonne place (jobs.annoter_resultat).
 function cleNiche(r){
   const n = r && r.niche;
-  return n && typeof n === 'object' ? (n.requete_amazon || n.niche || n.query || '') : (n || '');
+  // Fiction : la CLE du trio (`cle`), car plusieurs trios partagent la meme requete courte ; la
+  // requete pour un resultat anterieur, qui n'en portait pas.
+  return n && typeof n === 'object' ? (n.requete_amazon || n.niche || n.cle || n.query || '') : (n || '');
 }
 
 // L'analyse editoriale et les mots-cles sont des appels PAYANTS a la piece. Avec `?job=`, le
@@ -3846,7 +3853,55 @@ const DM_CONCLUSION = {
     `Peu de ventes et peu de place. Passez à autre chose.`],
   non_mesurable: ['⚪','Non mesuré','n',
     `Impossible de conclure : le rayon était vide ou tous les livres ont été écartés. Reformulez la requête ou changez de rayon. <strong>Ce n'est pas un mauvais résultat, c'est une absence de résultat.</strong>`],
+  // Voisin de non_mesurable, même grade neutre : un ou deux livres mesurables ne disent rien du
+  // marché (mesuré le 2026-10-05 : « Mur installé » rendu sur UN livre, « Mort » sur un livre).
+  mesure_mince: ['📏','Mesure trop mince','n',
+    `Trop peu de livres mesurés pour conclure. <strong>Ce n'est pas un rayon mort</strong> : élargissez la requête, ou essayez l'autre rayon. Ce n'est pas un mauvais résultat, c'est une mesure insuffisante.`],
 };
+
+// Les états où rien ne se conclut (miroir de fiction_scoring.NON_CONCLUANTES) : la carte n'y montre
+// ni chiffre, ni bouton d'analyse. Un état oublié ici laisserait un zéro se lire comme une mesure.
+const ETATS_NON_CONCLUANTS_FIC = ['non_mesurable', 'mesure_mince'];
+
+// Quatre tuiles « — » à la place des quatre chiffres : le calcul a tourné sur AUCUN livre (ou sur
+// un seul), ses zéros ne sont pas des mesures. Capture de Baptiste, 2026-10-05 : une carte
+// « Non mesuré » affichait Saturation 0,00 « peu couvert » en VERT.
+function tuilesVidesFic(){
+  const t = (ico, lib) => '<div class="fic-cle fic-vide"><span class="fic-cle-k">' + ico + ' ' + lib
+    + '</span><b>—</b><span class="mut">non mesuré</span></div>';
+  return '<div class="fic-cles">' + t('🔥', 'Saturation') + t('🌊', 'Profondeur')
+    + t('🚪', 'Ouverture') + t('💰', 'Prix médian') + '</div>';
+}
+
+// Sur combien de livres repose la carte. `null`/absent = résultat antérieur au compteur : aucune
+// ligne plutôt qu'un « 0 livre mesuré » qui serait faux.
+function mesureFic(r){
+  if(r.n_livres_mesures == null) return '';
+  const n = r.n_livres_mesures, m = (r.books || []).length;
+  // Aucun livre RENDU n'est pas « aucun livre trouvé » : la recherche a pu en trouver, dont les
+  // fiches n'ont pas pu être lues (`asins_demandes`, `n_echecs`). Deux causes, deux phrases.
+  const txt = m === 0 ? ((r.asins_demandes || 0) > 0 ? 'Aucune fiche livre n’a pu être lue'
+                                                     : 'Aucun livre trouvé')
+    : n === 0 ? 'Aucun livre mesuré sur ' + m
+    : n + (n > 1 ? ' livres mesurés' : ' livre mesuré') + ' sur ' + m;
+  return '<p class="fic-mesure">📏 ' + txt + '</p>';
+}
+
+// Le volet « Le rayon en détail » : note de saturation, part de séries, sonde. Sur une niche
+// non concluante, « 0 % de votre trio » et « part séries 0 % » seraient deux zéros de plus.
+function metriquesRayonFic(r, acVal){
+  const mesure = ETATS_NON_CONCLUANTS_FIC.indexOf(r.demand_matrix) < 0;
+  const note = mesure
+    ? '<p class="fic-sat-note">🔥 Saturation : les livres du rayon reprennent déjà, en moyenne, '
+      + Math.round((r.saturation_trio || 0) * 100) + ' % de votre trio. Plus c’est élevé, moins il reste de place.</p>'
+    : '';
+  const series = mesure ? fmtPct(r.series_share) : '<span class="mut">non mesuré</span>';
+  return note + '<div class="fic-metrics">'
+    + '<div class="metric"><span class="mlabel">📚 Part séries' + glossBtn('Part séries')
+    + '</span><span class="mval">' + series + '</span></div>'
+    + '<div class="metric"><span class="mlabel">🎯 Sonde autocomplete' + glossBtn('Sonde autocomplete')
+    + '</span>' + acVal + '</div></div>';
+}
 const fmtPct = n => Math.round((n??0)*100)+'%';
 const fmtEur = n => n==null ? '—' : Number(n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 
@@ -3955,6 +4010,8 @@ function renderFic(rows){
     const avert = phrases.filter(p=>WARN_RE.test(p))
       .map(p=>`<p class="fic-warn">${ICON_WARN}<span>${esc(p)}</span></p>`).join('');
     const nLivres = (r.books || []).length;
+    // Zéro livre mesuré, ou trop peu : ni chiffres ni analyse (cf. ETATS_NON_CONCLUANTS_FIC).
+    const concluante = ETATS_NON_CONCLUANTS_FIC.indexOf(r.demand_matrix) < 0;
     const card=document.createElement('div'); card.className='panel fic-card';
     card.style.setProperty('--i', i);
     card.innerHTML=`
@@ -3968,22 +4025,19 @@ function renderFic(rows){
       </div>
       <p class="fic-concl ${dmGrade}">${dmTexte}</p>
       ${avert}
-      <div class="fic-cles">
+      ${mesureFic(r)}
+      ${concluante ? `<div class="fic-cles">
         <div class="fic-cle fic-sat ${satCss}"><span class="fic-cle-k">🔥 Saturation${glossBtn('Saturation du trio')}</span><b>${fmtDec(r.saturation_trio)}</b><span class="verdict ${satGrade}">${esc(satLabel)}</span></div>
         <div class="fic-cle"><span class="fic-cle-k">🌊 Profondeur${glossBtn('Profondeur')}</span><b>${fmtDec(r.depth_score)}</b><span class="verdict ${depthGrade}">${esc(depthLabel)}</span></div>
         <div class="fic-cle"><span class="fic-cle-k">🚪 Ouverture${glossBtn('Ouverture')}</span><b>${fmtDec(r.openness_score)}</b><span class="verdict ${openGrade}">${esc(openLabel)}</span></div>
         <div class="fic-cle"><span class="fic-cle-k">💰 Prix médian</span><b>${fmtEur(pmed)}</b><span class="mut">${pmin==null?'':fmtEur(pmin)+' – '+fmtEur(pmax)}</span></div>
-      </div>
+      </div>` : tuilesVidesFic()}
       <div class="verdictslot" aria-live="polite">${verdictSlotFic(r)}</div>
       <details class="avance pli fic-livres"><summary>📚 Les livres qui occupent le rayon${nLivres ? ' (' + nLivres + ')' : ''}</summary>
         ${blocLivresFic(r)}</details>
       <details class="avance pli fic-detail"><summary>🔍 Le rayon en détail</summary>
-        <p class="fic-sat-note">🔥 Saturation : les livres du rayon reprennent déjà, en moyenne, ${Math.round((r.saturation_trio||0)*100)} % de votre trio. Plus c’est élevé, moins il reste de place.</p>
-        <div class="fic-metrics">
-          <div class="metric"><span class="mlabel">📚 Part séries${glossBtn('Part séries')}</span><span class="mval">${fmtPct(r.series_share)}</span></div>
-          <div class="metric"><span class="mlabel">🎯 Sonde autocomplete${glossBtn('Sonde autocomplete')}</span>${acVal}</div>
-        </div>
-        <div class="histslot"></div>
+        ${metriquesRayonFic(r, acVal)}
+        ${concluante ? '<div class="histslot"></div>' : ''}
       </details>`;
     brancherActionsFic(r, card);
     // L'historique fiction etait ECRIT a chaque run (_consigner_fiction) et JAMAIS lu :
@@ -3993,11 +4047,15 @@ function renderFic(rows){
     //
     // Charge a l'OUVERTURE du detail, comme en non-fiction : interroger l'historique de dix
     // trios que l'utilisateur ne depliera jamais, c'est dix requetes pour rien.
+    //
+    // Cle = celle du TRIO (cleNiche), pas sa requete : plusieurs trios d'un meme decor partagent la
+    // meme requete courte. Rien a charger pour une niche non concluante : le serveur n'en enregistre
+    // aucun point, la carte dirait « Premier passage » a chaque relance.
     let histCharge = false;
-    card.querySelector('.fic-detail').addEventListener('toggle', ev => {
+    if(concluante) card.querySelector('.fic-detail').addEventListener('toggle', ev => {
       if (!ev.target.open || histCharge) return;
       histCharge = true;
-      loadHistorique(r.niche && r.niche.query, card.querySelector('.histslot'));
+      loadHistorique(cleNiche(r), card.querySelector('.histslot'));
     });
     gridFic.appendChild(card);
   });
@@ -4468,7 +4526,13 @@ const AIDE = {
 
       <h3>Lire une carte</h3>
       <p>Commencez par la <strong>conclusion</strong> en haut (Pépite, Porteur mais
-      encombré, Mur installé, Désert, Sans intérêt, Non mesuré), puis les chiffres :</p>
+      encombré, Mur installé, Désert, Sans intérêt, Non mesuré, Mesure trop mince), puis
+      les chiffres. La ligne <strong>📏 « N livres mesurés sur M »</strong> dit sur combien
+      de livres repose la carte : sous trois livres mesurés, l'outil ne conclut rien et
+      n'affiche aucun chiffre. Ce n'est pas une niche morte : la requête a rendu trop peu
+      de livres exploitables. Élargissez-la, ou essayez l'autre rayon : en papier, une
+      partie des livres trouvés n'ont qu'un classement Kindle, qui ne se compare pas.
+      (Le seuil de trois livres est une hypothèse de travail, pas une règle établie.)</p>
       <ul>
         <li><strong>Saturation du trio</strong> : la part de votre trio que les livres du
         rayon promettent déjà. <strong>Ici, élevé = mauvais</strong> : c'est le seul chiffre
