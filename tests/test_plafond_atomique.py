@@ -111,11 +111,13 @@ def test_un_run_en_echec_garde_sa_place_prise_et_son_cout(tmp_path):
 def test_une_rafale_d_API_ne_depasse_pas_le_plafond(tmp_path, monkeypatch):
     from tests.test_server_jobs import _client_with_isolated_dbs
     client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
-    monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "2")
+    monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", "2")
     monkeypatch.setattr(server, "run_scout",
                         lambda seed=None, progress=None, cost=None, **kw: [])
 
-    codes = [client.post("/api/jobs", json={"type": "scout", "seed": f"s{i}"}).status_code
+    # Une niche par run : le plafond compte des NICHES (2026-10-06), pas des runs.
+    codes = [client.post("/api/jobs", json={"type": "scout", "seed": f"s{i}",
+                                            "n_search": 1}).status_code
              for i in range(6)]
     assert codes.count(202) == 2, f"codes obtenus : {codes}"
     assert codes.count(429) == 4
@@ -126,11 +128,11 @@ def test_le_refus_de_plafond_ne_cree_aucun_job(tmp_path, monkeypatch):
     from tests.test_server_jobs import _client_with_isolated_dbs
     from jobs import JobStore
     client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
-    monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "1")
+    monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", "1")
     monkeypatch.setattr(server, "run_scout",
                         lambda seed=None, progress=None, cost=None, **kw: [])
 
-    client.post("/api/jobs", json={"type": "scout", "seed": "a"})
-    client.post("/api/jobs", json={"type": "scout", "seed": "b"})
+    client.post("/api/jobs", json={"type": "scout", "seed": "a", "n_search": 1})
+    client.post("/api/jobs", json={"type": "scout", "seed": "b", "n_search": 1})
     uid = client.get("/api/auth/moi").json()["user_id"]
     assert len(JobStore(server._JOBS_DB).list_jobs(user_id=uid, limit=20)) == 1

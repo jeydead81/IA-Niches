@@ -28,12 +28,15 @@ from datetime import datetime
 import pytest
 
 import build_lowcontent_validation_set as cli
-from cache import Cache
+from cache import BOOK_TTL_S, Cache
 from lowcontent_validation import RapportCalibration
 from tests.outils_calibration import (ASINS_V2, LOC, LANG, PAYLOADS, XLSX_REEL, cache_run4_reel,
                                       cles, etiquetees_reelles, livre_v2)
 
-_TTL = 15 * 24 * 3600
+# Le TTL que le PRODUIT écrit aujourd'hui. Figé à 15 jours, il faisait dater « 10 jours trop tôt » les
+# fiches écrites maintenant (la purge déduit l'époque d'une ligne de son `expires`), et le test ne
+# cassait qu'une fois la date du changement de TTL dépassée de plus de dix jours.
+_TTL = BOOK_TTL_S
 
 
 def _demain() -> str:

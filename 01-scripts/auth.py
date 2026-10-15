@@ -58,6 +58,12 @@ FENETRE_TENTATIVES_S = 15 * 60
 # par adresse, alors que c'est exactement le mode opératoire de l'énumération en masse.
 MAX_INSCRIPTIONS_PAR_CLIENT = 10
 
+# Jetons envoyés par e-mail. Un lien traîne dans une boîte, un historique, un relais : il vit peu
+# (la réinitialisation donne la main sur le compte, une heure suffit) et ne sert qu'UNE fois.
+TTL_JETON_VERIFICATION_S = 48 * 3600
+TTL_JETON_REINITIALISATION_S = 3600
+USAGES_JETON = ("verification", "reinitialisation")
+
 # Mots de passe interdits parce qu'ils sont en tête de tous les dictionnaires d'attaque,
 # y compris au-delà de 12 caractères. La revue a MESURÉ que c'est la politique de mot de
 # passe — et non le réglage de scrypt — qui décide si un dictionnaire casse les comptes :
@@ -82,7 +88,10 @@ SCRYPT_N, SCRYPT_R, SCRYPT_P, SCRYPT_DKLEN = 2 ** 14, 8, 1, 32
 # messagerie. On écarte ce qui est manifestement faux (pas d'arobase, pas de point dans le
 # domaine, partie vide) plutôt que d'inventer une grammaire RFC 5322 qui rejetterait des
 # adresses légitimes — un client qui ne peut pas s'inscrire ne se plaint pas, il part.
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Volontairement permissive (« le seul juge de la validité d'une adresse est le serveur de messagerie »),
+# SAUF les délimiteurs d'adresse : `msg["To"] = "a,b@x.com"` s'analyse en DEUX destinataires, et une
+# inscription ferait alors envoyer le lien de vérification à un tiers (revue du 2026-10-06).
+_EMAIL = re.compile(r'^[^@\s,;:<>()\[\]\\"]+@[^@\s,;:<>()\[\]\\"]+\.[^@\s,;:<>()\[\]\\"]+$')
 
 
 class EmailInvalide(ValueError):
@@ -113,6 +122,8 @@ class Compte(BaseModel):
     user_id: str
     email: str
     cree_le: float = 0.0
+    # Défaut PESSIMISTE : une adresse n'est vérifiée que lorsqu'un lien envoyé à elle a servi.
+    email_verifie: bool = False
 
 
 def valider_mot_de_passe(mot_de_passe) -> str:
@@ -158,9 +169,30 @@ class UserStore:
                 " sel BLOB NOT NULL,"
                 " empreinte BLOB NOT NULL,"
                 " params TEXT NOT NULL,"          # durcir scrypt plus tard sans tout casser
-                " cree_le REAL NOT NULL"
+                " cree_le REAL NOT NULL,"
+                " email_verifie INTEGER NOT NULL DEFAULT 0"
                 ")"
             )
+            # Base créée avant la colonne : ses comptes sont LOCAUX (aucune instance n'a jamais été
+            # exposée), les déclarer non vérifiés ne ferait que verrouiller leur propriétaire
+            # dehors. `creer_compte` pose toujours la valeur explicitement : ce DEFAULT 1 ne vaut
+            # que pour les lignes qui existaient.
+            colonnes = {r[1] for r in cx.execute("PRAGMA table_info(comptes)")}
+            if "email_verifie" not in colonnes:
+                cx.execute("ALTER TABLE comptes ADD COLUMN email_verifie "
+                           "INTEGER NOT NULL DEFAULT 1")
+            cx.execute(
+                "CREATE TABLE IF NOT EXISTS jetons_courriel ("
+                " empreinte TEXT PRIMARY KEY,"       # SHA-256, jamais le jeton en clair
+                " user_id TEXT NOT NULL,"
+                " usage TEXT NOT NULL,"
+                " cree_le REAL NOT NULL,"
+                " expire_le REAL NOT NULL,"
+                " utilise INTEGER NOT NULL DEFAULT 0"
+                ")"
+            )
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_jetons_user "
+                       "ON jetons_courriel (user_id, usage)")
             cx.execute(
                 "CREATE TABLE IF NOT EXISTS sessions ("
                 " jeton_empreinte TEXT PRIMARY KEY,"   # SHA-256, jamais le jeton en clair
@@ -211,7 +243,7 @@ class UserStore:
         try:
             with self._conn() as cx:
                 cx.execute("INSERT INTO comptes (user_id, email, sel, empreinte, params, "
-                           "cree_le) VALUES (?, ?, ?, ?, ?, ?)",
+                           "cree_le, email_verifie) VALUES (?, ?, ?, ?, ?, ?, 0)",
                            (compte.user_id, propre, sel, empreinte, params, compte.cree_le))
         except sqlite3.IntegrityError as e:
             raise EmailDejaPris(f"un compte existe déjà pour « {propre} »") from e
@@ -227,6 +259,14 @@ class UserStore:
 
     def noter_tentative(self, cle: str) -> None:
         self._noter_tentative(cle)
+
+    @staticmethod
+    def _cle_connexion(email: str) -> str:
+        """Clé de la connexion dans la table des tentatives. L'« e-mail » d'une connexion est un
+        texte LIBRE tapé par n'importe qui : noté tel quel, `reinit:victime@x.com` ou `ip:1.2.3.4`
+        remplissait le compteur d'un autre usage (revue du 2026-10-06). Le préfixe `login:` fait que
+        rien de ce qu'on saisit ici ne peut atteindre les clés `ip:`, `reinit:`, `verif:`."""
+        return f"login:{email}"
 
     def _tentatives_recentes(self, email: str) -> int:
         with self._conn() as cx:
@@ -260,38 +300,49 @@ class UserStore:
         if len(mot_de_passe) > LONGUEUR_MAX_MOT_DE_PASSE:
             # Refusé AVANT scrypt : c'est tout l'intérêt du plafond de longueur.
             return None
-        if self._tentatives_recentes(propre) >= MAX_TENTATIVES:
+        if self._tentatives_recentes(self._cle_connexion(propre)) >= MAX_TENTATIVES:
             raise TropDeTentatives(
                 "trop de tentatives de connexion — réessayez dans quelques minutes")
         with self._conn() as cx:
             ligne = cx.execute(
-                "SELECT user_id, sel, empreinte, params, cree_le FROM comptes WHERE email=?",
-                (propre,)).fetchone()
+                "SELECT user_id, sel, empreinte, params, cree_le, email_verifie "
+                "FROM comptes WHERE email=?", (propre,)).fetchone()
 
         if ligne is None:
             # Leurre : sans cette dérivation, répondre à un email inconnu serait
             # instantané et à un email connu lent — le temps de réponse suffirait à
             # énumérer les clients. On paie donc le même prix dans les deux cas.
             self._deriver(mot_de_passe or "", b"leurre-de-temps-constant")
-            self._noter_tentative(propre)
+            self._noter_tentative(self._cle_connexion(propre))
             return None
 
-        user_id, sel, empreinte, params, cree_le = ligne
+        user_id, sel, empreinte, params, cree_le, verifie = ligne
         n, r, p = _lire_params(params)
         candidat = self._deriver(mot_de_passe or "", sel, n=n, r=r, p=p)
         # compare_digest et non « == » : une comparaison qui s'arrête au premier octet
         # différent laisse deviner l'empreinte octet par octet.
         if not hmac.compare_digest(candidat, empreinte):
-            self._noter_tentative(propre)
+            self._noter_tentative(self._cle_connexion(propre))
             return None
-        self._oublier_tentatives(propre)
-        return Compte(user_id=user_id, email=propre, cree_le=cree_le)
+        self._oublier_tentatives(self._cle_connexion(propre))
+        return Compte(user_id=user_id, email=propre, cree_le=cree_le, email_verifie=bool(verifie))
 
     def compte(self, user_id: str) -> Compte | None:
         with self._conn() as cx:
-            ligne = cx.execute("SELECT user_id, email, cree_le FROM comptes WHERE user_id=?",
-                               (user_id,)).fetchone()
-        return Compte(user_id=ligne[0], email=ligne[1], cree_le=ligne[2]) if ligne else None
+            ligne = cx.execute("SELECT user_id, email, cree_le, email_verifie FROM comptes "
+                               "WHERE user_id=?", (user_id,)).fetchone()
+        return (Compte(user_id=ligne[0], email=ligne[1], cree_le=ligne[2],
+                       email_verifie=bool(ligne[3])) if ligne else None)
+
+    def compte_par_email(self, email) -> Compte | None:
+        """Le compte d'une adresse (casse et espaces ignorés), ou None. Sert à la demande de
+        réinitialisation, dont la réponse ne doit JAMAIS dire si l'adresse existe."""
+        propre = normaliser_email(email)
+        if not propre:
+            return None
+        with self._conn() as cx:
+            ligne = cx.execute("SELECT user_id FROM comptes WHERE email=?", (propre,)).fetchone()
+        return self.compte(ligne[0]) if ligne else None
 
     def n_comptes(self) -> int:
         with self._conn() as cx:
@@ -324,6 +375,10 @@ class UserStore:
                            (compte.user_id, _empreinte_jeton(garder)))
             else:
                 cx.execute("DELETE FROM sessions WHERE user_id=?", (compte.user_id,))
+            # Un lien de réinitialisation demandé AVANT ce changement ne doit pas pouvoir reprendre
+            # la main APRÈS : on change son mot de passe précisément quand on craint pour le compte.
+            cx.execute("DELETE FROM jetons_courriel WHERE user_id=? AND usage='reinitialisation'",
+                       (compte.user_id,))
 
     def supprimer_compte(self, email: str, mot_de_passe: str) -> str:
         """Efface le compte et ses sessions. Rend le `user_id` supprimé, pour que l'appelant
@@ -337,9 +392,97 @@ class UserStore:
             raise IdentifiantsInvalides("mot de passe incorrect")
         with self._conn() as cx:
             cx.execute("DELETE FROM sessions WHERE user_id=?", (compte.user_id,))
+            cx.execute("DELETE FROM jetons_courriel WHERE user_id=?", (compte.user_id,))
             cx.execute("DELETE FROM comptes WHERE user_id=?", (compte.user_id,))
-            cx.execute("DELETE FROM tentatives WHERE email=?", (compte.email,))
+            cx.execute("DELETE FROM tentatives WHERE email=?", (self._cle_connexion(compte.email),))
         return compte.user_id
+
+    # ── Jetons envoyés par e-mail ───────────────────────────────────────────────────
+
+    def creer_jeton_courriel(self, user_id: str, usage: str, ttl_s: float | None = None) -> str:
+        """Rend le jeton EN CLAIR (à poser dans un lien) et n'en garde que l'empreinte, comme
+        pour les sessions : lire la base ne doit pas permettre de réinitialiser un mot de passe.
+
+        Un nouveau jeton REMPLACE les précédents non utilisés du même usage : « renvoyer le lien »
+        ne doit pas laisser traîner deux liens valides."""
+        if usage not in USAGES_JETON:
+            raise ValueError(f"usage de jeton inconnu : « {usage} »")
+        if ttl_s is None:
+            ttl_s = (TTL_JETON_VERIFICATION_S if usage == "verification"
+                     else TTL_JETON_REINITIALISATION_S)
+        jeton = secrets.token_urlsafe(32)
+        maintenant = self.now()
+        with self._conn() as cx:
+            cx.execute("DELETE FROM jetons_courriel WHERE user_id=? AND usage=? AND utilise=0",
+                       (user_id, usage))
+            cx.execute("INSERT INTO jetons_courriel (empreinte, user_id, usage, cree_le, "
+                       "expire_le) VALUES (?, ?, ?, ?, ?)",
+                       (_empreinte_jeton(jeton), user_id, usage, maintenant, maintenant + ttl_s))
+        return jeton
+
+    def _consommer_jeton(self, cx, jeton, usage: str) -> str | None:
+        """Marque le jeton utilisé ET rend son `user_id`, ou None. UN seul UPDATE conditionnel :
+        deux requêtes simultanées avec le même lien ne passent pas toutes les deux."""
+        if not isinstance(jeton, str) or not jeton.strip():
+            return None
+        empreinte = _empreinte_jeton(jeton)
+        cur = cx.execute("UPDATE jetons_courriel SET utilise=1 WHERE empreinte=? AND usage=? "
+                         "AND utilise=0 AND expire_le>?", (empreinte, usage, self.now()))
+        if cur.rowcount != 1:
+            return None
+        return cx.execute("SELECT user_id FROM jetons_courriel WHERE empreinte=?",
+                          (empreinte,)).fetchone()[0]
+
+    def _jeton_valable(self, jeton, usage: str) -> bool:
+        """Lecture SEULE : le jeton existe, sert cet usage, n'est pas utilisé et n'a pas expiré."""
+        if not isinstance(jeton, str) or not jeton.strip():
+            return False
+        with self._conn() as cx:
+            return cx.execute("SELECT 1 FROM jetons_courriel WHERE empreinte=? AND usage=? "
+                              "AND utilise=0 AND expire_le>?",
+                              (_empreinte_jeton(jeton), usage, self.now())).fetchone() is not None
+
+    def verifier_email_par_jeton(self, jeton) -> Compte | None:
+        """Consomme un lien de vérification et marque l'adresse vérifiée. None si le lien est
+        inconnu, expiré ou déjà servi — sans dire lequel."""
+        with self._conn() as cx:
+            user_id = self._consommer_jeton(cx, jeton, "verification")
+            if user_id is None:
+                return None
+            cx.execute("UPDATE comptes SET email_verifie=1 WHERE user_id=?", (user_id,))
+        return self.compte(user_id)
+
+    def reinitialiser_mot_de_passe_par_jeton(self, jeton, nouveau) -> Compte | None:
+        """Consomme un lien de réinitialisation et pose le nouveau mot de passe. None si le lien
+        est inconnu, expiré, déjà servi ou d'un autre usage.
+
+        La politique est appliquée AVANT de consommer le lien : un mot de passe refusé ne doit
+        pas obliger à tout redemander. Lève `MotDePasseFaible` — la page le montre, il ne dit
+        rien sur la validité du lien (la politique s'applique avant de le lire).
+
+        Ferme TOUTES les sessions (on oublie son mot de passe aussi quand on craint qu'un tiers
+        ait la main sur le compte), remet les tentatives à zéro et marque l'adresse vérifiée : un
+        lien consommé prouve l'accès à la boîte."""
+        valider_mot_de_passe(nouveau)
+        # Le lien est contrôlé AVANT scrypt (~45 ms, 16 Mo) : cette route n'exige pas de session, et
+        # dériver pour un lien inconnu en faisait un amplificateur de coût pour n'importe qui. Le
+        # contrôle ne consomme rien ; la consommation, elle, reste atomique plus bas.
+        if not self._jeton_valable(jeton, "reinitialisation"):
+            return None
+        sel = secrets.token_bytes(16)
+        empreinte = self._deriver(nouveau, sel)
+        params = f"scrypt:{SCRYPT_N}:{SCRYPT_R}:{SCRYPT_P}"
+        with self._conn() as cx:
+            user_id = self._consommer_jeton(cx, jeton, "reinitialisation")
+            if user_id is None:
+                return None
+            cx.execute("UPDATE comptes SET sel=?, empreinte=?, params=?, email_verifie=1 "
+                       "WHERE user_id=?", (sel, empreinte, params, user_id))
+            cx.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+            email = cx.execute("SELECT email FROM comptes WHERE user_id=?",
+                               (user_id,)).fetchone()[0]
+            cx.execute("DELETE FROM tentatives WHERE email=?", (self._cle_connexion(email),))
+        return self.compte(user_id)
 
     # ── Sessions ────────────────────────────────────────────────────────────────────
 

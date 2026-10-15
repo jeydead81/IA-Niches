@@ -7,8 +7,8 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-05** (1 877 tests sur 135 fichiers, 52 modules, 34
-> variables d'env, 22 endpoints, `server.py` 1 380 lignes). Références de ligne revérifiées le **2026-08-22**
+> Comptages revérifiés le **2026-10-15** (2 059 tests sur 144 fichiers, 53 modules, 37
+> noms d'env lus, 27 endpoints, `server.py` 1 914 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
@@ -32,16 +32,19 @@ des ESTIMATIONS de cadrage établies en session de travail, pas des mesures du d
 chiffre sourçable dans le code est « à 30 analyses/mois la marge est de 88 % »
 (`usage.py:4-6`) ; ni « 19 EUR », ni « 94 % », ni le seuil de rentabilité n'apparaissent dans
 `01-scripts/` ou `web/`. Ordre de grandeur CALCULÉ (pas mesuré) qui rend ces 88 % cohérents :
-30 scouts non-fiction au coût de PRODUCTION (0,084 $, §3) = 2,52 $, soit ~2,3 EUR au taux de
-change du moment — environ 12 % de 19 EUR. **Le taux de change n'est plus une constante du
+30 scouts non-fiction au coût de PRODUCTION (0,110 $ depuis le recalage du 2026-10-06, §3) =
+3,3 $, soit ~3,0 EUR au taux de change du moment. **Le « 88 % » ci-dessus est calculé sur le TTC,
+sans TVA ni frais de paiement** : sur la bonne base (19 EUR TTC = 15,83 EUR HT, moins 0,67 EUR de
+frais Stripe, moins ce coût) la marge de 30 scouts non-fiction vaut ~77 % du prix HT (revue du
+2026-10-06, CALCULÉ). **Le taux de change n'est plus une constante du
 dépôt** : `TAUX_USD_EUR` a disparu avec l'affichage des coûts (commit `4165efb`, §5.27) ; toute
 conversion en euros est désormais un calcul de tête, à requalifier comme tel.
 
 Corollaire à ne pas inverser : dès **~7 analyses par mois au coût de production**, le coût
-technique dépasse les frais d'encaissement d'un abonnement (0,084 $ ≈ 0,077 EUR par analyse ;
-les frais d'un encaissement à 19 EUR tournent autour de 0,50 EUR selon le prestataire —
-**chiffre hors dépôt, aucun prestataire n'est intégré**, à revérifier au moment de brancher le
-paiement). Le seuil serait de ~19 analyses au coût LOCAL, mais §3 interdit de citer ce coût-là
+technique dépasse les frais d'encaissement d'un abonnement (0,110 $ ≈ 0,100 EUR par analyse ;
+les frais d'un encaissement à 19 EUR TTC valent 0,67 EUR avec Stripe Billing — 1,5 % + 0,7 % +
+0,25 EUR, tarif LU sur stripe.com le 2026-10-06, **hors dépôt, aucun prestataire n'est intégré** —
+à revérifier au moment de brancher le paiement). Le seuil serait de ~25 analyses au coût LOCAL, mais §3 interdit de citer ce coût-là
 comme coût de production. Une formule antérieure de ce fichier annonçait l'inverse — que les
 frais de transaction dominaient — sur la foi du chiffre local : elle est fausse et ne doit pas
 revenir.
@@ -62,16 +65,18 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 ## 2. ARCHITECTURE RÉELLE
 
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
-mais rien n'est déployé) : FastAPI (`web/server.py`, **1 171 lignes,
-22 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-03) + un unique
-`web/index.html` de **125 534 octets** (CSS et JS inline, zéro build). **Une dépendance externe subsiste dans la
-page** : un `@import` Google Fonts (`web/index.html:8`, Fira Code + Fira Sans) — hors ligne la
-page fonctionne mais retombe sur les polices système ; ne plus écrire « zéro dépendance
-externe ».
+mais rien n'est déployé) : FastAPI (`web/server.py`, **1 914 lignes,
+27 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-15) + un unique
+`web/index.html` de **308 405 octets** (CSS et JS inline, zéro build). **La page ne charge plus
+aucune ressource tierce** (2026-10-15) : les trois polices (Newsreader, DM Sans, JetBrains Mono,
+sous-ensemble latin, WOFF2, licence SIL OFL 1.1) vivent dans `web/fonts/` et sont servies par
+`GET /fonts/{nom}` (§2.6, §2.20 point 7). L'ancien `@import` Google Fonts envoyait l'adresse IP de
+chaque visiteur à un tiers. Ne reste que les liens sortants `amazon.fr/dp/` — un clic de
+l'utilisateur, pas un chargement.
 
 **Cinq** bases SQLite : `df-cache.db`, `jobs.db`, `usage.db`, `history.db`, **`comptes.db`**.
 Elles vivent dans `99-logs/` par défaut, et dans **`DATA_DIR`** dès qu'elle est définie —
-`storage.py` en est la source unique (§2.17). **52 fichiers `.py`** dans `01-scripts/`.
+`storage.py` en est la source unique (§2.17). **53 fichiers `.py`** dans `01-scripts/`.
 
 **TROIS** moteurs indépendants coexistent désormais : le **scout non-fiction**, le **scout
 fiction** et le **scout low-content** (§2.11, livré les 2026-08-18/19). Les trois ne se
@@ -110,6 +115,14 @@ chiffre mais une **compromission** (`auth.py:1-5`).
 - **Normalisation d'e-mail** : casse et espaces seulement — pas de retrait des points ni du
   `+suffixe`, qui serait un choix de fournisseur et non une règle générale (`auth.py:132-139`).
 
+**Vérification d'adresse et mot de passe oublié (2026-10-06, §2.20).** `comptes.email_verifie`
+(défaut PESSIMISTE 0 ; les comptes antérieurs à la colonne sont migrés à 1 — ils sont locaux) et la
+table `jetons_courriel` : jetons de 256 bits, **SHA-256 seulement** en base, une heure pour la
+réinitialisation, 48 h pour la vérification, **un seul usage**, un nouveau jeton remplace les
+précédents non utilisés. Les clés de la table `tentatives` portent un préfixe par usage (`login:`,
+`ip:`, `reinit:`, `reinit-ip:`, `verif:`) : l'« e-mail » d'une connexion est un texte libre, noté
+tel quel il remplissait le compteur d'un autre usage.
+
 **LE point de sécurité, à ne jamais défaire** : le `user_id` vient **exclusivement du cookie de
 session** (`utilisateur_courant`, `web/server.py:425-438`). Avant `7ccb4f8`, quatre endpoints
 l'acceptaient du client (corps de `POST /api/jobs`, paramètre de `/api/usage`, `/api/jobs`,
@@ -128,7 +141,9 @@ compte est le service).
 ### 2.2 Scout NON-FICTION — `run_scout()` (`01-scripts/scout_master.py`, 167 lignes)
 
 Coût : **0,030 $ en local (MESURÉ**, run réel du 2026-07-21, `tutoriel_pdf.py:60`) ;
-**0,084 $ avec BSR serveur (CALCULÉ**, jamais mesuré, `tutoriel_pdf.py:61`). La distinction est
+**0,110 $ avec BSR serveur (CALCULÉ** : LLM mesuré à 0,0383 $ au tarif STANDARD de Sonnet
+le 2026-10-03 + 24 tâches DataForSEO ; 0,084 $ avant le recalage du 2026-10-06, qui reposait sur le
+tarif d'introduction, terminé le 2026-08-31). La distinction est
 portée par la source elle-même : présenter le second comme mesuré fausserait la tarification
 construite dessus. Voir §3.
 
@@ -348,6 +363,9 @@ toujours, l'unité de plafond consommée, sans que rien ne le dise.
   LIMITE. Le créneau est pris AVANT de marquer le job démarré : un job qui attend reste
   « en attente », ce qui est exactement ce qui se passe.
 
+**Le worker règle le décompte de niches comme le serveur** (`server._regler_niches`, §2.20), y
+compris pour les orphelins (`recuperer_orphelins(regler=…)`) : même règle, une seule fois par run.
+
 **`recuperer_orphelins` a QUITTÉ ce module** (2026-09-07) : elle vit dans `jobs.py`, et le
 serveur l'appelle lui aussi au démarrage (§2.17). Elle n'avait qu'un appelant — la boucle du
 worker — alors que le mode par défaut est `thread` : sans worker, un run coupé par un
@@ -371,23 +389,25 @@ source de la moitié des trous trouvés en audit.
 
 | Garde | Ce qu'il compte | Ce qu'il ne protège PAS |
 |---|---|---|
-| `_borner` / `_borner_texte` | le VOLUME demandé (`MAX_RECHERCHES` 20, `MAX_NICHES_FICTION` **11**, `MAX_RECHERCHES_LC` 20, textes libres 80 car.) | ce qui est dépensé à l'intérieur d'un run |
+| `_borner` / `_borner_texte` | le VOLUME demandé (`MAX_RECHERCHES` 20, `MAX_NICHES_FICTION` **9**, `MAX_RECHERCHES_LC` 20, textes libres 80 car.) | ce qui est dépensé à l'intérieur d'un run |
 | `devis.cout_max_estime` | le pire cas AVANT de lancer ; `POST /api/jobs` refuse en 400 | rien après le lancement |
 | `CostTracker.verifier(cout_prevu)` | les dollars PENDANT le run, prédictivement | le volume, et les postes non gardés |
-| `UsageMeter.reserver_analyse` | les ANALYSES par utilisateur, sur 30 j glissants, **atomiquement** | les appels « à la pièce » |
-| `_reserver_appel` (`DEBIT_APPELS_MAX` 40/h) | les analyses À LA PIÈCE, qui imputent `n_analyses=0` | les runs |
+| `UsageMeter.reserver_analyse` | les NICHES par utilisateur (une analyse en réserve autant qu'elle en demande, puis rend celles qui n'ont rien livré : §2.20), sur 30 j glissants, **atomiquement** | les appels « à la pièce » |
+| `_reserver_appel` (`DEBIT_APPELS_MAX` 40/h) | le RYTHME des analyses À LA PIÈCE, qui imputent `n_analyses=0` | les runs, et le total mensuel : 40/h = 28 800 appels par mois |
+| `_verifier_plafond` (plafond MENSUEL d'appels à la pièce, §2.20) | les verdicts, mots-clés et dossiers avec mots-clés sur 30 j : 2 par niche autorisée, 120 sans plafond de niches | les runs |
 
-**`MAX_NICHES_FICTION` vaut 11 et non 20, et c'est DÉRIVÉ, pas choisi** : c'est le plus
+**`MAX_NICHES_FICTION` vaut 9 et non 20, et c'est DÉRIVÉ, pas choisi** : c'est le plus
 grand nombre de trios dont le devis tient sous `PLAFOND_USD_PAR_RUN`. Au-delà, le run
 atteindrait le plafond en route et rendrait un rapport PARTIEL à quelqu'un qui a payé son
 plafond entier — ce qui se lit comme une arnaque, pas comme une protection. **Ne pas la
 relever sans relever le plafond** : `tests/test_devis.py` tient les deux ensemble, ainsi
-que les `max` des champs HTML et les presets. **Depuis les 10 fiches par niche (2026-10-05) le plus
-grand volume qui tient serait 13 (`volume_maximal`), et la borne reste 11** : non relevée, personne
-ne l'a demandé. Les 11 tiennent (0,485 $ au pire cas) ; « dérivé » veut dire « jamais au-dessus du
-plafond », plus « le maximum exact ».
+que les `max` des champs HTML et les presets. **Valait 11 jusqu'au 2026-10-06** : le devis
+sous-estimait alors la part LLM d'un facteur 2,3 à 2,6 (constantes calées sur le tarif d'introduction
+de Sonnet), et 11 trios coûtent en réalité ~0,69 $ pour un plafond de 0,60 $ — le rapport partiel
+facturé que cette borne existe pour empêcher. Recalé sur les runs mesurés (`jobs.db`, tarif
+standard) : 9 trios = 0,564 $ au pire cas, 10 = 0,625 $ (`devis.volume_maximal`).
 
-### 2.6 Endpoints (`web/server.py`) — **22**
+### 2.6 Endpoints (`web/server.py`) — **27**
 
 **`GET /api/scout` et `GET /api/fiction` N'EXISTENT PLUS** (commit `5257323`). Deux chemins pour
 le même travail, dont un seul exercé, divergent — c'est arrivé aux contraintes de composition,
@@ -396,30 +416,37 @@ file de progression du flux direct mourait avec la requête HTTP : fermer l'ongl
 de 15 minutes. **Ne pas les réintroduire.** `queue` n'est plus importé par `server.py`.
 
 Sauf mention contraire, **tout endpoint exige une session** (`Depends(utilisateur_courant)`,
-**14 occurrences** — 14 des 18 routes ; `POST /api/auth/deconnexion` lit le cookie sans
-l'exiger).
+**19 occurrences** — 19 des 27 routes ; sans session : `/`, `/fonts/{nom}`, l'inscription, la
+connexion, la déconnexion (elle lit le cookie sans l'exiger), `/api/auth/verification`,
+`mot-de-passe-oublie` et `mot-de-passe-reinitialiser` — on y arrive depuis une boîte de réception ou
+sans compte).
 
 | Méthode | Chemin | Session | Rôle |
 |---|---|---|---|
-| GET | `/` | **non** | Sert `web/index.html` tel quel (lecture disque à chaque appel). SEUL endpoint sans session — sinon l'écran de connexion serait inatteignable |
+| GET | `/` | **non** | Sert `web/index.html` tel quel (lecture disque à chaque appel), avec `Referrer-Policy: no-referrer`. Sans session, comme les routes d'authentification — sinon l'écran de connexion serait inatteignable |
+| GET | `/fonts/{nom}` | **non** | Les trois polices de la page (`web/fonts/*.woff2`), `font/woff2`, `Cache-Control: public, max-age=31536000, immutable`. Sans session : l'écran de connexion en a besoin. **Liste blanche** `^[a-z0-9\-]+\.woff2$` PUIS existence du fichier ; aucun chemin n'est construit à partir d'autre chose que ce nom validé. Un autre nom, une casse différente, un `..` → 404 |
 | POST | `/api/auth/inscription` | non | 201 + session. `INSCRIPTIONS_OUVERTES` fermé par défaut ; **le premier compte passe toujours** (amorçage). Inscriptions fermées → **403 avec un message identique quelle que soit l'adresse** (un 409 « déjà pris » sur une adresse connue aurait fait de l'inscription un oracle d'énumération). Inscriptions ouvertes → limitation **par IP**. `reprendre_donnees_locales` (booléen, facultatif) déclenche §2.1. `origine_sure` |
 | POST | `/api/auth/connexion` | non | 200 + session. **Un seul message** pour e-mail inconnu et mot de passe faux (401) ; quota épuisé → 429. `origine_sure` |
 | POST | `/api/auth/deconnexion` | cookie | 204. Ferme la session **côté serveur** ET retire le cookie : effacer le seul cookie laisserait le jeton valide pour quiconque en a copie |
-| GET | `/api/auth/moi` | oui | `{user_id, email}` de la session en cours |
+| GET | `/api/auth/moi` | oui | `{user_id, email, email_verifie, verification_requise}` de la session en cours. `verification_requise` vaut vrai dès `APP_ENV=prod` (§2.20) |
+| POST | `/api/auth/verification` | non | Consomme le lien reçu à l'inscription et marque l'adresse vérifiée. 204 ; **400 « lien invalide ou expiré »** sans dire lequel (inconnu, expiré, déjà servi, autre usage). `origine_sure` |
+| POST | `/api/auth/verification/renvoyer` | oui | Renvoie le lien. 204 ; sans effet si l'adresse est déjà vérifiée ; **503** si l'instance ne peut pas envoyer de courriel ; 429 au-delà de 3 demandes par fenêtre de 15 min. `origine_sure` |
+| POST | `/api/auth/mot-de-passe-oublie` | non | **202 IDENTIQUE que l'adresse existe ou non** ; le travail qui dépend du compte (recherche, jeton, envoi) part en ARRIÈRE-PLAN. Demandes comptées par adresse (connue ou non) et par poste. **503** si l'instance ne peut pas envoyer de courriel (fait de configuration, pas d'énumération). `origine_sure` |
+| POST | `/api/auth/mot-de-passe-reinitialiser` | non | Pose un nouveau mot de passe avec le lien (1 h, une fois). Ferme **TOUTES** les sessions, remet les tentatives à zéro, vérifie l'adresse. Mot de passe refusé → 400 **sans consommer le lien** ; lien contrôlé AVANT scrypt. `origine_sure` |
 | GET | `/api/lowcontent/formats` | oui | `[{cle, label, famille, norme, effort}]` triés, lus depuis `data/lowcontent_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur de format ; `norme` est exposé pour que l'UI pose son badge sans re-déduire la taxonomie |
 | POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. **Quand `inclure_mots_cles` est demandé, c'est un QUATRIÈME chemin payant** : gardé par `_verifier_plafond` **et** `_reserver_appel` (`web/server.py:1076-1077`), il impute `n_analyses=0` — il exige une marge sous le plafond sans la consommer. En low-content c'est `scored.niche` (`LowContentNiche`, qui porte requête, catégorie et satellites) qui part au générateur : le `LowContentScored` entier levait AVANT l'appel, l'exception était avalée, et le dossier sortait sans mots-clés, créneau consommé (corrigé le 2026-09-14). Un dossier sans mots-clés ne dépense rien et n'est pas gardé. `/api/pdf` est conservé comme ALIAS et sert le même document |
 | GET | `/api/fiction/sous-genres` | oui | `[{cle, label}]` triés, lus depuis `data/fiction_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur : jamais de liste dupliquée en dur côté JS |
 | GET | `/api/fiction/taxonomie/{sous_genre}` | oui | `{sous_genre, tropes, decors}` — alimente les menus du compositeur. Sous-genre inconnu → 400 |
-| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). **Solde du fournisseur** (`_verifier_solde`, §2.19) : **503** avant la réservation si le compte ne couvre pas les recherches du run. Vérifie le plafond (`usage.autorise`, 429) **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; impute `n_analyses=1` ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
+| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). **Solde du fournisseur** (`_verifier_solde`, §2.19) : **503** avant la réservation si le compte ne couvre pas les recherches du run. **Adresse vérifiée** (`_exiger_email_verifie`, 403, production seulement) avant tout ; **réserve les NICHES demandées** (`reserver_analyse`, 429 « il vous en reste N, cette analyse en demande M ») **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; règle le décompte à la fin (`_regler_niches`, §2.20) ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
 | GET | `/api/jobs/{id}` | oui | État complet : statut, progression, résultat, coût, erreur, dates. **404 — et non 403 — quand le job appartient à quelqu'un d'autre** : distinguer les deux confirmerait que l'identifiant existe |
 | GET | `/api/jobs` | oui | Liste de l'utilisateur de la session, plus récents d'abord. `limit` (20). **Aucun paramètre `user_id`** |
 | POST | `/api/jobs/{id}/annuler` | oui | **Arrête UNE analyse** de la session (2026-10-03 : elle bug ou tourne dans le vide). IMMÉDIAT côté données (statut `annule`), COOPÉRATIF côté thread : on ne tue pas un thread, `annulation.verifier()` lève `Annulation` — une **`BaseException`**, jamais une `Exception` (les `except Exception` « un échec ne coule jamais le run » l'avaleraient ; les moteurs relèvent déjà les `BaseException` en imputant le pire cas) — à chaque message de progression, avant une phase payante (`CostTracker.verifier`) et à chaque cycle d'attente du fournisseur (`search_providers`). Contrôle propre à chaque FIL (`threading.local`), lu en base au plus une fois par demi-seconde. **L'argent déjà engagé reste imputé et l'unité de plafond reste PRISE** : arrêter ne rembourse rien, sinon « lancer puis arrêter » serait gratuit (même règle qu'un échec). Aucune notification. `finish`/`fail`/`start` ne font JAMAIS revenir un travail `annule` à un autre état (le thread peut finir après). 404 — jamais 403 — pour le travail d'un autre compte ; 409 si déjà finie ; `origine_sure`. Marche aussi en `JOBS_MODE=worker` |
 | DELETE | `/api/jobs/{id}` | oui | **Supprime UNE analyse** de la session (« Mes analyses », 2026-10-03). **404** — jamais 403 — pour le travail d'un autre compte ; **409** pour une analyse pas finie (son thread écrirait dans le vide) ; 204 sinon ; `origine_sure`. Supprime le travail (étapes, résultat, verdicts et mots-clés rangés dedans) et **RIEN d'autre** : ni `usage.db` (supprimer de l'écran ne rembourse rien et ne libère aucune unité de plafond, sinon « supprimer puis relancer » contournerait le plafond mensuel), ni l'historique d'évolution des niches (`history.db`, série partagée par toutes les analyses d'une même niche) |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
-| GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_analyses, cout_usd}`. Le backend rend toujours le coût ; **l'UI n'affiche que le nombre d'analyses** (§5.27) |
-| POST | `/api/verdict` | oui | Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Exige une marge sous le plafond** (`_verifier_plafond`) mais impute `n_analyses=0` : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
+| GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_niches, plafond_niches, cout_usd}` (plus de `n_analyses`). Le backend rend toujours le coût ; **l'UI n'affiche que les niches : restantes sur le plafond s'il y en a un, sinon analysées** (§5.27) |
+| POST | `/api/verdict` | oui | **Gardes (2026-10-06)** : adresse vérifiée (production) ; puis **RAPPEL gratuit** si `?job=&cle=` désigne une niche qui porte déjà le résultat (`_deja_fait` : ni réservation, ni plafond, ni modèle) ; puis plafond MENSUEL d'appels (`_verifier_plafond`). Un échec à 0 $ libère sa place (`_solder_appel`). Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Compte dans le plafond MENSUEL d'appels** (`_verifier_plafond`) sans consommer de niche (`n_analyses=0`) : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
-| POST | `/api/kdp-keywords` | oui | Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18 : le titre et le pitch de l'analyse passent dans `analyse`). Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
+| POST | `/api/kdp-keywords` | oui | **Mêmes gardes que `/api/verdict`** (adresse vérifiée, rappel gratuit sous `mots_cles`, plafond mensuel d'appels, place libérée à 0 $). Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18 : le titre et le pitch de l'analyse passent dans `analyse`). Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
 
 ### 2.7 Gardes de sécurité (revue adversariale, commits `d443ba8` + `8d37ab8`)
@@ -429,9 +456,9 @@ l'exiger).
 | Garde | Où | Ce qu'il ferme |
 |---|---|---|
 | `user_id` exclusivement issu du cookie | `web/server.py:246-258` | Plafond contournable à volonté ; lecture de l'historique d'autrui |
-| `_verifier_plafond` | défini `web/server.py:394`, appelé en **trois** endroits : `:984` (`/api/verdict`), `:1024` (`/api/kdp-keywords`) et `:1076` (`/api/dossier`, **uniquement** dans la branche `inclure_mots_cles` — un dossier sans mots-clés ne dépense rien). `POST /api/jobs` ne l'appelle pas : il **réserve atomiquement** (`UsageMeter.reserver_analyse`, `:797-801`), après le devis et les bornes | `UsageMeter.autorise` n'avait **qu'un** site d'appel, `POST /api/jobs`, que l'interface n'empruntait pas : le plafond ne protégeait que le chemin inutilisé. **Les trois endpoints qui dépensent vérifient désormais.** `POST /api/pdf` n'a pas de garde parce qu'il ne dépense rien |
-| Bornes de volume `_borner` | `_borner` défini `web/server.py:242` ; `MAX_IDEES=30` (`:135`), `MAX_RECHERCHES=20` (`:136`), **`MAX_NICHES_FICTION=11`** (`:144`, **DÉRIVÉ** du plafond de coût, cf. §2.13), `MAX_RECHERCHES_LC=20` (`:147`) | Le plafond compte des ANALYSES, pas des appels payants : une seule « analyse » avec `search=9999` déclenchait des milliers de requêtes DataForSEO pour une unité de plafond. **Borner le volume est la seule protection réelle du MONTANT.** `_borner` **refuse (400) plutôt que de rogner en silence** — un utilisateur qui demande 9999 doit savoir qu'il ne l'aura pas |
-| `origine_sure` (anti-CSRF) | `web/server.py:252-277`, appelé sur `/api/auth/inscription` (`:464`), `/api/auth/connexion` (`:505`), `POST /api/jobs` (`:762`) — **3 sites** | Lancer un run dépense de l'argent réel ; `SameSite=Lax` laisse partir le cookie sur une navigation de premier niveau. S'appuie sur `Sec-Fetch-Site` (en-tête interdit au script, non falsifiable) puis sur `Origin` vs `Host`. **Absent = client hors navigateur** (curl, tests) : laissé passer, un tel client n'a pas de cookie ambiant à voler |
+| `_verifier_plafond` | `web/server.py`, appelé par `/api/verdict`, `/api/kdp-keywords` et `/api/dossier` (**uniquement** avec `inclure_mots_cles`). Compte les appels à la pièce des 30 derniers jours contre `_appels_a_la_piece_max()` (2 par niche autorisée, 120 sans plafond de niches). `POST /api/jobs` ne l'appelle pas : il **réserve atomiquement** des NICHES (`UsageMeter.reserver_analyse`), après le devis et les bornes | Le seul garde des appels à la pièce était un DÉBIT de 40/h : 28 800 appels par mois, soit jusqu'à ~950 € de LLM pour un abonné à quelques euros. Depuis le 2026-10-06 le plafond de NICHES ne conditionne PLUS ces appels (un abonné qui a consommé ses niches lit encore leurs verdicts) : c'est ce plafond mensuel d'appels qui borne le LLM |
+| Bornes de volume `_borner` | `_borner` défini `web/server.py:242` ; `MAX_IDEES=30` (`:135`), `MAX_RECHERCHES=20` (`:136`), **`MAX_NICHES_FICTION=9`** (`:144`, **DÉRIVÉ** du plafond de coût, cf. §2.13), `MAX_RECHERCHES_LC=20` (`:147`) | Le plafond compte des NICHES, pas des appels payants : une seule « analyse » avec `search=9999` déclenchait des milliers de requêtes DataForSEO pour une unité de plafond. **Borner le volume est la seule protection réelle du MONTANT.** `_borner` **refuse (400) plutôt que de rogner en silence** — un utilisateur qui demande 9999 doit savoir qu'il ne l'aura pas |
+| `origine_sure` (anti-CSRF) | `web/server.py`, appelé sur **11 routes** : inscription, connexion, `POST /api/jobs`, changement de mot de passe, clôture, annulation, suppression d'un travail, et les quatre routes de courriel de compte (§2.20) | Lancer un run dépense de l'argent réel ; `SameSite=Lax` laisse partir le cookie sur une navigation de premier niveau. S'appuie sur `Sec-Fetch-Site` (en-tête interdit au script, non falsifiable) puis sur `Origin` vs `Host`. **Absent = client hors navigateur** (curl, tests) : laissé passer, un tel client n'a pas de cookie ambiant à voler |
 | Cloisonnement des jobs | `web/server.py:563` et `:596-597` | Connaître un identifiant suffisait à lire le run, le résultat et le coût d'autrui |
 | Limitation des tentatives | `auth.py:53-59`, `:216-242` | Un top-1000 de mots de passe se teste en ligne en moins d'une minute contre une adresse connue |
 | Politique de mot de passe | `auth.py:43-47`, `:66-72`, `:112-129` | Dictionnaire ; et déni de service par mot de passe de plusieurs mégaoctets |
@@ -507,7 +534,7 @@ proprement sans verdict) · `tutoriel_pdf.py` (script autonome, exposé par aucu
 `python 01-scripts/tutoriel_pdf.py` régénère les deux PDF à la racine ; constantes
 `COUTS` / `ENV_VARS` / `ENDPOINTS` / `GLOSSAIRE` / `VERDICTS` / `PIEGES` / `DEPLOIEMENT`).
 **`COUTS` est la seule source du dépôt qui étiquette chaque chiffre mesuré / calculé /
-extrapolé / estimé.** `ENDPOINTS` couvre bien les **18** routes actuelles et `ENV_VARS` est à jour
+extrapolé / estimé.** `ENDPOINTS` couvre bien les **27** routes actuelles et `ENV_VARS` est à jour
 sur `INSCRIPTIONS_OUVERTES` et `COOKIE_SECURE` ; deux tests le tiennent
 (`tests/test_tutoriel_pdf.py:100,118`) en lisant `web/server.py` et les `os.getenv` du code comme
 source de vérité plutôt qu'en figeant une liste. **Trous connus, non couverts par ces
@@ -587,8 +614,8 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**1877 tests** sur **135 fichiers** `tests/test_*.py`, **1877 passés, 0 ignoré, 0 échec,
-0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-05,
+**2059 tests** sur **144 fichiers** `tests/test_*.py`, **2059 passés, 0 ignoré, 0 échec,
+0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-15,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
 
@@ -986,6 +1013,12 @@ L'adresse est relue depuis `comptes.db` au moment de l'envoi plutôt que portée
 l'y recopier en ferait une donnée personnelle de plus, dupliquée dans une base qui n'en a
 pas besoin.
 
+**Courriels de COMPTE (2026-10-06)** : `config_smtp(notifications=False)` et
+`Notificateur(transactionnel=True)` n'exigent que `SMTP_HOST` — le lien de vérification et le mot de
+passe oublié ne sont pas des notifications qu'on active par goût, ils sont le service. Les deux
+politiques restent distinctes : poser un hôte SMTP ne consent toujours pas aux messages de fin
+d'analyse. Corps : le lien seul, jamais un mot de passe ni une analyse.
+
 **Piège payé une fois, et le plus instructif du module** : `_notifier` lisait
 `UserStore(_COMPTES_DB)` alors que la constante s'appelle `_USERS_DB`. Le `NameError` était avalé
 par le `except Exception` de `_notifier` — qui est là pour une BONNE raison, et qui masquait donc
@@ -1021,6 +1054,15 @@ Le chemin était écrit à quatre endroits (les 4 constantes de `server.py`, plu
 suffirait à faire repartir une base sur le disque éphémère pendant que les autres suivent le
 volume, et **la plus discrète ferait le plus de dégâts** — un cache perdu ne lève rien, il
 fait simplement repayer tout le monde. `tests/test_deploiement.py` porte le cliquet.
+
+**Production et courriels (2026-10-06).** `_verifier_courriel_prod` refuse de démarrer en
+`APP_ENV=prod` sans `SMTP_HOST` et sans `BASE_URL` en `https://` : la vérification d'adresse y est
+exigée, et sans moyen d'envoyer un lien tous les comptes seraient verrouillés dehors, sans erreur.
+**Derrière un proxy de plateforme**, `_client_distant` lit `request.client.host` : sans
+`FORWARDED_ALLOW_IPS` adapté (uvicorn ne fait confiance aux en-têtes `X-Forwarded-*` que de
+`127.0.0.1` par défaut), tous les visiteurs partagent UNE adresse et les plafonds « par poste »
+(inscription : 10 par 15 min ; mot de passe oublié : 10 par 15 min) deviennent des plafonds
+GLOBAUX — un seul visiteur peut alors bloquer tous les autres. **À régler chez l'hébergeur.**
 
 **Récupération des travaux interrompus au démarrage** (`_recuperer_travaux_interrompus`,
 branchée sur le `lifespan` de l'app — pas `@app.on_event`, déprécié). En `JOBS_MODE=worker`
@@ -1197,6 +1239,97 @@ brut véridique), le texte d'écran non, parce que `concurrence_mesuree` est un 
 SERP vide en non-fiction comme mesurée donnerait le bonus « moins de 10 concurrents » (§5.36).
 (c) Un statut de tâche terminal autre que 40102 serait encore attendu 40 fois : aucun n'a été vu.
 
+### 2.20 Niches, appels à la pièce, comptes par courriel (2026-10-06)
+
+Né de la réflexion tarifaire : un produit vendu « par niche analysée » ne peut pas compter des runs.
+Aucun prix, aucune offre n'est codé ; seule l'unité l'est. Revue adversariale du lot (5 angles, 38
+agents, chaque constat soumis à un agent chargé de le réfuter) : tout ce qui a été confirmé est traité
+ou écrit ici.
+
+**1. Le plafond compte des NICHES.** `POST /api/jobs` réserve ce que le run demande
+(`_niches_demandees`, mêmes clés, alias `search` et défauts que les runners) ; à la fin
+`_regler_niches` ajoute une ligne NÉGATIVE (elle marche pareil depuis le serveur et le worker, qui ne
+partagent pas l'identifiant de la réservation) :
+
+| Issue | Niches décomptées |
+|---|---|
+| Réussi | les niches MESURÉES (`concurrence_mesuree`, ou `demand_matrix` hors `NON_CONCLUANTES`), **minimum 1** : un run qui a dépensé n'est pas gratuit |
+| Échec ou arrêt SANS dépense (coût nul), annulé avant démarrage, orphelin sans coût mesuré | **aucune** : rien n'a coûté, rien n'a été livré (décision du ROADMAP §2.4.6, close) |
+| Échec ou arrêt AVEC dépense | la réservation entière : arrêter ne rembourse rien, sinon « lancer puis arrêter » serait gratuit |
+
+La colonne `n_analyses`, `UsageResume.n_analyses` et `plafond_analyses` gardent leur nom (le changer
+imposerait de migrer la base) mais valent des NICHES (docstring de `usage.py`). Règlement fait AVANT
+`finish` (« terminé » implique « compté »), **une seule fois** par run même si `finish` lève.
+Connu et accepté : un run lancé puis arrêté à coût nul rend tout (ne coûte rien, mais occupe un
+créneau) ; la ligne de compensation est datée du règlement, pas de la réservation (dérive de quelques
+minutes au bord de la fenêtre de 30 jours) ; un travail `en_attente` à l'arrêt d'un serveur en mode
+thread n'est jamais récupéré (antérieur).
+
+**2. Appels à la pièce.** Le plafond de niches ne les conditionne plus ; un plafond MENSUEL d'appels
+(`APPELS_PIECE_PAR_NICHE = 2`, `APPELS_PIECE_MENSUEL_DEFAUT = 120`) les borne. **Un jeu par niche** :
+avec `?job=&cle=` et le résultat déjà rangé, le serveur le rend (`_deja_fait`,
+`JobStore.lire_annotation`) sans réservation ni modèle ; le marqueur `_deja_fait` est retiré de la
+carte côté page (elle est renvoyée telle quelle au serveur). Un appel qui échoue à 0 $ libère sa
+place (`UsageMeter.liberer`) ; ce qui a coûté reste compté. **Mesure** : un verdict coûte 0,0365 $ en
+moyenne (15 mesures), un jeu de mots-clés 0,0094 $ (5) : 28 800 appels par mois auraient coûté
+~1 050 $. Limite connue : fermer un compte efface sa consommation (`supprimer_utilisateur`, décision
+antérieure) — le plafond est donc porté par une identité qu'on peut effacer, ce que ferment les
+inscriptions fermées par défaut et, en production, la vérification d'adresse.
+
+**3. Vérification d'adresse et mot de passe oublié** (§2.1, §2.6, §2.16). Exigée seulement en
+production (`_verification_obligatoire`, déduite d'`APP_ENV=prod`) : un compte non vérifié reçoit
+**403 avant toute dépense** sur `POST /api/jobs`, `/api/verdict`, `/api/kdp-keywords` et le dossier
+avec mots-clés (`_exiger_email_verifie`). **Les liens portent le jeton dans le FRAGMENT**
+(`/#verif=…`, `/#reinit=…`), jamais dans la requête : un fragment n'est ni envoyé au serveur, ni
+journalisé par uvicorn ou un proxy, ni envoyé en Referer ; la page le lit puis le retire de l'URL
+(`history.replaceState`). Un lien de réinitialisation consommé prouve l'accès à la boîte : il vérifie
+l'adresse du même coup, et rend à son titulaire une adresse « squattée ». Le lien est contrôlé avant
+scrypt ; changer son mot de passe invalide les liens en attente ; l'adresse refuse les délimiteurs
+(`,;:<>()[]\"`) qui ajouteraient un destinataire. Connu : un alias `+n` d'une même boîte donne un
+plafond neuf par compte (la normalisation du `+suffixe` est un choix de fournisseur, §2.1) ; **aucun
+courriel réel n'a jamais été envoyé**.
+
+**4. Devis recalé** (`devis.py`). La part LLM valait 0,012 $ pour les trois moteurs et 0,001 $ par
+livre classé, calées sur le tarif d'introduction : elle est maintenant par moteur
+(`_LLM_IDEATOR` : non-fiction 0,039 $, fiction 0,015 $, low-content 0,045 $) et 0,0028 $ par livre,
+lues sur `jobs.db`. `MAX_NICHES_FICTION` passe de 11 à 9 (§2.13), le devis lit l'alias `search`.
+La CLI de calibration low-content en hérite : son devis de 31 requêtes vaut 0,8123 $ (au lieu de
+0,7792 $).
+
+**5. Interface.** Écran de connexion à quatre états (`libellesAuth`), bandeau « confirmez votre
+adresse » (`libelleVerif`, un seul écrivain), compteur « niches restantes » (`libelleUsage`)
+rafraîchi au lancement et à la fin d'une analyse, motif du serveur montré tel quel sur les refus de
+plafond (« il vous en reste N »).
+
+**6. Alerte de solde bas (2026-10-15).** `alerte_solde.py` : quand le solde DataForSEO passe sous
+`ALERTE_SOLDE_USD` (défaut 5 $), un message part à `ALERTE_SOLDE_EMAIL`, **au plus une fois par 24 h**,
+et de nouveau après une recharge si le solde retombe. Le solde est relu GRATUITEMENT (`lire_solde`) à
+chaque lecture fraîche (avant un lancement, cache de 30 s) **et après chaque run** (fil du serveur et
+worker) — sans cette seconde lecture l'alerte n'arriverait qu'au lancement SUIVANT, c'est-à-dire quand
+un client est déjà refusé. Envoi en arrière-plan ; la marque « déjà alerté » vit dans `df-cache.db`
+(elle survit à un redémarrage, donc à une mise en ligne). Un solde illisible n'alerte pas (règle 3) ;
+sans destinataire rien ne part et le journal le dit (aucune marque posée). **Le bon fonctionnement
+suppose `SMTP_HOST` ; aucun courriel réel n'a jamais été envoyé.**
+
+**7. Polices servies par le service (2026-10-15).** Newsreader, DM Sans et JetBrains Mono viennent
+de `web/fonts/` (`GET /fonts/{nom}`) au lieu de Google Fonts : chaque visite envoyait l'adresse IP du
+visiteur à un tiers — un défaut RGPD que la jurisprudence allemande (LG München I, 20/01/2022) a
+condamné, relevé au ROADMAP depuis août. Un fichier par famille, **sous-ensemble latin seulement**
+(`unicode-range`) : il couvre le français — accents, œ, €, guillemets, tirets, points de suspension —
+et tout autre alphabet retombe sur la police du système, sans erreur. Licence SIL OFL 1.1, texte et
+sources dans `web/fonts/LICENSES.txt`. **Poids déclarés** : Newsreader 500-600, DM Sans 400-700,
+JetBrains Mono 400-600 ; un poids absent serait SYNTHÉTISÉ par le navigateur sans rien dire.
+`tests/test_polices.py` interdit le retour de `fonts.googleapis.com` / `@import url(` et de toute URL
+externe dans la page, et vérifie que chaque `@font-face` pointe un fichier qui existe. Vérifié à
+l'écran le 2026-10-15 (serveur isolé) : les trois fichiers répondent 200, aucune requête tierce.
+**Les brouillons de `docs/pages-publiques/` ont été mis à jour** (plus d'appel à Google).
+
+**Connu, non traité.** Une défaillance INTERMITTENTE de la suite a été vue une fois sur six
+passes complètes (`test_liste_jobs_de_lutilisateur` : un travail de test resté « en cours » plus de
+10 s, jamais reproduite, non attribuée) ; relire `_attendre_job` avant de la soupçonner de masquer
+un vrai blocage. La part de niches « non concluantes » en fiction (seuil de 3 livres, HYPOTHÈSE)
+décide désormais de ce qui est décompté : à surveiller sur des runs réels.
+
 ---
 
 ## 3. SOURCES DE DONNÉES ET COÛTS
@@ -1219,12 +1352,12 @@ Codes DataForSEO : `location_code=2250` (France) et `language_code="fr_FR"` — 
 `BSR_SOURCE=scrape` (défaut) lit les fiches Amazon depuis une **IP résidentielle** : gratuit sur
 le PC de Baptiste, **bloqué depuis un datacenter**. En production il faut
 `BSR_SOURCE=dataforseo`, ce qui fait passer un scout non-fiction de **0,030 $ (mesuré) à
-0,084 $ (calculé, jamais mesuré en conditions serveur)**.
+0,110 $ (calculé : LLM mesuré, jamais mesuré en conditions serveur)**.
 **Ne jamais citer le chiffre local comme coût de production.**
 
 ### Variables d'environnement (`.env` uniquement)
 
-**Trente-quatre** variables sont lues par `os.getenv` dans `01-scripts/` et `web/`
+**Trente-sept** noms sont lus par `os.getenv` dans `01-scripts/` et `web/` (dont l'ANCIEN `PLAFOND_ANALYSES_MENSUEL`, lu pour REFUSER le démarrage en production, §2.20, et les deux de l'alerte de solde)
 (recensement exhaustif sur ces deux dossiers, aucun autre `.py` du dépôt n'en lit, revérifié
 le 2026-09-07 — la trente-quatrième est `DATA_DIR`, §2.17). **`.env.example` les documente
 désormais TOUTES**, `HOST`, `PORT` et les deux `LOWCONTENT_*_MODEL` compris : le trou de
@@ -1250,7 +1383,7 @@ sont désormais : `DATA_DIR`, `APP_ENV`, `HOST`/`PORT`, `JOBS_MODE`).
 | `HOST` | **DÉDUIT** (`_hote()`) : `0.0.0.0` si `APP_ENV=prod`, `127.0.0.1` sinon ; une valeur explicite prime toujours. Lue **uniquement** sous `if __name__ == "__main__"` : sans effet si le serveur est lancé par `uvicorn server:app` à la main. Le défaut local était injouable en conteneur — écouter la boucle locale y rend le service injoignable **sans la moindre erreur** (§2.17) | non |
 | `PORT` | `"8000"`. Même portée que `HOST`. Valeur non entière → repli silencieux sur 8000. Les plateformes imposent le leur | non |
 | `DATA_DIR` | non défini = `99-logs/`. **EXIGÉE dès `APP_ENV=prod`** : `storage.data_dir()` LÈVE, donc le serveur refuse de démarrer. Sans volume persistant, les cinq bases disparaissent à chaque mise en ligne, sans aucun signal (§2.17). Le répertoire est créé s'il manque — un volume neuf est vide | non (oui en prod) |
-| `PLAFOND_ANALYSES_MENSUEL` | non défini → `None` = illimité, mais l'usage reste journalisé (`web/server.py:88-98`). Valeur non entière → retombe silencieusement sur illimité. **Plafond PAR utilisateur, glissant sur 30 jours** | non |
+| `PLAFOND_NICHES_MENSUEL` | non défini → `None` = illimité, mais l'usage reste journalisé. Valeur non entière → retombe silencieusement sur illimité. **Plafond de NICHES PAR utilisateur, glissant sur 30 jours** ; il dérive aussi le plafond mensuel d'appels à la pièce (2 par niche). **Renommée le 2026-10-06** (elle comptait des RUNS sous le nom `PLAFOND_ANALYSES_MENSUEL`, dont la seule présence fait REFUSER le démarrage en production : l'ignorer ouvrirait le service sans plafond) | non |
 | `IDEATOR_MODEL` | `claude-sonnet-5` (`niche_ideator.py:20`), choisi après un A/B live du 2026-07-05 : qualité à parité avec `claude-opus-4-8` pour ~2× moins cher | non |
 | `VERDICT_MODEL` | `claude-sonnet-5` (`niche_verdict.py:9`) | non |
 | `KDP_KEYWORDS_MODEL` | `claude-sonnet-5` (`kdp_keywords.py:19`) | non |
@@ -1267,8 +1400,9 @@ sont désormais : `DATA_DIR`, `APP_ENV`, `HOST`/`PORT`, `JOBS_MODE`).
 | `WORKER_CONCURRENCE` | `5` (`CONCURRENCE_DEFAUT`, `worker.py:67`). Taille du pool de `worker.py` | non |
 | `WORKER_REPOS_S` | `2.0` (`worker.py:58`). Attente entre deux tentatives de `claim_next` quand la file est vide | non |
 | `NOTIFICATIONS_EMAIL` | non défini = **ÉTEINT**. Et il ne suffit pas : sans `SMTP_HOST`, rien ne part (§2.16) | non |
-| `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` / `_TLS` | port `587`, TLS actif. `SMTP_FROM` retombe sur `SMTP_USER`. Port non entier → repli sur 587 | non |
-| `BASE_URL` | non définie → le message de fin part **sans lien** plutôt qu'avec un lien mort : rien dans le code ne connaît le nom de domaine, il n'y a pas de déploiement | non |
+| `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` / `_TLS` | port `587`, TLS actif. `SMTP_FROM` retombe sur `SMTP_USER`. Port non entier → repli sur 587. **`SMTP_HOST` est EXIGÉ dès `APP_ENV=prod`** (courriels de compte : le serveur refuse de démarrer sans lui) ; il suffit à ces courriels, sans `NOTIFICATIONS_EMAIL` | non (oui en prod) |
+| `ALERTE_SOLDE_EMAIL` / `ALERTE_SOLDE_USD` | non définis = aucune alerte (le journal le dit ; avertissement au démarrage en production) / seuil `5` $. Voir §2.20 point 6 | non |
+| `BASE_URL` | racine publique du service : lien du message de fin ET liens de vérification / réinitialisation. Non définie → le message de fin part **sans lien** et aucun courriel de compte n'est envoyé. **EXIGÉE en `https://` dès `APP_ENV=prod`** (le lien de réinitialisation donne la main sur le compte) | non (oui en prod) |
 
 Les `REDDIT_*` **ne sont plus lues nulle part** : les modules qui les lisaient ont été supprimés
 (commit `eaa20b2`). Plus aucun résidu côté `.py`.
@@ -1440,10 +1574,11 @@ Section critique. Chacun a coûté un bug réel.
     périmée deux fois.** (a) `GET /api/scout` et `GET /api/fiction` **n'existent plus** ;
     (b) `_verifier_plafond` garde `/api/verdict` et `/api/kdp-keywords`, et `POST /api/jobs` fait
     sa propre vérification. **Et l'interface passe désormais exclusivement par `/api/jobs`** — le
-    bandeau « Ce mois-ci : N analyse(s) » se remplit donc réellement. Nuance à conserver :
+    bandeau de niches se remplit donc réellement. Nuance à conserver :
     `/api/verdict` et `/api/kdp-keywords` imputent avec `n_analyses=0` (ils complètent une analyse
-    déjà comptée) — **ils exigent une marge sous le plafond sans la consommer**, tandis que leur
-    coût en dollars, lui, est bien enregistré.
+    déjà comptée) ; **depuis le 2026-10-06 ils ne demandent plus de marge sous le plafond de niches** :
+    ils comptent dans le plafond MENSUEL d'appels à la pièce (§2.20), leur coût en dollars étant,
+    lui, enregistré.
 24. **`FictionNicheReport` interdit les champs extra** (`model_config extra="forbid"`,
     `models.py:302`) : un champ mal nommé lève à la construction plutôt que d'être avalé en
     silence. C'est ce qui a permis d'attraper l'ancien `autocomplete_score` mal placé. Corollaire
@@ -1487,7 +1622,7 @@ Section critique. Chacun a coûté un bug réel.
     (`fmtEur`, `web/index.html:1048`) reste — c'est une donnée de marché, pas une facture.
 28. **Les bornes serveur et formulaire coïncident désormais — les vérifier ENSEMBLE.**
     `#search` va jusqu'à 20 (`web/index.html:555`) comme `MAX_RECHERCHES` (`web/server.py:136`) ;
-    `#fic-n` jusqu'à **11** (`:625`) comme `MAX_NICHES_FICTION` (`:144`) ; `#lc-search` jusqu'à 20
+    `#fic-n` jusqu'à **9** comme `MAX_NICHES_FICTION` ; `#lc-search` jusqu'à 20
     comme `MAX_RECHERCHES_LC` (`:147`). La règle à tenir n'est plus « le serveur est plus
     permissif » mais **« le serveur ne doit jamais être PLUS STRICT que le formulaire »** : sinon
     une saisie valide à l'écran ressort en 400, et c'est l'utilisateur qui paie l'incohérence.
@@ -1631,6 +1766,20 @@ Section critique. Chacun a coûté un bug réel.
     `delta()` annonçait « la niche s'est dégagée » (saturation 1,0 puis 0,0, seule dépendante des
     tropes). Clé = `FictionNiche.cle`, jamais `query`.
 
+43. **La suite de tests écrivait dans les VRAIES bases.** `isoler_bases` redirige les chemins PAR
+    test ; un test qui lance un job sans l'attendre laisse un fil détaché qui se termine APRÈS,
+    quand le `monkeypatch` est défait, et relit alors `server._USAGE_DB` : le vrai fichier. Le
+    2026-10-06 cela a laissé 18 lignes de règlement dans `99-logs/usage.db` et 36 lignes dans
+    `history.db` (nettoyées avec sauvegarde, les lignes étant toutes de comptes de test). Cliquet :
+    `tests/conftest.py` pose `DATA_DIR` sur un dossier temporaire AVANT tout `import server` — la
+    garde de la suite entière, pas du test — et `tests/test_isolation_session.py` la tient. Même
+    famille que « 45 lignes fabriquées dans `history.db` ».
+44. **Dater une ligne de cache par son `expires` suppose un TTL connu.** La purge ciblée déduit la
+    date d'écriture d'une fiche de `expires − TTL de son époque` (`_ttl_livre_de_l_epoque`, bascule du
+    TTL de 15 à 30 jours le 2026-10-05) : valable pour les lignes ÉCRITES PAR LE PRODUIT, fausse pour
+    une ligne écrite après la bascule avec un TTL de 15 jours (jamais le cas en production ; c'était
+    le cas d'un test, `_TTL = 15 j` en dur, qui n'a cassé qu'une dizaine de jours plus tard).
+
 **Invariant transversal**
 
 29. **Un échec n'interrompt jamais un run, mais il est toujours compté — et il ne doit jamais se
@@ -1658,7 +1807,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 1877 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 2059 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
@@ -1708,17 +1857,18 @@ Section critique. Chacun a coûté un bug réel.
   facturation future, mais aucun montant n'est présenté à l'utilisateur et aucun encaissement
   n'existe. **En revanche l'authentification, les comptes et le multi-utilisateur EXISTENT
   désormais** (§2.1) — ne plus les lister ici.
-- **Réinitialisation de mot de passe (par e-mail), vérification d'adresse, changement
-  d'e-mail, rôles ou administration** : aucun de ces chemins n'est codé. `INSCRIPTIONS_OUVERTES`
-  se règle par `.env`, pas par une interface. **Nuance depuis le 2026-10-02** : le CHANGEMENT
-  de mot de passe par un utilisateur connecté (`POST /api/auth/mot-de-passe`, exige l'ancien,
-  referme les autres sessions) et la CLÔTURE de compte (`POST /api/auth/compte/suppression`,
-  exige le mot de passe, efface travaux, consommation et historique — jamais le cache
-  mutualisé) existent, avec leur menu dans l'interface. Un mot de passe OUBLIÉ reste un compte
-  perdu : il n'y a ni envoi de lien, ni question secrète, et c'est délibéré — ce serait une
-  surface d'attaque sur un service sans adresse vérifiée. **Nuance depuis `notification.py`** : un e-mail SORTANT existe désormais (message
-  de fin d'analyse, §2.16), éteint par défaut. Ça ne rend ni l'adresse vérifiée, ni le mot de
-  passe récupérable — le seul envoi codé est transactionnel et ne porte aucun lien d'action.
+- **Changement d'e-mail, rôles ou administration** : aucun de ces chemins n'est codé.
+  `INSCRIPTIONS_OUVERTES` se règle par `.env`, pas par une interface. **Nuance depuis le
+  2026-10-02** : le CHANGEMENT de mot de passe par un utilisateur connecté
+  (`POST /api/auth/mot-de-passe`, exige l'ancien, referme les autres sessions) et la CLÔTURE de
+  compte (`POST /api/auth/compte/suppression`, exige le mot de passe, efface travaux, consommation
+  et historique — jamais le cache mutualisé) existent, avec leur menu dans l'interface.
+  **Depuis le 2026-10-06** la VÉRIFICATION d'adresse et le MOT DE PASSE OUBLIÉ existent aussi
+  (§2.20) : liens à usage unique envoyés par SMTP. Ils exigent un serveur de courriel configuré
+  (`SMTP_HOST`, `BASE_URL`) — **aucun e-mail réel n'a jamais été envoyé**, la chaîne est testée avec
+  un SMTP bouchonné — et la vérification n'est exigée qu'en production. Il n'y a toujours ni
+  question secrète ni administration pour reprendre la main sur un compte à la place de son
+  titulaire.
 - **Support d'une autre place de marché qu'`amazon.fr`** : `marketplace.py` rassemble les
   neuf codages en dur, et `MARKETPLACE=com` **lève** au démarrage. Six choses du dépôt sont
   irréductiblement françaises (§2.15). Ne pas lire ce module comme un support multi-marché :
@@ -1741,7 +1891,7 @@ Section critique. Chacun a coûté un bug réel.
 - **`credits_tracker.py`, `MAX_CREDITS_PER_RUN`, plafond de crédits par run, mode dry-run au
   premier lancement, retry gaté à 1 tentative avec 5 s de délai, compteur « crédits restants sur
   1000 »** : rien de tout cela n'existe. Les seuls garde-fous de dépense sont
-  `PLAFOND_ANALYSES_MENSUEL` (via `_verifier_plafond` et `POST /api/jobs`) et les bornes de
+  `PLAFOND_NICHES_MENSUEL` (via `_verifier_plafond` et `POST /api/jobs`) et les bornes de
   volume `MAX_IDEES` / `MAX_RECHERCHES` / `MAX_NICHES_FICTION`.
 - **Rapport Excel `.xlsx` du scout** (onglets Synthèse / Métadonnées / Sponsorisés, mise en forme
   conditionnelle) : n'existe pas. `openpyxl` est **conservé** dans `requirements.txt` parce qu'il

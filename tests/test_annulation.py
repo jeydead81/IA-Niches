@@ -242,7 +242,9 @@ def test_le_thread_s_arrete_vraiment_et_n_ecrit_jamais_termine(monkeypatch, tmp_
 
 
 def test_l_argent_engage_reste_impute_et_l_unite_de_plafond_reste_prise(monkeypatch, tmp_path):
-    """Arrêter ne rembourse rien : sinon « lancer puis arrêter » serait gratuit."""
+    """Arrêter ne rembourse rien : sinon « lancer puis arrêter » serait gratuit. Le compteur
+    compte des NICHES depuis le 2026-10-06 : la réservation entière (6, le défaut) reste prise
+    quand de l'argent est parti. Un arrêt SANS dépense, lui, rend tout (test_compteur_niches)."""
     from usage import UsageMeter
     c, server, uid = _client(monkeypatch, tmp_path)
     compteur, arret = {"n": 0}, threading.Event()
@@ -255,7 +257,7 @@ def test_l_argent_engage_reste_impute_et_l_unite_de_plafond_reste_prise(monkeypa
     time.sleep(1.5)
     arret.set()
     resume = UsageMeter(server._USAGE_DB).resume(uid)
-    assert resume.n_analyses == 1, "l'unité reste prise"
+    assert resume.n_analyses == 6, "la réservation reste prise"
     assert resume.cout_usd > 0, "le coût déjà engagé reste imputé"
     assert JobStore(server._JOBS_DB).get(jid).cout["usd"] > 0
 

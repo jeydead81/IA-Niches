@@ -5,7 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>IA-Niches · Explorateur de niches KDP</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  /* Polices servies par le service lui-meme (web/fonts/, licence SIL OFL 1.1) : plus aucune requete
+     vers un tiers a l'ouverture de la page (RGPD : l'adresse IP du visiteur n'est plus envoyee a Google).
+     Sous-ensemble latin seulement : le francais n'en sort pas. */
+  @font-face{font-family:'Newsreader';font-style:normal;font-weight:500 600;font-display:swap;
+    src:url('/fonts/newsreader-latin.woff2') format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+  @font-face{font-family:'DM Sans';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url('/fonts/dm-sans-latin.woff2') format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
+  @font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 600;font-display:swap;
+    src:url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;}
 
   /* Charte IA-Niches v2 — « clair, vivant, rassurant ». Vert forêt pour la marque,
      un accent chaud (pêche) réservé aux moments de récompense, verdicts 🟢🟡🔴 sur leur
@@ -331,6 +342,16 @@
   .auth-ok{margin-top:14px;font-size:12.5px;color:#166534;background:var(--green-bg);
     border:1px solid #BBF7D0;border-radius:8px;padding:8px 10px;display:none}
   .auth-ok.on{display:block}
+  /* Adresse e-mail à confirmer : un bandeau, pas un blocage de l'écran (on peut lire ses analyses). */
+  .verif-bar{margin:0 0 12px;padding:10px 14px;border-radius:12px;font-size:13px;background:#FFF7E6;
+    border:1px solid #F2D9A6;color:#6B4A00;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .verif-bar[hidden]{display:none}
+  .verif-bar button{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--primary);
+    background:none;border:none;text-decoration:underline;cursor:pointer;padding:0}
+  .auth-oubli{margin-top:6px;text-align:center}
+  .auth-oubli button{font-family:var(--sans);font-size:12.5px;color:var(--text-muted);background:none;
+    border:none;text-decoration:underline;cursor:pointer;padding:0}
+  .auth-oubli[hidden],.auth-champ[hidden]{display:none}
   .compte-bar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--text-muted)}
   .compte-bar button{font-family:var(--sans);font-size:12.5px;color:var(--text-muted);
     background:var(--muted);border:1px solid var(--border);border-radius:6px;padding:4px 10px;
@@ -1611,13 +1632,13 @@
     <form class="auth-carte" id="auth-form">
       <h2 id="auth-titre">Connexion</h2>
 
-      <div class="auth-champ">
+      <div class="auth-champ" id="auth-champ-email">
         <span class="auth-ico" aria-hidden="true">✉️</span>
         <label for="auth-email" class="vh">Adresse e-mail</label>
         <input type="email" id="auth-email" placeholder="Adresse e-mail" autocomplete="email" required />
       </div>
 
-      <div class="auth-champ">
+      <div class="auth-champ" id="auth-champ-mdp">
         <span class="auth-ico" aria-hidden="true">🔒</span>
         <label for="auth-mdp" class="vh">Mot de passe</label>
         <input type="password" id="auth-mdp" placeholder="Mot de passe" autocomplete="current-password" required />
@@ -1643,6 +1664,9 @@
         <span id="auth-bascule-txt">Pas encore de compte ?</span>
         <button type="button" id="auth-bascule">Créer un compte</button>
       </p>
+      <p class="auth-oubli" id="auth-oubli-bloc">
+        <button type="button" id="auth-oubli">Mot de passe oublié ?</button>
+      </p>
     </form>
   </div>
 </div>
@@ -1665,6 +1689,7 @@
   <div class="app-main">
   <header class="topbar">
     <div class="usage-bar" id="usage-bar" hidden></div>
+    <div class="verif-bar" id="verif-bar" role="status" hidden></div>
     <div class="compte-bar" id="compte-bar" hidden>
       <button type="button" id="compte-email" aria-haspopup="true" aria-expanded="false"></button>
       <button type="button" id="btn-deconnexion">Se déconnecter</button>
@@ -1831,7 +1856,7 @@
           <summary>⚙️ Réglages avancés</summary>
           <div class="field">
             <label for="fic-n">Trios</label>
-            <input type="number" id="fic-n" value="5" min="3" max="11" />
+            <input type="number" id="fic-n" value="5" min="3" max="9" />
           </div>
         </details>
         <button class="run" id="run-fic" type="submit">
@@ -2471,13 +2496,13 @@ async function loadVerdict(r, det, btn){
       // 429 = plafond mensuel. Le dire comme une LIMITE, jamais comme une panne : rien
       // n'a ete depense, et c'est le rythme qui bloque, pas le service.
       const d = await rep.json().catch(()=>({}));
-      throw new Error(rep.status===429
-        ? 'Limite d\'analyses atteinte pour ce mois-ci. Rien n\'a ete lance.'
-        : (d.detail || 'Analyse indisponible.'));
+      throw new Error(d.detail || (rep.status===429
+        ? 'Limite mensuelle atteinte. Rien n\'a été dépensé.'
+        : 'Analyse indisponible.'));
     }
     const v = await rep.json();
     const conserve = v._conserve;
-    delete v._cout; delete v._conserve;
+    delete v._cout; delete v._conserve; delete v._deja_fait;
     r.verdict = v;
     const slot = det.querySelector('.verdictslot');
     slot.innerHTML = verdictSlot(r) + (conserve === false ? noteNonConservee() : '');
@@ -2556,10 +2581,13 @@ async function loadKdp(niche, slot, btn, vue){
     const r = await fetch(urlConservee('/api/kdp-keywords', vue.jobId, niche), {method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(type === 'scout' ? niche : {type, ...niche})});
-    if(!r.ok) throw new Error('HTTP ' + r.status);
+    if(!r.ok){
+      const d = await r.json().catch(()=>({}));
+      throw new Error(d.detail || ('HTTP ' + r.status));
+    }
     const mots = await r.json();
     const conserve = mots._conserve;
-    delete mots._cout; delete mots._conserve;
+    delete mots._cout; delete mots._conserve; delete mots._deja_fait;
     niche.mots_cles = mots;
     slot.innerHTML = kdpBlock(mots) + (conserve === false ? noteNonConservee() : '');
     brancherCopie(slot);
@@ -3370,13 +3398,13 @@ async function loadVerdictLc(r, carte, btn){
       body: JSON.stringify({type: 'lowcontent', ...r})});
     if(!rep.ok){
       const d = await rep.json().catch(()=>({}));
-      throw new Error(rep.status===429
-        ? 'Limite d\'analyses atteinte pour ce mois-ci. Rien n\'a ete lance.'
-        : (d.detail || 'Analyse indisponible.'));
+      throw new Error(d.detail || (rep.status===429
+        ? 'Limite mensuelle atteinte. Rien n\'a été dépensé.'
+        : 'Analyse indisponible.'));
     }
     const v = await rep.json();
     const conserve = v._conserve;
-    delete v._cout; delete v._conserve;
+    delete v._cout; delete v._conserve; delete v._deja_fait;
     r.verdict = v;
     carte.querySelector('.verdictslot').innerHTML = verdictSlot(r) + (conserve === false ? noteNonConservee() : '');
     brancherActionsLc(r, carte);
@@ -3415,13 +3443,13 @@ async function loadVerdictFic(r, carte, btn){
       body: JSON.stringify({type: 'fiction', ...r})});
     if(!rep.ok){
       const d = await rep.json().catch(()=>({}));
-      throw new Error(rep.status===429
-        ? 'Limite d’analyses atteinte pour ce mois-ci. Rien n’a été lancé.'
-        : (d.detail || 'Analyse indisponible.'));
+      throw new Error(d.detail || (rep.status===429
+        ? 'Limite mensuelle atteinte. Rien n’a été dépensé.'
+        : 'Analyse indisponible.'));
     }
     const v = await rep.json();
     const conserve = v._conserve;
-    delete v._cout; delete v._conserve;
+    delete v._cout; delete v._conserve; delete v._deja_fait;
     r.analyse = v;
     carte.querySelector('.verdictslot').innerHTML = verdictSlotFic(r) + (conserve === false ? noteNonConservee() : '');
     brancherActionsFic(r, carte);
@@ -3503,14 +3531,15 @@ async function lancerTravail(type, params, vue){
     const d = await r.json().catch(()=>({}));
     // 429 = plafond mensuel atteint. Le dire tel quel : « erreur » laisserait croire à une
     // panne, alors que c'est une limite volontaire et que rien n'a été dépensé.
-    vue.erreur(r.status===429
-      ? "Vous avez atteint votre limite d'analyses pour ce mois-ci. Rien n'a été lancé."
-      : (d.detail || "La demande a été refusée."));
+    vue.erreur(d.detail || (r.status===429
+      ? "Vous avez atteint votre limite de niches pour ce mois-ci. Rien n'a été lancé."
+      : "La demande a été refusée."));
     vue.apres();
     return null;
   }
   const id = (await r.json()).id;
   try{ localStorage.setItem(vue.cle, id); }catch(e){}
+  chargerUsage();                 // les niches sont réservées dès le lancement
   suivreTravail(id, vue);
   return id;
 }
@@ -3529,6 +3558,7 @@ function suivreTravail(id, vue){
     es.close();
     try{ localStorage.removeItem(vue.cle); }catch(e){}
     vue.apres();
+    chargerUsage();               // les niches non mesurées viennent d'être rendues
   });
 }
 
@@ -3705,7 +3735,7 @@ function demanderArret(btn, apres){
   zone.className = 'suppr-confirm arret-confirm';
   zone.setAttribute('role', 'group');
   zone.setAttribute('aria-label', 'Confirmer l’arrêt');
-  zone.innerHTML = '<span>Arrêter cette analyse ? Elle restera comptée dans vos analyses du mois.</span>'
+  zone.innerHTML = '<span>Arrêter cette analyse ? Si elle a déjà commencé, elle restera comptée dans vos niches du mois.</span>'
     + '<button type="button" class="btn-arret-oui">Oui, arrêter</button>'
     + '<button type="button" class="btn-arret-non">Continuer</button>';
   btn.replaceWith(zone);
@@ -3729,7 +3759,7 @@ async function arreterAnalyse(jobId, vue){
     if(vue){
       vue.arreter();
       try{ localStorage.removeItem(vue.cle); }catch(e){}
-      vue.erreur('Analyse arrêtée. Elle reste comptée dans vos analyses du mois.', true);
+      vue.erreur('Analyse arrêtée. Si elle avait commencé, elle reste comptée dans vos niches du mois.', true);
       vue.apres();
     }
     return {ok: true};
@@ -4267,18 +4297,72 @@ window.addEventListener('resize', ()=>{ if(!glossTip.hidden && glossOpenBtn) pos
 // Consommation du mois (Task U4) : un plafond qui bloque sans qu'on ait pu voir où on en
 // était se vit comme une panne. Échec silencieux si l'API ne répond pas — l'absence
 // d'affichage ne doit jamais bloquer le reste de la page.
+// Le compteur compte des NICHES depuis le 2026-10-06 (plus des runs) : avec un plafond on dit ce qu'il
+// RESTE, sans plafond ce qui a été analysé. Fonction pure, appelée par les tests avec node.
+function libelleUsage(u){
+  const n = Number(u.n_niches) || 0;
+  const cap = (u.plafond_niches === null || u.plafond_niches === undefined) ? null : Number(u.plafond_niches);
+  if(cap === null){
+    return {barre: `Ce mois-ci : <strong>${n}</strong> niche(s) analysée(s)`,
+            pied: `<strong>${n}</strong><span>niche(s) analysée(s)</span>`};
+  }
+  const reste = Math.max(0, cap - n);
+  return {barre: `Niches restantes ce mois-ci : <strong>${reste}</strong> sur ${cap}`,
+          pied: `<strong>${reste}</strong><span>niche(s) restante(s)</span>`};
+}
+
 function chargerUsage(){
   fetch('/api/usage').then(r=>r.ok?r.json():null).then(u=>{
     const el = $('#usage-bar');
     if(!el || !u) return;
+    const l = libelleUsage(u);
     el.hidden = false;
-    el.innerHTML = `Ce mois-ci : <strong>${fmt(u.n_analyses)}</strong> analyse(s)`;
+    el.innerHTML = l.barre;
     const pied = $('#nav-usage');
-    if(pied) pied.innerHTML = `<strong>${fmt(u.n_analyses)}</strong><span>analyse(s) lancée(s)</span>`;
+    if(pied) pied.innerHTML = l.pied;
   }).catch(()=>{});
 }
 
 // ================= Comptes =================
+// Les quatre états de l'écran de connexion. PURE : appelée avec node par les tests. Le champ masqué
+// n'est pas « required » (un champ invisible et obligatoire bloquerait l'envoi sans rien dire).
+function libellesAuth(mode){
+  const t = {
+    connexion:   {titre:'Connexion', bouton:'Se connecter', email:true, mdp:true, aide:false,
+                  reprise:false, oubli:true,
+                  bascule:{txt:'Pas encore de compte ?', btn:'Créer un compte'}},
+    inscription: {titre:'Créer un compte', bouton:'Créer mon compte', email:true, mdp:true, aide:true,
+                  reprise:true, oubli:false,
+                  bascule:{txt:'Vous avez déjà un compte ?', btn:'Se connecter'}},
+    oubli:       {titre:'Mot de passe oublié', bouton:'Envoyer le lien', email:true, mdp:false,
+                  aide:false, reprise:false, oubli:false,
+                  bascule:{txt:'', btn:'Retour à la connexion'}},
+    reinit:      {titre:'Nouveau mot de passe', bouton:'Enregistrer', email:false, mdp:true,
+                  aide:true, reprise:false, oubli:false,
+                  bascule:{txt:'', btn:'Retour à la connexion'}},
+  };
+  return t[mode] || t.connexion;
+}
+
+// Le bandeau « confirmez votre adresse ». PURE. `lien` : true/false = résultat du lien qu'on vient
+// de suivre, null = pas de lien. Rend null quand il n'y a rien à dire : hors production la
+// vérification n'est pas exigée, et un bandeau inutile se lit comme une panne.
+function libelleVerif(compte, lien){
+  const verifie = !!(compte && compte.email_verifie);
+  // Le lien suivi peut être celui d'un AUTRE compte, ou déjà consommé : le remerciement n'est dit qu'à
+  // un compte réellement vérifié, et un vieux lien ne déclenche aucune alarme chez qui l'est déjà.
+  if(lien === true && verifie) return {texte: 'Adresse confirmée, merci.', renvoyer: false};
+  if(lien === false && !verifie){
+    return {texte: 'Ce lien est invalide ou expiré. Demandez-en un nouveau :', renvoyer: true};
+  }
+  if(lien === false && verifie) return null;
+  if(compte && compte.verification_requise && !verifie){
+    return {texte: 'Confirmez votre adresse e-mail pour lancer des analyses : un lien vous a été envoyé.',
+            renvoyer: true};
+  }
+  return null;
+}
+
 // Tous les endpoints autres que « / » exigent une session : sans écran de connexion,
 // l'utilisateur ne verrait que des erreurs. L'écran occulte l'application tant qu'aucune
 // session n'est ouverte, plutôt que de laisser cliquer sur des boutons qui rendent 401.
@@ -4289,25 +4373,41 @@ function chargerUsage(){
   const bascule=$('#auth-bascule'), basculeTxt=$('#auth-bascule-txt');
   const repriseBloc=$('#auth-reprise-bloc'), reprise=$('#auth-reprise');
   const barre=$('#compte-bar'), emailAffiche=$('#compte-email');
-  let inscription = false;
+  const champEmail=$('#auth-champ-email'), champMdp=$('#auth-champ-mdp'), oubliBloc=$('#auth-oubli-bloc');
+  // 'connexion' | 'inscription' | 'oubli' | 'reinit' (lien reçu par e-mail)
+  let mode = 'connexion';
+  // Les liens e-mail arrivent en `/?verif=JETON` ou `/?reinit=JETON`. Le jeton est retiré de l'URL
+  // TOUT DE SUITE : il ne doit rester ni dans la barre d'adresse, ni dans l'historique du navigateur.
+  // Le jeton est dans le FRAGMENT (`/#verif=…`), jamais dans la requête : un fragment n'est pas envoyé
+  // au serveur, donc absent des journaux d'accès et du Referer.
+  const paramsUrl = new URLSearchParams(location.hash.replace(/^#/, ''));
+  const jetonVerif = paramsUrl.get('verif'), jetonReinit = paramsUrl.get('reinit');
+  if(jetonVerif || jetonReinit){ try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){} }
 
   function message(el, texte){ el.textContent = texte; el.classList.toggle('on', !!texte); }
 
   function rendre(){
-    titre.textContent = inscription ? 'Créer un compte' : 'Connexion';
-    btn.textContent   = inscription ? 'Créer mon compte' : 'Se connecter';
-    aide.hidden       = !inscription;
-    repriseBloc.hidden = !inscription;
-    if(!inscription) reprise.checked = false;
-    mdp.autocomplete  = inscription ? 'new-password' : 'current-password';
+    const l = libellesAuth(mode);
+    titre.textContent = l.titre;
+    btn.textContent   = l.bouton;
+    champEmail.hidden = !l.email; email.required = l.email;
+    champMdp.hidden   = !l.mdp;   mdp.required = l.mdp;
+    aide.hidden       = !l.aide;
+    repriseBloc.hidden = !l.reprise;
+    if(!l.reprise) reprise.checked = false;
+    oubliBloc.hidden  = !l.oubli;
+    mdp.autocomplete  = (mode === 'inscription' || mode === 'reinit') ? 'new-password' : 'current-password';
+    mdp.placeholder   = mode === 'reinit' ? 'Nouveau mot de passe' : 'Mot de passe';
     mdp.type = 'password'; $('#auth-voir').textContent = '👁️';
     $('#auth-voir').setAttribute('aria-pressed', 'false');
-    basculeTxt.textContent = inscription ? 'Vous avez déjà un compte ?' : 'Pas encore de compte ?';
-    bascule.textContent    = inscription ? 'Se connecter' : 'Créer un compte';
+    basculeTxt.textContent = l.bascule.txt;
+    bascule.textContent    = l.bascule.btn;
     message(err, ''); message(ok, '');
   }
 
-  bascule.addEventListener('click', ()=>{ inscription = !inscription; rendre(); });
+  // Connexion <-> inscription ; depuis « oubli » ou « reinit », on revient à la connexion.
+  bascule.addEventListener('click', ()=>{ mode = mode === 'connexion' ? 'inscription' : 'connexion'; rendre(); });
+  $('#auth-oubli').addEventListener('click', ()=>{ mode = 'oubli'; rendre(); email.focus(); });
 
   // Afficher / masquer le mot de passe : sur un champ de 12 caracteres minimum, une faute de
   // frappe invisible est la premiere cause d'echec a l'inscription.
@@ -4325,10 +4425,32 @@ function chargerUsage(){
     message(err, ''); message(ok, '');
     btn.disabled = true;
     try{
-      const r = await fetch(inscription ? '/api/auth/inscription' : '/api/auth/connexion', {
+      if(mode === 'oubli'){
+        // Réponse identique que l'adresse existe ou non : on n'en dit pas plus.
+        const r = await fetch('/api/auth/mot-de-passe-oublie', {method:'POST',
+          headers:{'Content-Type':'application/json'}, body: JSON.stringify({email: email.value.trim()})});
+        const d = await r.json().catch(()=>({}));
+        if(r.ok) message(ok, d.message || 'Si un compte existe pour cette adresse, un lien vient de lui être envoyé.');
+        else message(err, d.detail || 'Demande impossible pour le moment.');
+        return;
+      }
+      if(mode === 'reinit'){
+        const r = await fetch('/api/auth/mot-de-passe-reinitialiser', {method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({jeton: jetonReinit, nouveau: mdp.value})});
+        if(r.status === 204){
+          mode = 'connexion'; rendre(); mdp.value = '';
+          message(ok, 'Mot de passe enregistré. Connectez-vous avec le nouveau.');
+          return;
+        }
+        const d = await r.json().catch(()=>({}));
+        message(err, d.detail || 'Réinitialisation impossible pour le moment.');
+        return;
+      }
+      const r = await fetch(mode === 'inscription' ? '/api/auth/inscription' : '/api/auth/connexion', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({email: email.value.trim(), mot_de_passe: mdp.value,
-                              reprendre_donnees_locales: inscription && reprise.checked})});
+                              reprendre_donnees_locales: mode === 'inscription' && reprise.checked})});
       if(!r.ok){
         const d = await r.json().catch(()=>({}));
         message(err, d.detail || 'Connexion impossible.');
@@ -4351,7 +4473,7 @@ function chargerUsage(){
     }
   });
 
-  function entrer(adresse){
+  function entrer(adresse, lien){
     ecran.classList.remove('on');
     barre.hidden = false;
     emailAffiche.textContent = adresse;
@@ -4359,6 +4481,7 @@ function chargerUsage(){
     $('#nav').hidden = false;
     montrerVue('explorer');
     chargerUsage();
+    chargerBandeauVerif(lien === undefined ? null : lien);
     chargerFormatsLc();
     chargerSousGenres();
     chargerHistorique();
@@ -4372,9 +4495,36 @@ function chargerUsage(){
     $('#nav').hidden = true;
     histSection.hidden = true; histListe.innerHTML = ''; HISTORIQUE = [];
     ecran.classList.add('on');
-    inscription = false;
+    mode = 'connexion';
     rendre();
     email.focus();
+  }
+
+  // Bandeau « confirmez votre adresse » : l'état vient de /api/auth/moi (la réponse de connexion ne
+  // le porte pas). `lien` : résultat du lien qu'on vient de suivre, ou null.
+  function chargerBandeauVerif(lien){
+    const bandeau = $('#verif-bar');
+    fetch('/api/auth/moi').then(r => r.ok ? r.json() : null).then(c => {
+      const l = libelleVerif(c, lien);
+      if(!l){ bandeau.hidden = true; return; }
+      bandeau.innerHTML = '';
+      const t = document.createElement('span'); t.textContent = l.texte; bandeau.appendChild(t);
+      if(l.renvoyer){
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Renvoyer le lien';
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          const rep = await fetch('/api/auth/verification/renvoyer', {method:'POST'}).catch(()=>null);
+          if(rep && rep.status === 204) t.textContent = 'Lien renvoyé : regardez votre boîte de réception.';
+          else {
+            const d = rep ? await rep.json().catch(()=>({})) : {};
+            t.textContent = d.detail || 'Envoi impossible pour le moment.';
+          }
+          b.disabled = false;
+        });
+        bandeau.appendChild(b);
+      }
+      bandeau.hidden = false;
+    }).catch(()=>{});
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────────
@@ -4466,10 +4616,30 @@ function chargerUsage(){
   });
 
   rendre();
-  fetch('/api/auth/moi').then(r=>{
-    if(r.ok) return r.json().then(c=>entrer(c.email));
-    sortir();
-  }).catch(()=>sortir());
+  async function demarrer(){
+    if(jetonReinit){
+      // Lien « mot de passe oublié » : le formulaire de nouveau mot de passe, sans vérifier de session
+      // (elles seront toutes fermées par la réinitialisation).
+      mode = 'reinit'; rendre(); ecran.classList.add('on'); mdp.focus();
+      return;
+    }
+    // Lien de vérification : consommé AVANT de lire /api/auth/moi, pour que l'état affiché soit à jour.
+    let lien = null;
+    if(jetonVerif){
+      lien = await fetch('/api/auth/verification', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({jeton: jetonVerif})})
+        .then(r => r.status === 204).catch(() => false);
+    }
+    fetch('/api/auth/moi').then(r=>{
+      if(r.ok) return r.json().then(c=>entrer(c.email, lien));
+      sortir();
+      if(lien !== null){
+        message(lien ? ok : err, lien ? 'Adresse confirmée. Vous pouvez vous connecter.'
+                                      : 'Ce lien est invalide ou expiré. Connectez-vous pour en recevoir un nouveau.');
+      }
+    }).catch(()=>sortir());
+  }
+  demarrer();
 })();
 
 // ================= Aide contextuelle =================

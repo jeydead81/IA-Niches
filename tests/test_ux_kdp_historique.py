@@ -268,7 +268,7 @@ def test_un_run_interrompu_est_repris_au_rechargement():
 def test_le_plafond_atteint_se_dit_et_ne_passe_pas_pour_une_panne():
     """429 n'est pas une erreur technique : c'est une limite volontaire, et rien n'a été
     dépensé. Le dire évite que l'utilisateur relance en boucle."""
-    assert "limite d'analyses pour ce mois-ci" in HTML
+    assert "limite de niches pour ce mois-ci" in HTML
     assert "Rien n'a été lancé" in HTML
 
 

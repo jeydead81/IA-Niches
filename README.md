@@ -65,7 +65,7 @@ asynchrone** : le run survit à la fermeture de l'onglet.
     `_verifier_plafond` (`:188`). Auparavant `UsageMeter.autorise` n'avait qu'**un seul** site
     d'appel, celui que l'interface n'empruntait pas ;
   - **bornes sur les paramètres de volume** : `MAX_IDEES=30`, `MAX_RECHERCHES=20`,
-    `MAX_NICHES_FICTION=20`. Le plafond compte des *analyses*, pas des appels payants : sans
+    `MAX_NICHES_FICTION=9` (20 à l'origine, 11 jusqu'au 2026-10-06). Le plafond compte des *niches*, pas des appels payants : sans
     bornes, une seule « analyse » avec `search=9999` déclenchait des milliers de requêtes
     DataForSEO. `_borner` **refuse en 400** plutôt que de rogner en silence ;
   - **garde anti-CSRF `origine_sure`** (`Sec-Fetch-Site` + `Origin`) sur les trois endpoints qui
@@ -132,7 +132,8 @@ Les défauts vides ne font pas échouer le démarrage : l'échec survient au pre
 |---|---|---|
 | `INSCRIPTIONS_OUVERTES` | **non défini = fermé** | Autorise la création de comptes **au-delà du premier**. Le plafond mensuel étant *par utilisateur*, un compte de plus est un plafond neuf : laisser l'inscription libre revient à offrir une dépense illimitée à un anonyme. Valeurs acceptées : `1`, `true`, `yes`, `oui`. **Le premier compte passe toujours**, sinon une installation neuve serait inutilisable. |
 | `COOKIE_SECURE` | non défini | **Ne peut plus que FORCER** le drapeau `Secure`, jamais le désactiver. Normalement inutile : le drapeau est **déduit** de `X-Forwarded-Proto` puis du schéma de la requête. À ne renseigner que derrière un proxy TLS qui n'annonce pas le protocole. |
-| `PLAFOND_ANALYSES_MENSUEL` | non défini = illimité | Plafond glissant sur 30 jours **par utilisateur**. Vérifié par **tous** les chemins payants depuis `d443ba8`. Valeur non entière → illimité, silencieusement. |
+| `ALERTE_SOLDE_EMAIL` / `ALERTE_SOLDE_USD` | non définis = aucune alerte / `5` | Message envoyé à cette adresse (une fois par 24 h, de nouveau après une recharge) quand le solde DataForSEO passe sous le seuil. Solde relu après chaque analyse et avant chaque lancement ; illisible = pas d'alerte. Utilise `SMTP_HOST`. |
+| `PLAFOND_NICHES_MENSUEL` | non défini = illimité | Plafond de **niches** glissant sur 30 jours **par utilisateur** (renommée le 2026-10-06 : elle comptait des runs sous le nom `PLAFOND_ANALYSES_MENSUEL`, dont la présence fait refuser le démarrage en production). Une analyse réserve les niches qu'elle demande et rend celles qui n'ont rien livré. Dérive aussi le plafond mensuel des appels à la pièce (2 par niche). Valeur non entière → illimité, silencieusement. |
 
 **Coût et infrastructure**
 
@@ -251,17 +252,19 @@ low-content avec sélecteur de format —, progression en direct (SSE reconnecta
 niches dépliable, glossaire contextuel et **pastille d'aide « ? » fixe** ouvrant un mini-tutoriel
 **par onglet**, chacun terminé par une section « Pièges de lecture ».
 
-**Une seule ressource tierce subsiste** : `web/index.html:8` fait un
-`@import url('https://fonts.googleapis.com/css2?…')` pour Fira Sans et Fira Code. Chaque ouverture
-émet donc une requête vers Google. La page reste fonctionnelle hors ligne (les deux variables CSS
-portent un repli : `system-ui,sans-serif` et `ui-monospace,monospace`), mais l'application n'est
-pas strictement locale tant que cet import est là.
+**Aucune ressource tierce n'est chargée par la page** (depuis le 2026-10-15) : les trois polices
+(Newsreader, DM Sans, JetBrains Mono, WOFF2 latin, licence SIL OFL 1.1) sont dans `web/fonts/` et
+servies par `GET /fonts/{nom}`, sans session. L'ancien `@import` Google Fonts envoyait l'adresse IP de
+chaque visiteur à Google. Ne restent que les liens sortants `amazon.fr/dp/` — un clic de
+l'utilisateur, pas un chargement. `tests/test_polices.py` interdit le retour d'une URL externe.
 
-**Endpoints exposés par `web/server.py` — 18** (décorateurs `@app.`, comptés le 2026-08-22) :
+**Endpoints exposés par `web/server.py`** — **27** au 2026-10-15 (liste complète : `CLAUDE.md` §2.6).
+Le tableau ci-dessous date du 2026-08-22 et **ne les liste pas tous** (manquent notamment l'annulation
+et la suppression d'une analyse, le changement de mot de passe, la vérification d'adresse) :
 
 | Groupe | Routes |
 |---|---|
-| Page | `GET /` — sert `index.html`, seul endpoint **hors `/api/auth/`** à ne pas exiger de session |
+| Page | `GET /` — sert `index.html` · `GET /fonts/{nom}` — les trois polices ; sans session l'un et l'autre |
 | Comptes | `POST /api/auth/inscription` · `POST /api/auth/connexion` · `POST /api/auth/deconnexion` (ces trois-là n'exigent pas de session en cours) · `GET /api/auth/moi` |
 | Travaux | `POST /api/jobs` · `GET /api/jobs` · `GET /api/jobs/{id}` · `GET /api/jobs/{id}/stream` |
 | Fiction | `GET /api/fiction/sous-genres` · `GET /api/fiction/taxonomie/{sous_genre}` |
@@ -558,7 +561,7 @@ jusqu'à ~45 min d'attente.
 | Demande | priority (défaut) | standard | Origine |
 |---|---|---|---|
 | Scout non-fiction, BSR local (`scrape`) | 0,030 $ | 0,021 $ | mesuré |
-| Scout non-fiction, BSR serveur (`dataforseo`) | **0,084 $** | 0,048 $ | calculé |
+| Scout non-fiction, BSR serveur (`dataforseo`) | **0,110 $** | 0,074 $ | calculé (LLM mesuré au tarif standard, 2026-10-06 ; 0,084 $ avant) |
 | Scout fiction, 3 trios | 0,153 $ | 0,113 $ | mesuré |
 | Scout fiction, 8 trios | 0,409 $ | 0,299 $ | extrapolé |
 | Scout low-content, 6 niches | ~0,05 $ | ~0,03 $ | **estimé** — aucune mesure datée |
@@ -573,7 +576,7 @@ jusqu'à ~45 min d'attente.
 **PIÈGE `BSR_SOURCE` — ne jamais citer le chiffre local comme coût de production.** Le défaut
 `scrape` lit les fiches `amazon.fr/dp/{asin}` depuis une **IP résidentielle**. Depuis un datacenter,
 Amazon bloque : il faut `BSR_SOURCE=dataforseo`, et le scout non-fiction passe de 0,030 $ à
-**0,084 $**, soit ×2,8.
+**0,110 $**, soit ×3,7.
 
 Le **cache SQLite mutualisé** (`99-logs/df-cache.db`) est l'économie principale à l'échelle : deux
 utilisateurs qui analysent le même rayon ne le paient qu'une fois. Ce partage est **délibéré**, pas
@@ -746,7 +749,7 @@ vérifie qu'ils échouent pour la BONNE raison. C'est ce qui tient ces 1038 test
   ASIN les facture une seconde fois — mesuré : 240 appels pour 120 ASIN, 0,78 $ contre un plafond de
   0,60 $, franchi **en silence**. Seuls les ASIN absents de l'enrichissement valent un second
   passage.
-- **`MAX_NICHES_FICTION` vaut 11, et c'est DÉRIVÉ, pas choisi** : c'est le plus grand nombre de
+- **`MAX_NICHES_FICTION` vaut 9 (11 avant le recalage du devis du 2026-10-06), et c'est DÉRIVÉ, pas choisi** : c'est le plus grand nombre de
   trios dont le devis tient sous `PLAFOND_USD_PAR_RUN`. Ne pas la relever sans relever le plafond —
   au-delà, le run atteindrait le plafond en route et rendrait un rapport **partiel** à quelqu'un qui
   a payé son plafond entier, ce qui se lit comme une arnaque et non comme une protection.
@@ -774,10 +777,11 @@ vérifie qu'ils échouent pour la BONNE raison. C'est ce qui tient ces 1038 test
   légales, confidentialité, CGV, landing. Chacune porte des `[[A COMPLETER : … ]]` — identité légale,
   hébergeur, prix, délai de rétractation. `tests/test_pages_publiques.py` verrouille le lien : dès
   qu'une route sert un de ces fichiers, il ne doit plus rester un seul marqueur.
-- **Réinitialisation de mot de passe, vérification d'adresse, changement d'e-mail, suppression de
-  compte, rôles, administration** : aucun de ces chemins n'est codé. Un mot de passe perdu est un
-  compte perdu. Le seul e-mail sortant est le message de fin d'analyse, transactionnel et sans lien
-  d'action.
+- **Changement d'e-mail, rôles, administration** : aucun de ces chemins n'est codé. Depuis le
+  2026-10-06 la **vérification d'adresse** et le **mot de passe oublié** existent (liens à usage
+  unique envoyés par SMTP, jeton dans le fragment de l'URL) ; ils exigent `SMTP_HOST` et `BASE_URL`
+  en `https://` en production, et **aucun courriel réel n'a jamais été envoyé** (chaîne testée avec
+  un SMTP bouchonné). Le changement de mot de passe et la clôture de compte (2026-10-02) existent.
 - **Le dépôt est DÉPLOYABLE, rien n'est déployé.** Depuis le 2026-09-07 : `requirements.txt` à la
   racine (il inclut celui de `01-scripts/`, il ne le recopie pas), `Procfile`, `HOST` déduit
   d'`APP_ENV`, `DATA_DIR` **exigée** en production, et les travaux interrompus par un redémarrage

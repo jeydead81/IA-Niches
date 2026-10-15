@@ -113,8 +113,8 @@ def test_job_refuse_quand_le_plafond_est_atteint(tmp_path, monkeypatch):
     client, server = _client_with_isolated_dbs(monkeypatch, tmp_path)
     from usage import UsageMeter
 
-    monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "1")
-    # Le compte connecté a déjà consommé son unique analyse autorisée ce mois-ci. Le
+    monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", "1")
+    # Le compte connecté a déjà consommé sa seule niche autorisée ce mois-ci. Le
     # plafond porte sur l'identité de la SESSION : c'est ce qui le rend incontournable.
     moi = client.get("/api/auth/moi").json()["user_id"]
     UsageMeter(tmp_path / "usage.db", plafond_analyses=1).enregistrer(
@@ -217,7 +217,7 @@ def test_endpoint_usage_expose_la_consommation(monkeypatch, tmp_path):
     r = client.get("/api/usage")
     assert r.status_code == 200
     d = r.json()
-    assert "n_analyses" in d and "cout_usd" in d
+    assert "n_niches" in d and "cout_usd" in d
 
 
 def test_verdict_a_la_demande(monkeypatch, tmp_path):

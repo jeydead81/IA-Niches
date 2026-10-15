@@ -1042,7 +1042,7 @@ def test_l_arret_demande_confirmation_et_dit_que_l_analyse_reste_comptee():
     src = _html()
     debut = src.index("function demanderArret(")
     corps = src[debut:src.index("\n}\n", debut)]
-    assert "Elle restera comptée dans vos analyses du mois" in corps
+    assert "elle restera comptée dans vos niches du mois" in corps
     assert "btn-arret-oui" in corps and "btn-arret-non" in corps
     assert "btn-arret-non').focus()" in corps, "la sortie sûre est le choix par défaut"
 
@@ -1054,7 +1054,7 @@ def test_arreter_coupe_le_flux_rend_la_main_et_ne_cible_que_le_travail_affiche()
     assert "/annuler" in corps and "'POST'" in corps and "204" in corps
     assert "vue.arreter()" in corps and "vue.apres()" in corps
     assert "localStorage.removeItem(vue.cle)" in corps, "sinon un rechargement raccrocherait le travail arrêté"
-    assert "Elle reste comptée dans vos analyses du mois" in corps
+    assert "elle reste comptée dans vos niches du mois" in corps
     # chaque vue sait couper SON flux
     assert src.count("arreter(){ if(es") == 3
 

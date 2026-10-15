@@ -114,7 +114,10 @@ def test_R11_cache_vide_le_devis_vaut_celui_du_produit_et_n_ecrit_rien(tmp_path)
     absent = tmp_path / "absent.db"
     d = cli.devis_calibration(requetes, cli.ouvrir_cache_lecture(absent), plafond_usd=2.0)
     assert d.total_usd == pytest.approx(cout_max_estime("lowcontent", {"n_search": 31}))
-    assert d.total_usd == pytest.approx(0.7792, abs=1e-4)
+    # 0,7792 $ avec l'ancienne part LLM (0,012 $) ; 0,8123 $ depuis qu'elle est recalée sur les runs
+    # low-content mesurés (0,045 $ d'idéation, devis.py, 2026-10-06) : 31 SERP + 186 fiches à 0,003 $
+    # + 0,045 $ + 31 niches de réponse à 0,00375 $.
+    assert d.total_usd == pytest.approx(0.8123, abs=1e-4)
     assert d.n_serp_a_payer == 31 and d.n_asin_a_payer == 186
     import inspect
     from lowcontent_master import run_lowcontent_scout

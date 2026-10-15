@@ -111,6 +111,7 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
 
     journal(f"[worker] job {job.id} ({job.type}) démarré")
     annulation.installer(controle_du_travail(store, job.id))
+    regle = False                      # le décompte de niches n'est réglé QU'UNE fois
     try:
         resultat = runner(job.params, progress, cost, job.user_id)
         b = cost.breakdown()
@@ -122,6 +123,11 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
             store.enregistrer_cout_annule(job.id, b)
             journal(f"[worker] job {job.id} arrêté par l'utilisateur")
         else:
+            # Niches non mesurees rendues AVANT « termine » : « termine » implique « compte ».
+            # `imputer=_imputer` : le MEME ecrivain que pour le cout (tests, base du worker).
+            server._regler_niches(job.user_id, job.type, job.params, "termine", b["usd"],
+                                  resultat, imputer=_imputer)
+            regle = True
             store.finish(job.id, resultat, b)
             server._notifier(job.user_id, job.type, "termine", job.id, journal=journal)
             journal(f"[worker] job {job.id} terminé ({b['dataforseo_calls']} recherches)")
@@ -130,11 +136,16 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
         # aucune notification (il l'a arretee lui-meme).
         b = cost.breakdown()
         _imputer(job.user_id, job.type, b["usd"], 0)
+        server._regler_niches(job.user_id, job.type, job.params, "annule", b["usd"],
+                              imputer=_imputer)
         store.enregistrer_cout_annule(job.id, b)
         journal(f"[worker] job {job.id} arrêté par l'utilisateur")
     except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
         b = cost.breakdown()
         _imputer(job.user_id, job.type, b["usd"], 0)
+        if not regle:                  # `finish` a pu lever APRÈS le règlement « termine »
+            server._regler_niches(job.user_id, job.type, job.params, "echec", b["usd"],
+                                  imputer=_imputer)
         # MÊME assainissement qu'en ligne (A3) : le message d'exception peut porter les
         # identifiants DataForSEO, et le worker écrit dans le MÊME champ que le serveur.
         # Le corriger d'un seul côté laisserait la fuite entière sur l'autre.
@@ -143,6 +154,7 @@ def executer_un_job(store: JobStore, journal=print) -> bool:
         journal(f"[worker] job {job.id} en échec")
     finally:
         annulation.retirer()
+    server._alerter_apres_run()        # le job a dépensé : le compte est peut-être sous le seuil
     return True
 
 
@@ -167,7 +179,9 @@ def boucle(store: JobStore | None = None, repos_s: float = REPOS_S,
     que le pool travaille a cote."""
     store = store or JobStore(server._JOBS_DB)
     k = concurrence if concurrence is not None else concurrence_configuree()
-    n = recuperer_orphelins(store, journal=journal)
+    n = recuperer_orphelins(store, journal=journal, regler=lambda j: server._regler_niches(
+        j.user_id, j.type, j.params, "echec", float((j.cout or {}).get("usd") or 0.0),
+        imputer=_imputer))
     journal(f"[worker] demarre · {k} creneau(x) · {n} travail(aux) orphelin(s) recupere(s)")
 
     if k == 1:

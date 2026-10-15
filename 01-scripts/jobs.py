@@ -165,6 +165,35 @@ class JobStore:
                 cx.execute("ROLLBACK")
                 raise
 
+    def lire_annotation(self, job_id: str, user_id: str, cle: str, champ: str) -> dict | None:
+        """Ce qu'`annoter_resultat` a rangé sous `champ` pour la niche `cle`, ou None.
+
+        Sert à ne jamais REPAYER un appel à la pièce : le bouton disparaît de la page une fois
+        le résultat rangé, mais un double clic, deux onglets ou un client qui rejoue l'API
+        rappelleraient le modèle pour la même niche. None — sans lever — quand il n'y a rien à
+        rendre : travail inconnu, d'un AUTRE utilisateur (connaître un identifiant ne donne
+        aucun droit de lecture), sans résultat, niche absente, champ hors liste, ou valeur qui
+        n'est pas un objet (le `verdict` d'un résultat fiction est le TEXTE du moteur, pas une
+        annotation du modèle)."""
+        if champ not in self.CHAMPS_ANNOTABLES or not cle:
+            return None
+        with self._conn() as cx:
+            row = cx.execute("SELECT user_id, resultat FROM jobs WHERE id=?",
+                             (job_id,)).fetchone()
+        if row is None or row[0] != user_id or row[1] is None:
+            return None
+        try:
+            resultat = json.loads(row[1])
+        except ValueError:
+            return None
+        if not isinstance(resultat, list):
+            return None
+        for entree in resultat:
+            if isinstance(entree, dict) and self._est_la_niche(entree, cle):
+                valeur = entree.get(champ)
+                return valeur if isinstance(valeur, dict) and valeur else None
+        return None
+
     @staticmethod
     def _est_la_niche(entree: dict, cle: str) -> bool:
         if not cle:                    # une clé vide ne désigne AUCUNE niche (un trio sans requête)
@@ -372,7 +401,7 @@ ORPHELIN_APRES_S = 30 * 60
 
 
 def recuperer_orphelins(store: JobStore, depuis_s: float = ORPHELIN_APRES_S,
-                        journal=print, prefixe: str = "[worker]") -> int:
+                        journal=print, prefixe: str = "[worker]", regler=None) -> int:
     """Passe en échec les travaux interrompus. Rend combien ont été récupérés.
 
     Le coût déjà mesuré est CONSERVÉ (§5.29) : le remettre à zéro ferait croire qu'un run
@@ -388,6 +417,10 @@ def recuperer_orphelins(store: JobStore, depuis_s: float = ORPHELIN_APRES_S,
     divergent. Celle qui divergerait serait justement celle qui ne tourne pas sur le
     poste où l'on teste.
 
+    `regler(job)` : rappel appelé APRÈS la mise en échec, pour rendre au client les niches d'un run
+    qu'un redémarrage a coupé (le serveur y branche son règlement de niches). Ne lève jamais : une
+    comptabilité qui échoue ne doit pas empêcher de récupérer les autres travaux.
+
     `prefixe` n'est pas cosmétique : dans un journal partagé, savoir si c'est le serveur
     ou le worker qui a récupéré un travail dit lequel des deux processus a redémarré."""
     n = 0
@@ -397,5 +430,10 @@ def recuperer_orphelins(store: JobStore, depuis_s: float = ORPHELIN_APRES_S,
                    "effectué est conservé ci-dessus ; relancez pour terminer.",
                    cout=job.cout)
         journal(f"{prefixe} job {job.id} ({job.type}) récupéré : interrompu")
+        if regler is not None:
+            try:
+                regler(job)
+            except Exception:  # noqa: BLE001 — voir docstring
+                journal(f"{prefixe} job {job.id} : décompte de niches non ajusté")
         n += 1
     return n

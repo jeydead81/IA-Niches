@@ -161,7 +161,7 @@ def test_le_plafond_couvre_les_mots_cles_fiction(monkeypatch, tmp_path):
     import server
     from tests.conftest import isoler_bases, ouvrir_session
     isoler_bases(monkeypatch, server, tmp_path)
-    monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "0")
+    monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", "0")
     faux = _Anthropic({"candidats": CANDIDATS})
     monkeypatch.setattr("kdp_keywords._default_client", lambda: faux)
     c = TestClient(server.app, raise_server_exceptions=False)

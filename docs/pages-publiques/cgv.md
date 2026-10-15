@@ -460,10 +460,9 @@ usages purement fonctionnels : mémoriser l'identifiant de l'analyse en cours af
 reprendre après un rechargement, et mémoriser l'état ouvert ou fermé d'un panneau d'aide.
 Ces données restent dans le navigateur de l'utilisateur.
 
-L'interface charge une **police de caractères depuis Google Fonts**
-(`fonts.googleapis.com`). Ce chargement expose l'adresse IP de l'utilisateur à ce
-fournisseur. Hors ligne, l'interface fonctionne et retombe sur les polices du système.
-[[A COMPLETER : décision retenue — héberger la police localement pour supprimer cette dépendance, ou la documenter dans la politique de confidentialité]]
+Les **polices de caractères** de l'interface sont hébergées par le service lui-même : aucune
+ressource n'est chargée depuis un site tiers, et l'adresse IP de l'utilisateur n'est transmise à aucun
+fournisseur de polices.
 
 ### 10.3 Ce qui est transmis aux sous-traitants
 
@@ -723,8 +722,8 @@ CINQ BASES ET LEUR CONTENU (art. 10.1)
 - 01-scripts/jobs.py:49-65 — table jobs (params, progression, resultat, cout, erreur, dates)
 
 COOKIES, STOCKAGE LOCAL, RESSOURCE EXTERNE (art. 10.2)
-- web/index.html:8 — @import url('https://fonts.googleapis.com/css2?family=Fira+Code…')
-  SEULE ressource externe du fichier (grep https?:// , <script src, <link)
+- web/index.html — trois @font-face vers /fonts/*.woff2 (web/fonts/, GET /fonts/{nom}) ;
+  plus aucune ressource externe (tests/test_polices.py : @import, fonts.googleapis.com, URL tierces)
 - web/index.html:1463,1479,1489,1492,1496 — localStorage : identifiant du job en cours
 - web/index.html:1799-1807 — localStorage : état du panneau d'aide
 - Aucun traceur : aucune occurrence d'analytics, gtag, matomo, plausible, pixel dans

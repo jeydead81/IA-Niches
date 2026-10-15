@@ -10,13 +10,18 @@ disant quel volume tiendrait. Le plafond en cours de run reste, mais comme filet
 recours (panne, tempête de retries, tarif qui change chez le fournisseur) — plus comme mode
 de fonctionnement nominal.
 
-LE MODÈLE EST CALÉ SUR LES MESURES DU DÉPÔT, pas sur une intuition. Il retombe exactement
-sur les deux chiffres non-fiction et à 8 % près sur les deux chiffres fiction :
+LE MODÈLE EST CALÉ SUR LES MESURES DU DÉPÔT, pas sur une intuition. Les postes LLM viennent
+de `jobs.db` (tarif STANDARD de Sonnet, 3/15 $ par million de jetons, en vigueur depuis le
+2026-08-31 : le tarif d'introduction, 2/10, faisait croire le LLM 1,5 fois moins cher) :
 
-    scout NF local (BSR gratuit)  6 SERP + ideator            = 0,030 $  (mesuré)
-    scout NF serveur              + 18 ASIN                   = 0,084 $  (calculé)
-    fiction 3 trios               3 SERP + 36 ASIN + classif  = 0,165 $  (mesuré 0,153)
-    fiction 8 trios               8 SERP + 96 ASIN + classif  = 0,420 $  (extrapolé 0,409)
+    scout NF, 6 recherches   LLM 0,0383 $ (mesuré 2026-10-03) + 24 tâches    = 0,110 $  (calculé)
+    fiction 5 trios, 12 fiches   0,171 $ DataForSEO + 0,1585 $ LLM           = 0,3295 $ (mesuré 2026-10-05)
+    low-content, 3 et 6 niches   LLM 0,0564 $ / 0,0504 $ (mesuré)
+
+Avant cette correction (2026-10-05) la part LLM valait 0,012 $ pour les trois moteurs et
+0,001 $ par livre classé : le devis annonçait 0,227 $ pour un run fiction de 5 trios qui en
+coûtait 0,33, et laissait passer 11 trios à 0,485 $ quand ils en coûtent ~0,69 — au-delà du
+plafond de 0,60 $ par run, donc le rapport partiel facturé que ce module existe pour éviter.
 
 Un modèle qui ne reproduit pas les mesures refuserait des runs au hasard : c'est ce que
 `test_le_modele_reproduit_les_mesures_du_depot` protège.
@@ -31,11 +36,15 @@ from search_providers import COST_PER_CALL_USD
 # Coût d'UN appel DataForSEO en priority (le défaut). Une SERP comme un ASIN.
 _TARIF = COST_PER_CALL_USD[2]
 
-# Postes LLM, DÉDUITS des mesures ci-dessus et non devinés :
-#   ideator : 0,030 $ (scout NF local) − 6 SERP × 0,003 = 0,012 $
-#   classif : (0,153 $ − 3 SERP − 36 ASIN) / 36 livres ≈ 0,001 $ par quatrième de couverture
-_LLM_IDEATOR = 0.012
-_LLM_CLASSIF_PAR_LIVRE = 0.001
+# Postes LLM, MESURÉS (jobs.db) et non devinés. Un appel d'idéation par run, dont le coût
+# dépend du moteur : sa consigne, sa taxonomie et sa réponse n'ont rien de commun.
+#   scout : 0,0390 $ (3 niches) et 0,0383 $ (6 niches) — 2 235 jetons entrants, 2 107 sortants
+#   fiction : 0,0149 $ — quatre runs du 2026-10-05 échoués APRÈS l'idéation, avant tout rayon
+#   lowcontent : 0,0564 $ (3 niches), 0,0504 $ (6) ; la part qui grandit avec n est ajoutée plus bas
+_LLM_IDEATOR = {"scout": 0.039, "fiction": 0.015, "lowcontent": 0.045}
+# Classification d'une quatrième de couverture : (0,1585 − 0,0149) $ / 52 livres = 0,00276 $
+# (run fiction mesuré du 2026-10-05, tarif standard). Arrondi au-dessus : un devis est un pire cas.
+_LLM_CLASSIF_PAR_LIVRE = 0.0028
 
 # La réponse du classement low-content grandit avec n : UN appel, mais une niche de plus à
 # rendre. Constante lue dans l'ideator (`_budget_reponse`) et tarif lu dans la grille de
@@ -53,6 +62,7 @@ _SORTIE_USD_PAR_JETON = max(_PRIX_LC["out"], _PRIX_LC.get("out_std", _PRIX_LC["o
 _MODELES = {
     "scout": {
         "cle": "n_search", "defaut": 6,
+        "alias": "search",            # nom historique, accepté par POST /api/jobs (§5.22)
         "asin_par_unite": 3,          # scout_master.n_bsr_per_niche
         "classif_par_unite": 0,       # pas de lecture de quatrièmes en non-fiction
     },
@@ -84,7 +94,8 @@ def _volume(type_: str, params: dict) -> tuple[dict, int]:
         # présenté à l'utilisateur comme une garantie.
         raise ValueError(f"aucun modèle de coût pour le type « {type_} » "
                          f"(connus : {sorted(_MODELES)})")
-    brut = (params or {}).get(modele["cle"], modele["defaut"])
+    params = params or {}
+    brut = params.get(modele["cle"], params.get(modele.get("alias"), modele["defaut"]))
     try:
         n = int(brut)
     except (TypeError, ValueError):
@@ -98,7 +109,8 @@ def ventilation_max_estimee(type_: str, params: dict | None = None) -> dict:
     modele, n = _volume(type_, params or {})
     n_asin = n * modele["asin_par_unite"]
     n_classif = n * modele["classif_par_unite"]
-    llm = (_LLM_IDEATOR                   # un seul appel d'idéation par run
+    ideator = _LLM_IDEATOR[type_]
+    llm = (ideator                        # un seul appel d'idéation par run
            + n_classif * _LLM_CLASSIF_PAR_LIVRE
            + n * modele.get("jetons_sortie_par_unite", 0) * _SORTIE_USD_PAR_JETON)
     return {"n": n, "n_asin": n_asin, "serp_usd": n * _TARIF,
@@ -116,7 +128,7 @@ def cout_max_estime(type_: str, params: dict | None = None) -> float:
     return round(
         v["serp_usd"]                     # une SERP par niche
         + v["asin_usd"]                   # les fiches ASIN (BSR, éditeur, prix, pages)
-        + _LLM_IDEATOR                    # un seul appel d'idéation par run
+        + _LLM_IDEATOR[type_]             # un seul appel d'idéation par run
         + v["_classif"] * _LLM_CLASSIF_PAR_LIVRE
         + v["_jetons"] * _SORTIE_USD_PAR_JETON,
         4)

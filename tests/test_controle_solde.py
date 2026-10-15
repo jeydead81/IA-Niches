@@ -144,6 +144,8 @@ def test_un_solde_epuise_refuse_les_trois_moteurs_avant_toute_depense(banc, monk
 def test_le_client_ne_lit_ni_fournisseur_ni_montant(banc, monkeypatch):
     c, server, uid, _ = banc
     monkeypatch.setattr(server, "_lire_solde", lambda: -0.049)
+    from tests.conftest import verifier_email
+    verifier_email(server, uid)          # en production, un compte non vérifié est refusé AVANT le solde
     monkeypatch.setenv("APP_ENV", "prod")
     d = c.post("/api/jobs", json=_corps("fiction")).json()["detail"]
     assert "Rien n'a été lancé" in d and "décompté" in d
@@ -206,15 +208,17 @@ def test_une_requete_invalide_est_refusee_avant_la_lecture_du_solde(banc, monkey
 
 
 def test_le_controle_se_fait_avant_la_reservation_de_l_unite(banc, monkeypatch):
-    """Sinon un client dont le service est à sec paierait une unité de son plafond mensuel."""
+    """Sinon un client dont le service est à sec paierait ses niches du plafond mensuel."""
     c, server, uid, _ = banc
     monkeypatch.setattr(server, "_lire_solde", lambda: -1.0)
-    monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "1")
+    # Le plafond vaut EXACTEMENT un run de cinq trios : un refus qui consommerait la place
+    # rendrait le run suivant impossible.
+    monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", "5")
     for _ in range(3):
         assert c.post("/api/jobs", json=_corps("fiction")).status_code == 503
     monkeypatch.setattr(server, "_lire_solde", lambda: 5.0)
     assert c.post("/api/jobs", json=_corps("fiction")).status_code == 202, \
-        "l'unique unité du plafond est restée intacte"
+        "les cinq niches du plafond sont restées intactes"
 
 
 # ── 3. Le cache de lecture ──────────────────────────────────────────────────────

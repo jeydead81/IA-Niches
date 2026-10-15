@@ -1,6 +1,6 @@
 """Plafond de COÛT par run — garde-fou distinct du plafond d'ANALYSES.
 
-`PLAFOND_ANALYSES_MENSUEL` compte des runs, pas des dollars : une seule « analyse » sur
+`PLAFOND_NICHES_MENSUEL` compte des niches, pas des dollars : une seule « analyse » sur
 un rayon lent peut enchaîner des dizaines d'appels DataForSEO. Les bornes de volume
 (`MAX_RECHERCHES`…) bornent ce qui est DEMANDÉ, pas ce qui est DÉPENSÉ — un run borné à
 6 niches paie quand même 6 SERP + le batch ASIN + les tokens de l'ideator. Le plafond de
@@ -50,7 +50,7 @@ def test_le_plafond_par_defaut_vient_de_l_environnement(monkeypatch):
 
 
 def test_une_valeur_d_environnement_illisible_ne_casse_pas_le_run(monkeypatch):
-    """Même posture que PLAFOND_ANALYSES_MENSUEL : une saisie fautive retombe sur le
+    """Même posture que PLAFOND_NICHES_MENSUEL : une saisie fautive retombe sur le
     défaut, elle ne fait pas planter tous les runs."""
     monkeypatch.setenv("PLAFOND_USD_PAR_RUN", "beaucoup")
     cost = CostTracker()

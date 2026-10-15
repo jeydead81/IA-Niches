@@ -156,7 +156,7 @@ def test_le_client_ne_choisit_plus_son_identite(tmp_path, monkeypatch):
 
     # Le job, l'usage et l'historique sont tous imputés à MON compte, pas au user_id soufflé.
     assert [j["id"] for j in client.get("/api/jobs").json()] == [job_id]
-    assert client.get("/api/usage").json()["n_analyses"] == 1
+    assert client.get("/api/usage").json()["n_niches"] == 1
     assert client.get("/api/history", params={"niche": "tarot"}).json()["passages"]
     from history import NicheHistory
     assert not NicheHistory(tmp_path / "h.db").historique("quelqu-un-d-autre", "tarot")
@@ -167,14 +167,14 @@ def test_le_plafond_ne_se_contourne_plus_en_changeant_de_user_id(tmp_path, monke
     """Corollaire direct : avec un plafond à 1, le second job est refusé même si le client
     envoie une identité differente."""
     client, server = _client(monkeypatch, tmp_path)
-    monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", "1")
+    monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", "1")
     _inscrire(client)
     from models import ScoredNiche
     monkeypatch.setattr(server, "run_scout",
                         lambda **kw: [ScoredNiche(niche="tarot", global_score=7.1,
                                                   concurrence_mesuree=True)])
 
-    jid = client.post("/api/jobs", json={"type": "scout"}).json()["id"]
+    jid = client.post("/api/jobs", json={"type": "scout", "n_search": 1}).json()["id"]
     fin = time.time() + 10
     while time.time() < fin:
         if client.get(f"/api/jobs/{jid}").json()["statut"] in ("termine", "echec"):
@@ -226,7 +226,7 @@ def test_le_premier_compte_adopte_les_donnees_locales_s_il_le_demande(tmp_path, 
                           "reprendre_donnees_locales": True})
     assert r.status_code == 201 and r.json()["donnees_locales_reprises"] is True
     assert client.get("/api/history", params={"niche": "ancienne"}).json()["passages"]
-    assert client.get("/api/usage").json()["n_analyses"] == 1
+    assert client.get("/api/usage").json()["n_niches"] == 1
 
 
 def test_le_second_compte_n_adopte_rien(tmp_path, monkeypatch):

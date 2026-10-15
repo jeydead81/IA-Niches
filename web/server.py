@@ -16,6 +16,7 @@ Lancer :  uvicorn server:app --reload   (depuis le dossier web/)
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 import sys
 import tempfile
@@ -49,9 +50,12 @@ from fiction_taxonomy import load_taxonomy, valid_keys  # noqa: E402
 from fiction_ideator import ContraintesTrio  # noqa: E402
 import storage  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
+from cache import Cache  # noqa: E402
+import alerte_solde as _alerte  # noqa: E402
 import search_providers as _sp  # noqa: E402
 from devis import PLAFOND_DEPASSE, ventilation_max_estimee, verifier_devis  # noqa: E402
-from notification import notifier_fin_de_job
+from notification import (Notificateur, config_smtp, corps_reinitialisation,  # noqa: E402
+                          corps_verification, notifier_fin_de_job)
 from models import FictionNicheReport, LowContentScored, ScoredNiche  # noqa: E402
 from positioning_pdf import build_positioning_pdf  # noqa: E402
 from dossier_pdf import build_dossier_pdf  # noqa: E402
@@ -60,11 +64,12 @@ from jobs import JobStore, recuperer_orphelins  # noqa: E402
 from progression_publique import liste_publique, texte_public  # noqa: E402
 from annulation import Annulation, controle_du_travail  # noqa: E402
 import annulation as _annulation  # noqa: E402
-from usage import PlafondAtteint, UsageMeter  # noqa: E402
+from usage import FENETRE_GLISSANTE_S, PlafondAtteint, UsageMeter  # noqa: E402
 from history import NicheHistory  # noqa: E402
 from auth import (EmailDejaPris, EmailInvalide, IdentifiantsInvalides,  # noqa: E402
                   MAX_INSCRIPTIONS_PAR_CLIENT,
-                  MotDePasseFaible, SESSION_TTL_S, TropDeTentatives, UserStore)
+                  MotDePasseFaible, SESSION_TTL_S, TropDeTentatives, UserStore,
+                  normaliser_email)
 
 @asynccontextmanager
 async def _cycle_de_vie(app: FastAPI):
@@ -170,14 +175,16 @@ COOKIE_SESSION = "ia_niches_session"
 IDEES_PAR_RUN = 10
 MAX_IDEES = 30
 MAX_RECHERCHES = 20
-# 11 et non 20 : c'est le plus grand nombre de trios dont le devis (devis.py) tient sous
+# 9 et non 20 : c'est le plus grand nombre de trios dont le devis (devis.py) tient sous
 # PLAFOND_USD_PAR_RUN. Au-dela, le run atteindrait le plafond en cours de route et rendrait
 # un rapport PARTIEL a quelqu'un qui a paye son plafond entier -- ce qui se lit comme une
 # arnaque, pas comme une protection. La fiction est le seul scout concerne : elle paie
-# 12 ASIN ET une classification de quatrieme de couverture PAR NICHE.
+# 10 fiches ET une classification de quatrieme de couverture PAR NICHE.
+# Valait 11 jusqu'au 2026-10-05, calcule sur un devis qui sous-estimait le LLM d'un facteur
+# 2,5 (tarif d'introduction) : 11 trios coutent ~0,69 $ pour un plafond de 0,60 $.
 # test_devis.py tient cette borne et le plafond ensemble ; ne pas la relever sans relever
 # le plafond, sinon la promesse "jamais de rapport partiel" tombe en silence.
-MAX_NICHES_FICTION = 11
+MAX_NICHES_FICTION = 9
 # Meme borne que le non-fiction : le poste qui coute est le nombre de niches
 # CONFRONTEES a Amazon, pas le nombre de requetes lues dans l'arbre (gratuit).
 MAX_RECHERCHES_LC = 20
@@ -235,17 +242,34 @@ def _reserver_appel(user_id: str, type_: str) -> int:
 
 
 
-def _plafond_analyses_mensuel() -> int | None:
-    """Plafond mensuel glissant PAR utilisateur — garde-fou contre la queue de distribution
-    (l'utilisateur à 500 analyses), pas une grille tarifaire. Défaut prudent : pas de
-    plafond configuré -> illimité (mais journalisé, cf. usage.py)."""
-    raw = os.getenv("PLAFOND_ANALYSES_MENSUEL")
+def _plafond_niches_mensuel() -> int | None:
+    """Plafond mensuel glissant de NICHES, PAR utilisateur — garde-fou contre la queue de
+    distribution, pas une grille tarifaire. Défaut prudent : pas de plafond configuré ->
+    illimité (mais journalisé, cf. usage.py).
+
+    Compte des niches depuis le 2026-10-06 : la variable s'appelait PLAFOND_ANALYSES_MENSUEL et
+    comptait des runs. L'ancien nom fait REFUSER le démarrage en production
+    (`_verifier_config_prod`) : l'ignorer ouvrirait le service sans plafond, en silence."""
+    raw = os.getenv("PLAFOND_NICHES_MENSUEL")
     if not raw:
         return None
     try:
         return int(raw)
     except ValueError:
         return None
+
+
+# Un verdict ET un jeu de mots-clés par niche autorisée : c'est ce que l'offre inclut. Le plafond
+# de niches ne conditionne PLUS ces appels (un abonné qui a consommé ses niches doit lire leurs
+# verdicts) ; ce qui borne le LLM à la pièce, c'est ce plafond MENSUEL d'appels — le débit horaire
+# (`_reserver_appel`) n'est qu'un limiteur de rythme, 28 800 appels par mois le laissent passer.
+APPELS_PIECE_PAR_NICHE = 2
+APPELS_PIECE_MENSUEL_DEFAUT = 120     # sans plafond de niches (poste local) : un fusible, pas une offre
+
+
+def _appels_a_la_piece_max() -> int:
+    plafond = _plafond_niches_mensuel()
+    return APPELS_PIECE_PAR_NICHE * plafond if plafond is not None else APPELS_PIECE_MENSUEL_DEFAUT
 
 
 def _cookie_securise(request: Request) -> bool:
@@ -352,6 +376,11 @@ def _verifier_config_prod() -> None:
     apres avoir facture une analyse fausse."""
     if (os.getenv("APP_ENV") or "").strip().lower() != "prod":
         return
+    if (os.getenv("PLAFOND_ANALYSES_MENSUEL") or "").strip():
+        raise RuntimeError(
+            "PLAFOND_ANALYSES_MENSUEL a été renommée PLAFOND_NICHES_MENSUEL : elle compte des "
+            "NICHES depuis le 2026-10-06, plus des runs. Renommez-la (et recalculez la valeur) : "
+            "l'ignorer ouvrirait le service sans plafond, en silence.")
     src = (os.getenv("BSR_SOURCE") or "scrape").strip().lower()
     if src != "dataforseo":
         raise RuntimeError(
@@ -362,6 +391,115 @@ def _verifier_config_prod() -> None:
 
 
 _verifier_config_prod()
+
+
+# ── Courriels de compte : vérification d'adresse et mot de passe oublié ──────────────────────────
+MAX_COURRIELS_PAR_ADRESSE = 3         # par fenêtre de tentatives (15 min), adresse connue OU NON
+MAX_DEMANDES_OUBLI_PAR_CLIENT = 10    # par adresse IP : un seul poste ne balaie pas des adresses
+
+
+def _base_url() -> str | None:
+    return (os.getenv("BASE_URL") or "").strip().rstrip("/") or None
+
+
+def _courriel_possible() -> bool:
+    """Un lien suppose un serveur de courriel ET une adresse publique : sans la seconde, il ne
+    mènerait nulle part depuis une boîte de réception, et un lien mort est pire que pas de lien."""
+    return config_smtp(notifications=False) is not None and _base_url() is not None
+
+
+def _verification_obligatoire() -> bool:
+    """Exigée dès `APP_ENV=prod`, DÉDUITE comme le cookie `Secure` et l'hôte d'écoute : ce qui
+    s'oublie doit se déduire. Hors production il n'y a ni serveur de courriel ni personne à
+    vérifier (le poste de Baptiste)."""
+    return (os.getenv("APP_ENV") or "").strip().lower() == "prod"
+
+
+def _avertir_sans_destinataire_d_alerte() -> None:
+    """Hors de `_verifier_courriel_prod` : l'absence de destinataire ne justifie pas de refuser de
+    démarrer (le service marche sans), mais un exploitant qui croit être prévenu d'un compte vide et
+    ne l'est pas l'apprend par un client refusé. Un avertissement au démarrage, en production."""
+    if _verification_obligatoire() and _alerte.destinataire() is None:
+        _LOG.warning("ALERTE_SOLDE_EMAIL n'est pas défini : aucune alerte par e-mail ne sera envoyée "
+                     "quand le solde DataForSEO passera sous %.0f $.", _alerte.seuil_usd())
+
+
+def _verifier_courriel_prod() -> None:
+    """Refuse de démarrer en production sans de quoi envoyer un lien.
+
+    Sans serveur de courriel, la vérification serait exigée (`_verification_obligatoire`) mais
+    ne pourrait jamais aboutir : tous les comptes seraient verrouillés dehors, sans erreur ni
+    journal — le défaut muet que ce dépôt refuse partout (`DATA_DIR`, `BSR_SOURCE`)."""
+    if not _verification_obligatoire():
+        return
+    if config_smtp(notifications=False) is None:
+        raise RuntimeError(
+            "APP_ENV=prod exige SMTP_HOST (et SMTP_USER / SMTP_PASSWORD / SMTP_FROM selon le "
+            "serveur) : sans lui, aucun client ne peut vérifier son adresse ni récupérer son "
+            "mot de passe, et tous seraient verrouillés dehors sans erreur.")
+    if _base_url() is None:
+        raise RuntimeError(
+            "APP_ENV=prod exige BASE_URL (l'adresse publique du service, ex. "
+            "https://niches.example.fr) : les liens de vérification et de réinitialisation en "
+            "dépendent, et un lien relatif ne mène nulle part depuis une boîte de réception.")
+    if not _base_url().lower().startswith("https://"):
+        raise RuntimeError(
+            f"APP_ENV=prod exige un BASE_URL en https:// (reçu : « {_base_url()} »). Le lien de "
+            f"réinitialisation donne la main sur le compte : en http il voyagerait en clair, et sans "
+            f"schéma il ne mènerait nulle part.")
+    _avertir_sans_destinataire_d_alerte()
+
+
+_verifier_courriel_prod()
+
+
+def _envoyer_courriel_maintenant(destinataire: str, sujet: str, corps: str) -> None:
+    Notificateur(journal=lambda m: _LOG.warning(m), transactionnel=True).envoyer(
+        destinataire, sujet, corps)
+
+
+def _en_arriere_plan(fn, *args) -> None:
+    """Lance `fn(*args)` dans un fil détaché. Un seul endroit, que les tests remplacent par un appel
+    en ligne : sans cela on lirait un résultat avant que le travail de fond n'ait eu lieu."""
+    threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+def _envoyer_courriel(destinataire: str, sujet: str, corps: str) -> None:
+    """Envoi en ARRIÈRE-PLAN. Un SMTP lent (jusqu'à 20 s) ne doit pas retenir la réponse : ni pour
+    ne pas bloquer l'inscription, ni pour que le TEMPS de réponse de « mot de passe oublié » ne
+    dise pas si l'adresse existe. Ne lève jamais : `Notificateur.envoyer` rend un booléen."""
+    _en_arriere_plan(_envoyer_courriel_maintenant, destinataire, sujet, corps)
+
+
+def _envoyer_lien(compte, usage: str) -> bool:
+    """Crée un jeton de `usage` et envoie le lien à l'adresse du compte. False si le service ne
+    peut pas envoyer (poste local) : rien n'est créé en base dans ce cas."""
+    if not _courriel_possible():
+        return False
+    jeton = UserStore(_USERS_DB).creer_jeton_courriel(compte.user_id, usage)
+    # Le jeton va dans le FRAGMENT (`#`), jamais dans la requête (`?`) : un fragment n'est jamais
+    # envoyé au serveur, donc absent du journal d'accès d'uvicorn, de ceux d'un proxy et du Referer.
+    if usage == "verification":
+        sujet, corps = corps_verification(f"{_base_url()}/#verif={jeton}")
+    else:
+        sujet, corps = corps_reinitialisation(f"{_base_url()}/#reinit={jeton}")
+    _envoyer_courriel(compte.email, sujet, corps)
+    return True
+
+
+def _exiger_email_verifie(user_id: str) -> None:
+    """403 AVANT toute dépense quand l'adresse n'est pas vérifiée (production seulement).
+
+    Sans adresse vérifiée, « un compte de plus » est un plafond neuf : INSCRIPTIONS_OUVERTES
+    finira par s'ouvrir, et c'est le jour où cette porte doit déjà être fermée."""
+    if not _verification_obligatoire():
+        return
+    compte = UserStore(_USERS_DB).compte(user_id)
+    if compte is None or not compte.email_verifie:
+        raise HTTPException(
+            status_code=403,
+            detail="Confirmez votre adresse e-mail pour lancer des analyses : un lien vous a été "
+                   "envoyé à l'inscription. Rien n'a été lancé.")
 
 
 def _notifier(user_id: str, type_: str, statut: str, job_id: str,
@@ -408,17 +546,56 @@ _SOLDE_TTL_S = 30                 # une recharge du compte doit se voir en moins
 _SOLDE_CACHE = {"t": 0.0, "v": None}
 
 
-def _lire_solde() -> float | None:
+def _lire_solde(frais: bool = False) -> float | None:
     """Le solde du fournisseur, mis en cache `_SOLDE_TTL_S` secondes : le contrôle est gratuit
     mais lance une requête réseau, et une rafale de lancements ne doit pas en faire une chacun.
     None = illisible (cf. `search_providers.lire_solde`) ; mis en cache aussi, pour qu'un
-    fournisseur lent ne soit pas interrogé à chaque lancement."""
+    fournisseur lent ne soit pas interrogé à chaque lancement.
+
+    `frais=True` ignore le cache (lecture d'après-run). Toute lecture FRAÎCHE passe par l'alerte de
+    solde bas (`_alerter_solde`) : une lecture servie par le cache ne la relance pas."""
     maintenant = time.monotonic()
-    if _SOLDE_CACHE["t"] and maintenant - _SOLDE_CACHE["t"] < _SOLDE_TTL_S:
+    if not frais and _SOLDE_CACHE["t"] and maintenant - _SOLDE_CACHE["t"] < _SOLDE_TTL_S:
         return _SOLDE_CACHE["v"]
     valeur = _sp.lire_solde()
     _SOLDE_CACHE.update(t=maintenant, v=valeur)
+    _alerter_solde(valeur)
     return valeur
+
+
+def _envoyer_alerte(destinataire: str, sujet: str, corps: str) -> bool:
+    return Notificateur(journal=lambda m: _LOG.warning(m), transactionnel=True).envoyer(
+        destinataire, sujet, corps)
+
+
+def _traiter_alerte_solde(solde: float) -> None:
+    """Décide et envoie (voir `alerte_solde`). Tourne en ARRIÈRE-PLAN : un SMTP lent (jusqu'à 20 s)
+    ne doit retenir ni un lancement ni la fin d'un run. Ne lève jamais."""
+    try:
+        _alerte.verifier_et_alerter(solde, Cache(storage.base("df-cache.db")),
+                                    _envoyer_alerte, _LOG)
+    except Exception:  # noqa: BLE001 — une alerte ne doit jamais faire échouer ce qui l'appelle
+        _LOG.exception("alerte de solde impossible")
+
+
+def _alerter_solde(solde) -> None:
+    if solde is None:                 # illisible n'est pas bas (règle 3)
+        return
+    try:
+        _en_arriere_plan(_traiter_alerte_solde, solde)
+    except Exception:  # noqa: BLE001
+        _LOG.exception("alerte de solde impossible")
+
+
+def _alerter_apres_run() -> None:
+    """Relit le solde (gratuit, hors cache) UNE FOIS un run terminé : c'est le moment où le compte
+    peut passer sous le seuil, et sans cela l'alerte n'arriverait qu'au lancement SUIVANT — c'est-à-dire
+    quand un client est déjà refusé. Appelée par le fil du serveur et par le worker, après la
+    libération du créneau. Ne lève jamais."""
+    try:
+        _lire_solde(frais=True)
+    except Exception:  # noqa: BLE001
+        _LOG.exception("relecture du solde impossible")
 
 
 async def _verifier_solde(type_: str, params: dict) -> None:
@@ -443,22 +620,103 @@ async def _verifier_solde(type_: str, params: dict) -> None:
     raise HTTPException(status_code=503, detail=detail)
 
 
-def _verifier_plafond(user_id: str, n_analyses: int = 1) -> None:
-    """Vérifié AVANT de dépenser, sur TOUT chemin payant.
+def _solder_appel(ligne: int, cost, echec: bool) -> None:
+    """Solde une réservation à la pièce. Un appel qui a ÉCHOUÉ sans rien dépenser n'a rien livré :
+    sa place est libérée (sinon chaque panne du fournisseur consommait une place du plafond mensuel).
+    Ce qui a coûté, même sans rien livrer, reste compté — les jetons sont facturés dès la réponse."""
+    usd = cost.total_usd()
+    meter = UsageMeter(_USAGE_DB)
+    if echec and usd <= 0:
+        meter.liberer(ligne)
+    else:
+        meter.solder(ligne, usd)
 
-    `UsageMeter.autorise` n'avait qu'un seul site d'appel — `POST /api/jobs` — que
-    l'interface n'emprunte jamais. Le plafond ne protégeait donc que le chemin que
-    personne n'utilise, pendant que les quatre endpoints réellement utilisés dépensaient
-    librement. Toute nouvelle dépense doit passer par ici."""
-    usage = UsageMeter(_USAGE_DB, plafond_analyses=_plafond_analyses_mensuel())
-    if not usage.autorise(user_id, n_analyses=n_analyses):
-        raise HTTPException(status_code=429, detail="plafond mensuel atteint")
+
+def _verifier_plafond(user_id: str) -> None:
+    """Plafond MENSUEL des appels à la pièce (verdict, mots-clés, dossier avec mots-clés),
+    vérifié AVANT de dépenser. `POST /api/jobs` a le sien : la réservation de niches.
+
+    Ces appels n'ont longtemps eu pour garde qu'un débit de 40 par heure, soit 28 800 appels
+    par mois : 957 € de LLM possibles pour un abonné à quelques euros. Le plafond vaut deux
+    appels par niche autorisée (`_appels_a_la_piece_max`). Toute nouvelle dépense à la pièce
+    doit passer par ici."""
+    maxi = _appels_a_la_piece_max()
+    if UsageMeter(_USAGE_DB).compter(user_id, TYPES_A_LA_PIECE, FENETRE_GLISSANTE_S) >= maxi:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Limite mensuelle atteinte : {maxi} analyses détaillées (verdicts et "
+                   f"mots-clés) sur 30 jours glissants. Rien n'a été dépensé.")
 
 
 def _imputer(user_id: str, type_: str, cout_usd: float, n_analyses: int) -> None:
     """Impute une dépense DÉJÀ faite. Appelé même en cas d'échec du run : l'argent est
     parti, le compteur doit le dire."""
     UsageMeter(_USAGE_DB).enregistrer(user_id, type_, cout_usd, n_analyses=n_analyses)
+
+
+# ── Compteur de NICHES ──────────────────────────────────────────────────────────────────────────
+# (clé du volume, nom historique accepté, défaut du runner, borne serveur) — les MÊMES lectures que
+# `_run_*_job` et `_valider_volumes`, dont ce tableau ne doit jamais s'écarter.
+_VOLUMES = {
+    "scout": ("n_search", "search", 6, MAX_RECHERCHES),
+    "fiction": ("n_niches", None, 8, MAX_NICHES_FICTION),
+    "lowcontent": ("n_search", None, 6, MAX_RECHERCHES_LC),
+}
+
+
+def _niches_demandees(type_: str, params: dict) -> int:
+    """Le nombre de niches qu'un run RÉSERVE. Ne lève JAMAIS : appelée à la fin d'un run (parfois
+    depuis le worker), une exception ici ferait échouer un run payé pour un souci de comptabilité.
+    Les paramètres ont été validés à la création du travail ; une valeur illisible retombe sur le
+    défaut du runner, une valeur démesurée sur la borne."""
+    cle, alias, defaut, maxi = _VOLUMES.get(type_, (None, None, 1, 1))
+    params = params if isinstance(params, dict) else {}
+    brut = params.get(cle, params.get(alias, defaut) if alias else defaut) if cle else defaut
+    try:
+        n = int(brut)
+    except (TypeError, ValueError):
+        n = defaut
+    return max(1, min(n, maxi))
+
+
+def _niches_mesurees(type_: str, resultat) -> int:
+    """Combien de cartes d'un résultat portent une MESURE. Une niche non mesurée (recherche
+    Amazon tombée, rayon trop mince) n'a rien livré : la décompter se lirait comme un vol, et la
+    compter comme livrée comme une erreur de marché (règle 3)."""
+    if not isinstance(resultat, list):
+        return 0
+    if type_ == "fiction":
+        return sum(1 for r in resultat
+                   if isinstance(r, dict) and r.get("demand_matrix") not in NON_CONCLUANTES)
+    return sum(1 for r in resultat if isinstance(r, dict) and r.get("concurrence_mesuree") is True)
+
+
+def _regler_niches(user_id: str, type_: str, params: dict, statut: str, cout_usd: float,
+                   resultat=None, imputer=None) -> None:
+    """Ajuste le décompte à la FIN d'un run : la place a été prise au lancement pour toutes les
+    niches demandées, on rend celles qui n'ont rien livré. Ne lève JAMAIS (voir ci-dessus).
+
+    - `termine` : on garde les niches MESURÉES, avec un minimum de une — un run réussi a dépensé
+      (idéation), le rendre gratuit ouvrirait un robinet.
+    - `echec` / `annule` SANS DÉPENSE (`cout_usd` nul) : rien n'a coûté, rien n'a été livré, on
+      rend tout. C'est la décision du ROADMAP §2.4.6 : une panne à 0 $ ne coûte pas six niches.
+    - `echec` / `annule` AVEC dépense : la réservation reste entière. Arrêter ne rembourse rien,
+      sinon « lancer puis arrêter » serait gratuit.
+
+    Un ajustement est une ligne NÉGATIVE : il marche pareil depuis le serveur et depuis le worker,
+    qui ne partagent pas l'identifiant de la réservation. `imputer` laisse le worker passer le sien."""
+    try:
+        reservees = _niches_demandees(type_, params)
+        if statut == "termine":
+            a_garder = max(1, _niches_mesurees(type_, resultat))
+        elif cout_usd <= 0:
+            a_garder = 0
+        else:
+            return
+        if a_garder < reservees:
+            (imputer or _imputer)(user_id, type_, 0.0, -(reservees - a_garder))
+    except Exception as e:  # noqa: BLE001 — un run payé ne doit pas échouer sur sa comptabilité
+        _LOG.warning("décompte de niches non ajusté : %s", type(e).__name__)
 
 
 async def _corps_json(request: Request) -> dict:
@@ -575,7 +833,8 @@ async def api_inscription(request: Request, response: Response):
     if premier:
         _adopter_donnees_locales(compte.user_id)
     _poser_session(request, response, store.creer_session(compte.user_id))
-    return {"user_id": compte.user_id, "email": compte.email,
+    _envoyer_lien(compte, "verification")
+    return {"user_id": compte.user_id, "email": compte.email, "email_verifie": False,
             "donnees_locales_reprises": premier}
 
 
@@ -676,17 +935,145 @@ async def api_supprimer_compte(request: Request,
     return reponse
 
 
+_COURRIEL_INDISPONIBLE = "L'envoi de courriels n'est pas disponible sur cette instance."
+
+
+@app.post("/api/auth/verification", status_code=204)
+async def api_verification(request: Request) -> Response:
+    """Consomme un lien de vérification d'adresse. Sans session : on clique le lien depuis sa
+    boîte, parfois sur un autre appareil. 400 « invalide ou expiré » sans dire lequel."""
+    origine_sure(request)
+    body = await _corps_json(request)
+    if UserStore(_USERS_DB).verifier_email_par_jeton(body.get("jeton")) is None:
+        raise HTTPException(status_code=400, detail="lien invalide ou expiré")
+    return Response(status_code=204)
+
+
+@app.post("/api/auth/verification/renvoyer", status_code=204)
+async def api_renvoyer_verification(request: Request,
+                                    user_id: str = Depends(utilisateur_courant)) -> Response:
+    """Renvoie le lien de vérification. Sans effet pour une adresse déjà vérifiée."""
+    origine_sure(request)
+    store = UserStore(_USERS_DB)
+    compte = store.compte(user_id)
+    if compte is None:
+        raise HTTPException(status_code=401, detail="authentification requise")
+    if compte.email_verifie:
+        return Response(status_code=204)
+    if not _courriel_possible():
+        raise HTTPException(status_code=503, detail=_COURRIEL_INDISPONIBLE)
+    cle = f"verif:{user_id}"
+    if store.tentatives_recentes(cle) >= MAX_COURRIELS_PAR_ADRESSE:
+        raise HTTPException(status_code=429,
+                            detail="trop de demandes : réessayez dans quelques minutes")
+    store.noter_tentative(cle)
+    _envoyer_lien(compte, "verification")
+    return Response(status_code=204)
+
+
+def _traiter_oubli(adresse: str) -> None:
+    compte = UserStore(_USERS_DB).compte_par_email(adresse)
+    if compte is not None:
+        _envoyer_lien(compte, "reinitialisation")
+
+
+@app.post("/api/auth/mot-de-passe-oublie", status_code=202)
+async def api_mot_de_passe_oublie(request: Request):
+    """Envoie un lien de réinitialisation. La réponse est IDENTIQUE que l'adresse existe ou non :
+    dire « aucun compte à cette adresse » ferait de cette page un oracle d'énumération, qui
+    annulerait l'anti-énumération soignée de la connexion.
+
+    Les demandes sont comptées par adresse (connue ou non : un 429 qui ne frapperait que les
+    comptes existants serait lui-même un oracle) et par poste. L'envoi part en arrière-plan : le
+    temps de réponse ne dit rien non plus."""
+    origine_sure(request)
+    body = await _corps_json(request)
+    if not _courriel_possible():
+        # Un fait de CONFIGURATION, indépendant du compte : le dire n'énumère personne, et répondre
+        # « un lien vient d'être envoyé » ferait attendre un courriel qui ne viendra jamais.
+        raise HTTPException(status_code=503, detail=_COURRIEL_INDISPONIBLE)
+    reponse = {"ok": True,
+               "message": "Si un compte existe pour cette adresse, un lien vient de lui être envoyé."}
+    propre = normaliser_email(body.get("email"))
+    if not propre:
+        return reponse
+    store = UserStore(_USERS_DB)
+    par_adresse, par_poste = f"reinit:{propre}", f"reinit-ip:{_client_distant(request)}"
+    if (store.tentatives_recentes(par_adresse) >= MAX_COURRIELS_PAR_ADRESSE
+            or store.tentatives_recentes(par_poste) >= MAX_DEMANDES_OUBLI_PAR_CLIENT):
+        raise HTTPException(status_code=429,
+                            detail="trop de demandes : réessayez dans quelques minutes")
+    store.noter_tentative(par_adresse)
+    store.noter_tentative(par_poste)
+    # Tout ce qui dépend de l'EXISTENCE du compte (recherche, création du jeton, envoi) part en
+    # arrière-plan, pour une adresse connue comme pour une inconnue : sinon ces quelques millisecondes
+    # de plus faisaient du temps de réponse un oracle d'existence.
+    _en_arriere_plan(_traiter_oubli, propre)
+    return reponse
+
+
+@app.post("/api/auth/mot-de-passe-reinitialiser", status_code=204)
+async def api_reinitialiser_mot_de_passe(request: Request) -> Response:
+    """Pose un nouveau mot de passe avec un lien de réinitialisation. Ferme TOUTES les sessions
+    (voir `UserStore.reinitialiser_mot_de_passe_par_jeton`) : on ne reste pas connecté, il faut
+    se reconnecter avec le nouveau mot de passe. Un mot de passe refusé par la politique rend
+    400 SANS consommer le lien."""
+    origine_sure(request)
+    body = await _corps_json(request)
+    nouveau = body.get("nouveau")
+    if not isinstance(nouveau, str):
+        raise HTTPException(status_code=400, detail="« nouveau » doit être du texte")
+    try:
+        compte = UserStore(_USERS_DB).reinitialiser_mot_de_passe_par_jeton(body.get("jeton"),
+                                                                           nouveau)
+    except MotDePasseFaible as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if compte is None:
+        raise HTTPException(status_code=400, detail="lien invalide ou expiré")
+    reponse = Response(status_code=204)
+    reponse.delete_cookie(COOKIE_SESSION, path="/")
+    return reponse
+
+
 @app.get("/api/auth/moi")
 def api_moi(user_id: str = Depends(utilisateur_courant)):
     compte = UserStore(_USERS_DB).compte(user_id)
     if compte is None:
         raise HTTPException(status_code=401, detail="authentification requise")
-    return {"user_id": compte.user_id, "email": compte.email}
+    return {"user_id": compte.user_id, "email": compte.email,
+            "email_verifie": compte.email_verifie,
+            "verification_requise": _verification_obligatoire()}
 
 
 @app.get("/")
 def index() -> HTMLResponse:
-    return HTMLResponse((_HERE / "index.html").read_text(encoding="utf-8"))
+    # Le lien de vérification / de réinitialisation porte un JETON dans l'URL, et la page charge
+    # des polices tierces : sans cet en-tête, le navigateur enverrait l'adresse complète (jeton
+    # compris) en Referer. La page retire le jeton de l'URL dès qu'elle l'a lu ; ceci couvre
+    # l'instant entre le chargement et cette lecture.
+    return HTMLResponse((_HERE / "index.html").read_text(encoding="utf-8"),
+                        headers={"Referrer-Policy": "no-referrer"})
+
+
+_DOSSIER_POLICES = _HERE / "fonts"
+_NOM_POLICE = re.compile(r"^[a-z0-9\-]+\.woff2$")
+
+
+@app.get("/fonts/{nom}")
+def police(nom: str) -> Response:
+    """Sert une police de `web/fonts/` (Newsreader, DM Sans, JetBrains Mono ; licence SIL OFL 1.1).
+
+    SANS session, comme `/` : l'écran de connexion en a besoin avant qu'il y en ait une. Le nom est
+    validé par une liste blanche (`[a-z0-9-]+.woff2`) ET doit désigner un fichier existant du dossier :
+    aucun chemin n'est jamais construit à partir d'autre chose. Elles vivaient chez Google Fonts : chaque
+    visite envoyait l'adresse IP du visiteur à un tiers."""
+    if not _NOM_POLICE.match(nom):
+        raise HTTPException(status_code=404, detail="police inconnue")
+    chemin = _DOSSIER_POLICES / nom
+    if not chemin.is_file():
+        raise HTTPException(status_code=404, detail="police inconnue")
+    return Response(content=chemin.read_bytes(), media_type="font/woff2",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 def _sse(event: str, data) -> str:
@@ -913,6 +1300,7 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     sa progression/son résultat/son coût dans le magasin, pas dans une queue en mémoire liée
     à la connexion — fermer l'onglet ne l'arrête pas et ne perd pas l'argent déjà dépensé."""
     origine_sure(request)
+    _exiger_email_verifie(user_id)
     body = await _corps_json(request)
     type_ = body.get("type")
     runner = _JOB_RUNNERS.get(type_)
@@ -953,8 +1341,8 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     # paierait ses erreurs de frappe.
     try:
         ligne_usage = UsageMeter(
-            _USAGE_DB, plafond_analyses=_plafond_analyses_mensuel()
-        ).reserver_analyse(user_id, type_)
+            _USAGE_DB, plafond_analyses=_plafond_niches_mensuel()
+        ).reserver_analyse(user_id, type_, n_analyses=_niches_demandees(type_, params))
     except PlafondAtteint as e:
         raise HTTPException(status_code=429, detail=str(e))
 
@@ -974,13 +1362,15 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         # délai d'attente — les garderait aux frais de ceux qui font la queue. Le travail
         # est fini, la place doit être rendue.
         statut = "echec"
+        regle = False                  # le décompte de niches n'est réglé QU'UNE fois
         with _creneaux():
             job_store.start(job_id)           # sans effet sur un travail deja annule
             cost = CostTracker()
             if job_store.est_annule(job_id):
                 # Arrete pendant l'attente d'un creneau : rien n'a tourne, rien n'est depense.
-                # La reservation est soldee a zero, l'unite de plafond reste prise.
+                # La reservation est soldee a zero ET rendue (rien n'a coute, rien n'est livre).
                 UsageMeter(_USAGE_DB).solder(ligne_usage, 0.0)
+                _regler_niches(user_id, type_, params, "annule", 0.0)
                 statut = "annule"
             else:
                 # Point de controle PROPRE A CE FIL : l'arret demande par l'utilisateur est lu en
@@ -1008,6 +1398,10 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
                         job_store.enregistrer_cout_annule(job_id, b)
                         statut = "annule"
                     else:
+                        # Les niches non mesurees sont rendues AVANT « termine » : « termine »
+                        # doit impliquer « compte », comme pour le cout.
+                        _regler_niches(user_id, type_, params, "termine", b["usd"], resultat)
+                        regle = True
                         job_store.finish(job_id, resultat, b)
                         statut = "termine"
                 except Annulation:
@@ -1016,6 +1410,7 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
                     # « lancer puis arreter » serait gratuit.
                     b = cost.breakdown()
                     UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
+                    _regler_niches(user_id, type_, params, "annule", b["usd"])
                     job_store.enregistrer_cout_annule(job_id, b)
                     statut = "annule"
                 except Exception as e:  # noqa: BLE001 — l'argent déjà dépensé doit rester imputé
@@ -1024,6 +1419,8 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
                     # rembourse pas une unite de plafond, sinon un run qui echoue en boucle
                     # serait gratuit.
                     UsageMeter(_USAGE_DB).solder(ligne_usage, b["usd"])
+                    if not regle:              # `finish` a pu lever APRÈS le règlement « termine »
+                        _regler_niches(user_id, type_, params, "echec", b["usd"])
                     job_store.fail(job_id, _erreur_publique(e), cout=b)
                 finally:
                     _annulation.retirer()
@@ -1031,6 +1428,7 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
         # Hors du créneau. Ne lève jamais : le run est payé, compté et en base.
         if statut != "annule":          # l'auteur l'a arretee lui-meme : rien a lui annoncer
             _notifier(user_id, type_, statut, job_id)
+        _alerter_apres_run()            # le run a depense : le compte est peut-etre sous le seuil
 
     if _mode_jobs() == "worker":
         # Empile SEULEMENT. Sans ce garde, serveur ET worker executeraient le meme job :
@@ -1075,11 +1473,19 @@ def annuler_job(job_id: str, request: Request, user_id: str = Depends(utilisateu
     404 -- jamais 403 -- pour le travail d'un autre compte ; 409 si l'analyse est deja finie ;
     `origine_sure` comme tout ce qui modifie des donnees."""
     origine_sure(request)
-    issue = JobStore(_JOBS_DB).annuler(job_id, user_id)
+    store = JobStore(_JOBS_DB)
+    avant = store.get(job_id)
+    issue = store.annuler(job_id, user_id)
     if issue == "introuvable":
         raise HTTPException(status_code=404, detail="job inconnu")
     if issue == "deja_fini":
         raise HTTPException(status_code=409, detail="Cette analyse est déjà terminée.")
+    if (_mode_jobs() == "worker" and avant is not None and avant.user_id == user_id
+            and avant.statut == "en_attente"):
+        # Personne ne reprendra ce travail (`claim_next` ne prend que les `en_attente`) : rien n'a
+        # tourné, rien n'est dépensé, on rend ses niches. En mode thread c'est le fil du travail qui
+        # le fait quand il voit `est_annule` — ne jamais régler deux fois.
+        _regler_niches(user_id, avant.type, avant.params, "annule", 0.0)
     return Response(status_code=204)
 
 
@@ -1112,7 +1518,8 @@ def usage(user_id: str = Depends(utilisateur_courant)):
     """Consommation du mois glissant. Un plafond qui bloque sans que l'utilisateur ait pu
     voir où il en était serait vécu comme une panne, pas comme une limite."""
     r = UsageMeter(_USAGE_DB).resume(user_id)
-    return r.model_dump() if hasattr(r, "model_dump") else dict(r)
+    return {"n_niches": r.n_analyses, "plafond_niches": _plafond_niches_mensuel(),
+            "cout_usd": r.cout_usd}
 
 
 @app.get("/api/jobs/{job_id}/stream")
@@ -1172,6 +1579,25 @@ def _content_disposition(name: str) -> str:
     return f"attachment; filename=\"{ascii_name}.pdf\"; filename*=UTF-8''{utf8}"
 
 
+def _deja_fait(request: Request, user_id: str, champ: str) -> dict | None:
+    """Le résultat DÉJÀ rangé dans la niche que la page désigne (`?job=…&cle=…`), ou None.
+
+    Un jeu par niche : le bouton disparaît de la page une fois le résultat rangé, mais un double
+    clic, deux onglets ou un client qui rejoue l'API rappelleraient le modèle pour la même niche
+    — 0,037 $ chaque fois, plafonné seulement par le plafond mensuel. Le SERVEUR rend ce qu'il a
+    gardé : sans réservation, sans appel, sans coût. Lecture seule, travail de la session
+    seulement (`user_id` du cookie). Une lecture qui échoue retombe sur l'appel normal."""
+    job_id = (request.query_params.get("job") or "").strip()
+    if not job_id:
+        return None
+    cle = (request.query_params.get("cle") or "")[:300]
+    try:
+        return JobStore(_JOBS_DB).lire_annotation(job_id, user_id, cle, champ)
+    except Exception as e:  # noqa: BLE001 — voir docstring
+        _LOG.warning("rappel impossible (%s) : %s", champ, type(e).__name__)
+        return None
+
+
 def _conserver_dans_travail(request: Request, user_id: str, champ: str, valeur: dict) -> bool | None:
     """Range un resultat PAYE a la piece (verdict, mots-cles) dans le travail qui l'a vu naitre.
 
@@ -1200,6 +1626,7 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
     dans le body). Mesuré à 0,0283 $ pièce : les générer d'avance pour le top-3 pesait
     78 % du coût d'un run, pour des analyses que l'utilisateur ne lisait pas. On ne paie
     donc que la niche sur laquelle il clique."""
+    _exiger_email_verifie(user_id)
     body = await _corps_json(request)
     # Dispatch sur `type`, defaut "scout" pour compat : un client existant n'envoie pas ce
     # champ et doit continuer a fonctionner. UN SEUL endpoint pour les deux verdicts --
@@ -1227,22 +1654,29 @@ async def api_verdict(request: Request, user_id: str = Depends(utilisateur_coura
         # ceci tient pour un client hors page, et pour un résultat ancien dont la carte n'a pas
         # l'état « mesure mince ».
         raise HTTPException(status_code=400, detail=f"{raison} Rien n'a été dépensé.")
-    # Appel LLM facturé. Il ne CONSOMME pas d'unité d'analyse (il complète une analyse
-    # déjà payée, d'où n_analyses=0 à l'imputation) mais il EXIGE une marge : un compte au
-    # plafond ne doit pas pouvoir continuer à faire tourner le LLM indéfiniment.
+    # Déjà rangé dans cette niche : rendu tel quel, sans plafond, sans réservation, sans modèle.
+    # Fiction : `analyse`, jamais `verdict` (le TEXTE du moteur).
+    rappel = _deja_fait(request, user_id, "analyse" if type_ == "fiction" else "verdict")
+    if rappel is not None:
+        return {**rappel, "_deja_fait": True, "_conserve": True}
+    # Appel LLM facturé. Il ne CONSOMME aucune niche (il complète une analyse déjà payée, d'où
+    # n_analyses=0 à l'imputation) mais il compte dans le plafond MENSUEL d'appels à la pièce.
     _verifier_plafond(user_id)
     ligne = _reserver_appel(user_id, "verdict")
     cost = CostTracker()
     fabrique = {"lowcontent": generate_lowcontent_verdict, "fiction": generate_fiction_verdict,
                 "scout": generate_verdict}[type_]
+    echec = True
     try:
         verdict = fabrique(scored, on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+        echec = False
     except Exception as e:  # noqa: BLE001 — la réponse a pu être PAYÉE avant de lever
         raise HTTPException(status_code=502, detail=_erreur_publique(e)) from None
     finally:
         # Soldé même quand la lecture lève : les jetons sont facturés dès la réponse, et
-        # une réservation laissée à 0 $ effaçait la dépense d'usage.db (§5.29).
-        UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
+        # une réservation laissée à 0 $ effaçait la dépense d'usage.db (§5.29). Libérée si rien
+        # n'a été dépensé (`_solder_appel`).
+        _solder_appel(ligne, cost, echec)
     reponse = {**verdict.model_dump(), "_cout": cost.breakdown()}
     # Un résultat fiction porte DÉJÀ un `verdict` : le texte du moteur et ses réserves (rayon
     # incomplet, sous-genre fantôme). L'objet du modèle se range à côté, sous `analyse`.
@@ -1287,6 +1721,7 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
 
     Les candidats sont confirmés gratuitement par l'autocomplete Amazon : le coût imputé
     ne couvre que l'appel LLM, la vérification ne coûte rien."""
+    _exiger_email_verifie(user_id)
     body = await _corps_json(request)
     # Meme dispatch que /api/verdict : `type` absent = non-fiction (compat). En low-content la
     # requete, la categorie et les satellites vivent sur `scored.niche` (LowContentNiche) : c'est
@@ -1314,16 +1749,21 @@ async def api_kdp_keywords(request: Request, user_id: str = Depends(utilisateur_
         candidat, titre, contexte = scored.niche, scored.niche.niche, ""
     else:
         candidat, titre, contexte = scored, scored.niche, ""
+    rappel = _deja_fait(request, user_id, "mots_cles")        # un jeu par niche, voir `_deja_fait`
+    if rappel is not None:
+        return {**rappel, "_deja_fait": True, "_conserve": True}
     _verifier_plafond(user_id)
     ligne = _reserver_appel(user_id, "kdp_keywords")          # même raisonnement que /api/verdict
     cost = CostTracker()
+    echec = True
     try:
         mots = generer_mots_cles(candidat, titre=titre, contexte=contexte,
                                  on_usage=lambda i, o, m: cost.add_llm(m, i, o))
+        echec = False
     except Exception as e:  # noqa: BLE001 — même raisonnement que /api/verdict
         raise HTTPException(status_code=502, detail=_erreur_publique(e)) from None
     finally:
-        UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
+        _solder_appel(ligne, cost, echec)
     reponse = {**mots.model_dump(), "_cout": cost.breakdown()}
     conserve = _conserver_dans_travail(request, user_id, "mots_cles", mots.model_dump())
     if conserve is not None:
@@ -1342,6 +1782,8 @@ async def api_dossier(request: Request, user_id: str = Depends(utilisateur_coura
     doit pas depenser a l'insu de l'utilisateur. Les categories, elles, se deduisent des
     BSR deja collectes -- cout 0 $, donc cochees par defaut cote UI."""
     body = await _corps_json(request)
+    if body.get("inclure_mots_cles"):
+        _exiger_email_verifie(user_id)          # seul chemin payant du dossier
     type_ = (body.get("type") or "scout").strip().lower()
     if type_ not in ("scout", "lowcontent"):
         raise HTTPException(status_code=400,
@@ -1383,7 +1825,7 @@ async def api_dossier(request: Request, user_id: str = Depends(utilisateur_coura
         except Exception as e:  # noqa: BLE001 — le document reste utile sans eux (5.29)
             _LOG.warning("mots-cles indisponibles pour le dossier : %s", e)
             mots = None
-        UsageMeter(_USAGE_DB).solder(ligne, cost.total_usd())
+        _solder_appel(ligne, cost, mots is None)
 
     with tempfile.TemporaryDirectory() as d:
         chemin = build_dossier_pdf(scored, f"{d}/dossier.pdf", mots_cles=mots,
@@ -1433,8 +1875,12 @@ def _recuperer_travaux_interrompus(store: JobStore | None = None) -> int:
     if _mode_jobs() == "worker":
         return 0
     try:
-        return recuperer_orphelins(store or JobStore(_JOBS_DB),
-                                   journal=_LOG.info, prefixe="[serveur]")
+        return recuperer_orphelins(
+            store or JobStore(_JOBS_DB), journal=_LOG.info, prefixe="[serveur]",
+            # Un run coupé par une mise en ligne n'a rien livré et la faute n'est pas celle du client :
+            # ses niches lui sont rendues, sauf si un coût a été mesuré avant la coupure.
+            regler=lambda j: _regler_niches(j.user_id, j.type, j.params, "echec",
+                                            float((j.cout or {}).get("usd") or 0.0)))
     except Exception:  # noqa: BLE001 — le ménage ne doit jamais empêcher de démarrer
         _LOG.exception("récupération des travaux interrompus impossible")
         return 0

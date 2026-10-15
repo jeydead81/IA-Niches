@@ -46,7 +46,7 @@ def _client(monkeypatch, tmp_path, plafond=None, faux=None):
     from tests.conftest import isoler_bases, ouvrir_session
     isoler_bases(monkeypatch, server, tmp_path)
     if plafond is not None:
-        monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", str(plafond))
+        monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", str(plafond))
     faux = faux or _Client(_payload())
     monkeypatch.setattr("fiction_verdict._default_client", lambda: faux)
     c = TestClient(server.app, raise_server_exceptions=False)

@@ -198,7 +198,8 @@ return {appels, analyse: r.analyse && r.analyse.verdict, slot: slot.innerHTML,
 
 def test_une_limite_atteinte_se_dit_comme_une_limite():
     sortie = _jouer("""
-globalThis.fetch = async () => ({ok: false, status: 429, json: async () => ({detail: 'x'})});
+globalThis.fetch = async () => ({ok: false, status: 429, json: async () => ({detail:
+  "Limite mensuelle atteinte : 4 analyses détaillées (verdicts et mots-clés) sur 30 jours glissants. Rien n'a été dépensé."})});
 const r = """ + json.dumps(_rapport()) + """;
 await loadVerdictFic(r, carte, btn);
 return {texte: para.textContent, actif: !btn.disabled, analyse: r.analyse === undefined};

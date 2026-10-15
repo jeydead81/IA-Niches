@@ -114,11 +114,13 @@ def test_une_absence_de_classement_reste_a_trois_jours():
 
 def test_le_devis_a_dix_fiches_est_celui_a_douze_moins_deux_fiches_et_deux_classifications_par_niche(
         monkeypatch):
-    """Le seul écart entre les deux réglages, et il se calcule : 2 × (0,003 $ de fiche + 0,001 $ de
-    classification) par niche."""
-    from devis import _MODELES, cout_max_estime
+    """Le seul écart entre les deux réglages, et il se calcule : 2 × (0,003 $ de fiche + le coût
+    d'une classification, LU dans devis) par niche. La classification valait 0,001 $ avant que
+    le devis ne soit recalé sur les mesures du tarif standard (2026-10-05) : la figer ici
+    ferait échouer ce test à chaque recalage, sans rien prouver de plus."""
+    from devis import _LLM_CLASSIF_PAR_LIVRE, _MODELES, cout_max_estime
     a_dix = cout_max_estime("fiction", {"n_niches": 5})
     monkeypatch.setitem(_MODELES["fiction"], "asin_par_unite", 12)
     monkeypatch.setitem(_MODELES["fiction"], "classif_par_unite", 12)
     a_douze = cout_max_estime("fiction", {"n_niches": 5})
-    assert a_douze - a_dix == __import__("pytest").approx(5 * 2 * (0.003 + 0.001), abs=1e-3)
+    assert a_douze - a_dix == __import__("pytest").approx(5 * 2 * (0.003 + _LLM_CLASSIF_PAR_LIVRE), abs=1e-3)

@@ -5,7 +5,11 @@ rend 401 sans session. Chaque test de serveur doit donc ouvrir un compte. Le fai
 helper unique évite deux dérives : recopier la séquence d'inscription dans cinq fichiers, et
 surtout la tentation de désactiver l'authentification en test « pour simplifier » — ce qui
 reviendrait à ne plus jamais tester le chemin réel."""
+import atexit
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -14,6 +18,22 @@ _RACINE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_RACINE / "web"))
 
 MDP_TEST = "un-mot-de-passe-solide"
+
+# LES CINQ BASES NE SONT JAMAIS CELLES DU DÉPÔT, quel que soit le test (2026-10-06).
+#
+# `isoler_bases` redirige les chemins PAR TEST, et c'est insuffisant : un test qui lance un job
+# sans l'attendre laisse un fil détaché qui se termine APRÈS le test, quand le `monkeypatch` est
+# déjà défait — et le fil relit alors `server._USAGE_DB` : le vrai fichier. Le 2026-10-06, la suite
+# a ainsi écrit 18 lignes de règlement dans le vrai `usage.db` et 36 dans le vrai `history.db`
+# (même famille que les « 45 lignes fabriquées dans history.db » d'une session antérieure).
+#
+# `storage.data_dir()` lit DATA_DIR à CHAQUE appel : le poser ici, avant tout `import server`,
+# redirige les quatre constantes du serveur ET le `df-cache.db` des orchestrateurs, pour tous les
+# tests, y compris pour un fil qui survit à son test. `isoler_bases` garde son rôle (un dossier
+# neuf par test) ; ceci n'est que le filet.
+_BASES_DE_LA_SESSION = tempfile.mkdtemp(prefix="ia-niches-tests-")
+os.environ["DATA_DIR"] = _BASES_DE_LA_SESSION
+atexit.register(shutil.rmtree, _BASES_DE_LA_SESSION, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)
@@ -65,6 +85,15 @@ def ouvrir_inscriptions(monkeypatch) -> None:
     porte explicitement — ce qui rend la contrainte visible dans le test plutôt que de la
     contourner en douce depuis un helper partagé."""
     monkeypatch.setenv("INSCRIPTIONS_OUVERTES", "1")
+
+
+def verifier_email(server, user_id: str) -> None:
+    """Marque l'adresse d'un compte comme vérifiée, par le chemin RÉEL (un jeton, un lien consommé).
+
+    En production (`APP_ENV=prod`) un compte non vérifié ne lance rien : tout test qui passe en
+    production pour observer un message de production doit d'abord en avoir un de vérifié."""
+    magasin = server.UserStore(server._USERS_DB)
+    magasin.verifier_email_par_jeton(magasin.creer_jeton_courriel(user_id, "verification"))
 
 
 def ouvrir_session(client, email: str = "test@example.com") -> str:

@@ -44,8 +44,8 @@ moteurs d'analyse coexistent : non-fiction, fiction et low-content. Chacun combi
 
 L'application est **mono-page**, servie par un serveur local, et ne comporte **aucun
 traceur, aucun cookie publicitaire, aucune analytique tierce**. Une inspection exhaustive
-de l'unique fichier d'interface ne fait apparaître **qu'une seule ressource externe** : un
-import de polices Google Fonts (voir § 7.4).
+de l'unique fichier d'interface ne fait apparaître **aucune ressource externe chargée** : les
+polices de caractères sont servies par le service lui-même (voir § 7.4).
 
 ---
 
@@ -291,17 +291,12 @@ votre adresse IP.** Là encore, les appels partent du serveur.
 
 - Fournisseur : DataForSEO — [[A COMPLETER : entité contractante, adresse, et référence de l'accord de sous-traitance signé]]
 
-### 7.4 Google Fonts — polices de caractères
+### 7.4 Polices de caractères
 
-L'unique page de l'application importe deux familles de polices depuis
-`fonts.googleapis.com`. **C'est votre navigateur qui effectue cet appel, pas le serveur :
-votre adresse IP est donc transmise à Google**, ainsi que les informations habituellement
-véhiculées par une requête HTTP (agent utilisateur, en-tête `Referer`).
-
-C'est la seule requête que la page adresse à un tiers, et la seule circonstance où une
-donnée vous concernant quitte l'installation sans transiter par le serveur.
-
-- [[A COMPLETER : décider de la suite. Deux options : (a) héberger les fichiers de police localement, ce qui supprime purement et simplement cet appel et le problème juridique associé — la jurisprudence allemande (LG München I, 20/01/2022) a condamné l'appel dynamique à Google Fonts ; (b) le conserver et le mentionner ici. La rédaction ci-dessus est celle de l'option (b). Si l'option (a) est retenue, cette section doit être supprimée.]]
+Les trois familles de polices de l'interface (Newsreader, DM Sans et JetBrains Mono, sous
+licence SIL Open Font License 1.1) sont **hébergées par le service lui-même** et servies avec la
+page. **Votre navigateur n'adresse aucune requête à Google ni à un autre tiers pour les
+afficher** : votre adresse IP ne quitte donc pas l'installation de ce fait.
 
 ### 7.5 Amazon
 
@@ -380,20 +375,18 @@ l'application. Aucune sauvegarde n'est prévue par le code lui-même.
 
 ## 10. Transferts hors de l'Union européenne
 
-Deux sous-traitants au moins impliquent un transfert hors UE, et un troisième une
-transmission depuis votre navigateur :
+Deux sous-traitants au moins impliquent un transfert hors UE :
 
 | Destinataire | Ce qui part | Nature du transfert |
 |---|---|---|
 | Anthropic | Graine saisie, textes de livres Amazon, métriques | [[A COMPLETER : préciser l'entité contractante et le pays de traitement, et le mécanisme de transfert invoqué — clauses contractuelles types de la Commission, ou Data Privacy Framework si l'entité y est certifiée]] |
 | DataForSEO | Mots-clés et codes ASIN | [[A COMPLETER : idem — pays de traitement et mécanisme de transfert]] |
-| Google (Fonts) | Votre adresse IP, depuis votre navigateur | [[A COMPLETER : idem, ou suppression de ce transfert par l'hébergement local des polices, cf. § 7.4]] |
 
 Il faut souligner un point favorable : **aucune donnée d'identification vous concernant
 (e-mail, identifiant de compte) ne part vers Anthropic ni vers DataForSEO.** Ce qui leur
 est transmis, ce sont des mots-clés de recherche de livres et des données publiques
-Amazon. Le seul destinataire qui reçoive une donnée personnelle au sens strict est Google,
-et uniquement votre adresse IP, du fait de l'import de polices.
+Amazon. Aucune donnée personnelle ne part de votre navigateur vers un tiers : les polices de
+caractères sont servies par le service lui-même (§ 7.4).
 
 ---
 
@@ -575,9 +568,10 @@ Racine : C:/Users/pharma01/Desktop/O.S.C.A.R/OSCAR - Edition KDP - OBL/IA Niches
      -> aucun fichier de log applicatif n'est écrit sur disque par le code
 
 9. web/index.html
-   - l.8       : @import url('https://fonts.googleapis.com/css2?family=Fira+Code...
-                 &family=Fira+Sans...') — SEUL appel externe
-   - grep -o "https\?://..." sur tout le fichier : une seule URL distincte, celle ci-dessus
+   - polices : trois @font-face vers /fonts/*.woff2 (web/fonts/, servies par GET /fonts/{nom}),
+                 plus aucun appel externe (2026-10-15)
+   - grep -o "https\?://..." sur tout le fichier : aucune URL distincte hors liens amazon.fr/dp/
+     (tests/test_polices.py)
    - grep "script src|<img|<iframe|gtag|analytics|googletagmanager" : AUCUNE occurrence
      -> aucun traceur, aucune analytique tierce, aucune image distante
    - l.1393, 1699, 1722 : clés localStorage 'ia-niches-job-lowcontent',

@@ -1,9 +1,16 @@
 """usage.py — compteur d'usage par utilisateur + plafond (SQLite, même pattern que cache.py :
 connexion par appel + WAL, sûr en concurrence).
 
-Le compteur est un GARDE-FOU, pas une grille tarifaire (cf. plan SaaS 2026-07-21) : à
-30 analyses/mois la marge est de 88 %, le coût unitaire n'est pas le risque — le risque est
-la queue de distribution (un utilisateur à 500 analyses). Le plafond, quand il est configuré,
+UNITÉ : depuis le 2026-10-06 le compteur compte des NICHES, plus des runs. La colonne
+`n_analyses`, le champ `UsageResume.n_analyses` et le paramètre `plafond_analyses` gardent leur
+nom historique (le renommer imposerait de migrer la base) mais valent des niches : un run en
+réserve autant qu'il en demande, puis le serveur ajuste (ligne négative) à ce qu'il a réellement
+mesuré — `server._regler_niches`. Les appels à la pièce (verdict, mots-clés) valent 0.
+
+Le compteur est un GARDE-FOU, pas une grille tarifaire (cf. plan SaaS 2026-07-21) : le coût
+unitaire n'est pas le risque — le risque est la queue de distribution (un utilisateur à 500
+analyses ; marge à 30 analyses : voir CLAUDE.md §1, recalculée sur la bonne base le 2026-10-06).
+Le plafond, quand il est configuré,
 est donc PAR utilisateur et MENSUEL GLISSANT (un plafond cumulatif à vie bloquerait un client
 fidèle au bout de quelques mois) ; sans plafond configuré, l'usage reste illimité mais reste
 journalisé (transparence, jamais un silence sur la dépense)."""
@@ -121,6 +128,14 @@ class UsageMeter:
         with self._conn() as cx:
             cx.execute("UPDATE usage SET cout_usd=? WHERE id=?", (cout_usd, ligne_id))
 
+    def liberer(self, ligne_id: int) -> None:
+        """Retire une réservation à la pièce qui n'a RIEN coûté (`cout_usd` nul). Un appel qui échoue
+        avant de dépenser n'a rien livré : lui garder sa place faisait perdre à l'abonné une place du
+        plafond mensuel à chaque panne du fournisseur. Une réservation déjà soldée à plus de zéro
+        n'est jamais retirée (`AND cout_usd=0`) : ce qui a coûté reste compté."""
+        with self._conn() as cx:
+            cx.execute("DELETE FROM usage WHERE id=? AND cout_usd=0", (ligne_id,))
+
     def reserver_analyse(self, user_id: str, type: str, n_analyses: int = 1) -> int:
         """Verifie le plafond ET prend la place, dans UNE SEULE transaction.
 
@@ -148,9 +163,13 @@ class UsageMeter:
                         "WHERE user_id=? AND horodatage>=?", (user_id, cutoff)).fetchone()
                     if row[0] + n_analyses > self.plafond_analyses:
                         cx.execute("ROLLBACK")
+                        # Dit ce qui RESTE : « limite atteinte » laisserait croire à une panne,
+                        # alors qu'un volume plus petit passerait peut-être.
+                        reste = max(0, self.plafond_analyses - row[0])
                         raise PlafondAtteint(
-                            f"plafond mensuel atteint ({self.plafond_analyses} analyses "
-                            f"sur 30 jours glissants)")
+                            f"Plafond mensuel de {self.plafond_analyses} niches sur 30 jours "
+                            f"glissants : il vous en reste {reste}, cette analyse en demande "
+                            f"{n_analyses}. Rien n'a été lancé.")
                 cur = cx.execute(
                     "INSERT INTO usage (user_id, type, cout_usd, n_analyses, horodatage) "
                     "VALUES (?, ?, 0.0, ?, ?)",

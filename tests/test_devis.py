@@ -20,27 +20,68 @@ from devis import PLAFOND_DEPASSE, cout_max_estime, verifier_devis, volume_maxim
 
 # ── Le modèle colle-t-il au réel ? ─────────────────────────────────────────────
 
-@pytest.mark.parametrize("type_,params,attendu,source", [
-    # Scout non-fiction, 6 recherches (le défaut de `run_scout`), BSR par DataForSEO.
-    ("scout", {"n_search": 6}, 0.084, "calculé, tutoriel_pdf.COUTS"),
-    # Fiction 3 trios : le seul point RÉELLEMENT mesuré en live du dépôt.
-    ("fiction", {"n_niches": 3}, 0.153, "MESURÉ en live"),
-    ("fiction", {"n_niches": 8}, 0.409, "extrapolé"),
+@pytest.mark.parametrize("type_,params,attendu,tolerance,source", [
+    # Scout non-fiction, 6 recherches : LLM MESURÉ à 0,0383 $ (jobs.db, 2026-10-03, tarif
+    # standard de Sonnet depuis le 2026-08-31) + 6 SERP + 18 fiches BSR à 0,003 $ (production).
+    ("scout", {"n_search": 6}, 0.1103, 0.12, "calculé : LLM mesuré + 24 tâches"),
+    # Fiction 5 trios à 12 fiches : le point MESURÉ du 2026-10-05 (jobs.db) = 0,3295 $ dont
+    # 0,171 $ DataForSEO (57 appels) et 0,1585 $ LLM (31 486 jetons entrants, 4 269 sortants).
+    # Tolérance plus large : le devis ne suppose AUCUNE dédup entre niches (52 fiches payées
+    # sur 60 possibles), c'est le prix de la garantie « jamais de rapport partiel ».
+    ("fiction", {"n_niches": 5}, 0.3295, 0.20, "MESURÉ en live"),
 ])
-def test_le_modele_reproduit_les_mesures_du_depot(type_, params, attendu, source, monkeypatch):
+def test_le_modele_reproduit_les_mesures_du_depot(type_, params, attendu, tolerance, source,
+                                                  monkeypatch):
     """Un modèle qui ne retombe pas sur les chiffres mesurés refuserait des runs au
-    hasard. Tolérance 12 % : le devis vise le PIRE cas, donc il doit majorer un peu.
+    hasard. Le devis vise le PIRE cas, donc il doit majorer un peu — jamais sous-estimer.
 
     Les mesures fiction ont été prises à 12 fiches par niche ; le défaut est 10 depuis le
     2026-10-05 (décision de Baptiste). Le modèle doit les retrouver PARAMÉTRÉ à 12 : c'est ce
-    qui prouve qu'il suit la réalité, et non son réglage du jour."""
+    qui prouve qu'il suit la réalité, et non son réglage du jour.
+
+    Les anciens points (scout 0,084 $, fiction 0,153 $ / 0,409 $) datent du tarif
+    d'introduction de Sonnet, terminé le 31/08/2026 : le LLM coûte 1,5 fois plus depuis, et
+    le devis le sous-estimait d'un facteur 2,3 à 2,6 sur la fiction."""
     if type_ == "fiction":
         from devis import _MODELES
         monkeypatch.setitem(_MODELES["fiction"], "asin_par_unite", 12)
         monkeypatch.setitem(_MODELES["fiction"], "classif_par_unite", 12)
     estime = cout_max_estime(type_, params)
-    assert estime == pytest.approx(attendu, rel=0.12), f"{source} : {attendu} $"
+    assert estime == pytest.approx(attendu, rel=tolerance), f"{source} : {attendu} $"
     assert estime >= attendu * 0.95, "le devis ne doit jamais SOUS-estimer"
+
+
+@pytest.mark.parametrize("type_,params,llm_mesure,source", [
+    ("scout", {"n_search": 6}, 0.0383, "jobs.db 2026-10-03, 2 235 jetons entrants, 2 107 sortants"),
+    ("scout", {"n_search": 3}, 0.0390, "jobs.db 2026-10-02"),
+    ("lowcontent", {"n_search": 3}, 0.0564, "jobs.db 2026-10-02 (le plus cher des trois runs)"),
+    ("lowcontent", {"n_search": 6}, 0.0504, "jobs.db 2026-10-03"),
+    # Fiction : l'idéation seule vaut 0,0149 $ (4 runs échoués avant la classification) ;
+    # le reste du run mesuré, (0,1585 − 0,0149) / 52 livres, donne 0,00276 $ par livre.
+    ("fiction", {"n_niches": 5}, 0.1585, "jobs.db 2026-10-05, 52 livres classés"),
+])
+def test_la_part_llm_du_devis_ne_sous_estime_aucun_run_mesure(type_, params, llm_mesure, source,
+                                                              monkeypatch):
+    """La part LLM était une constante unique de 0,012 $ pour les trois moteurs, calée sur
+    le tarif d'introduction. Mesuré : le non-fiction coûte 0,038 $ d'idéation à lui seul, le
+    low-content 0,05 $. Un devis qui sous-estime laisse passer un run que le plafond de 0,60 $
+    coupera en route — le rapport partiel facturé que tout ce module existe pour éviter."""
+    from devis import _MODELES, ventilation_max_estimee
+    if type_ == "fiction":                       # mesuré à 12 fiches, réglage du jour : 10
+        monkeypatch.setitem(_MODELES["fiction"], "asin_par_unite", 12)
+        monkeypatch.setitem(_MODELES["fiction"], "classif_par_unite", 12)
+    llm = ventilation_max_estimee(type_, params)["llm_usd"]
+    assert llm >= llm_mesure * 0.99, f"{source} : le devis annonce {llm:.4f} $ de LLM"
+    assert llm <= llm_mesure * 1.6, "le devis ne doit pas non plus gonfler sans mesure"
+
+
+def test_le_devis_lit_aussi_le_nom_historique_du_volume_non_fiction():
+    """`POST /api/jobs` accepte `search` comme `n_search` (§5.22). Le devis ne lisait que
+    `n_search` : un client envoyant `search: 20` était devisé pour 6 recherches et lancé pour
+    20. Le plafond par run restait le filet, mais le devis est censé refuser AVANT."""
+    assert (cout_max_estime("scout", {"search": 20})
+            == cout_max_estime("scout", {"n_search": 20})
+            > cout_max_estime("scout", {}))
 
 
 def test_le_devis_croit_avec_le_volume():

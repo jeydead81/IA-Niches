@@ -57,12 +57,16 @@ def _vrai(v: str | None) -> bool:
     return (v or "").strip().lower() in ("1", "true", "yes", "oui")
 
 
-def config_smtp() -> ConfigSMTP | None:
+def config_smtp(notifications: bool = True) -> ConfigSMTP | None:
     """`None` tant que les DEUX conditions ne sont pas réunies : le drapeau et l'hôte.
 
     Poser un hôte SMTP dans le `.env` n'est pas consentir à écrire aux utilisateurs, et
-    poser le drapeau sans hôte n'est pas une configuration."""
-    if not _vrai(os.getenv("NOTIFICATIONS_EMAIL")):
+    poser le drapeau sans hôte n'est pas une configuration.
+
+    `notifications=False` : les courriels de COMPTE (lien de vérification, mot de passe oublié)
+    ne demandent que l'hôte. Ce ne sont pas des notifications qu'on active par goût : sans
+    eux, un compte ne peut pas être vérifié ni récupéré. Deux politiques distinctes."""
+    if notifications and not _vrai(os.getenv("NOTIFICATIONS_EMAIL")):
         return None
     hote = (os.getenv("SMTP_HOST") or "").strip()
     if not hote:
@@ -116,14 +120,51 @@ def corps_fin_de_job(type_: str, statut: str, job_id: str, base_url: str | None 
     return sujet, "\n".join(lignes)
 
 
+def corps_verification(lien: str) -> tuple[str, str]:
+    """(sujet, corps) du lien de vérification d'adresse. Ne porte QUE le lien : jamais le mot de
+    passe, jamais d'analyse (règle 2 du module)."""
+    return ("IA-Niches : confirmez votre adresse e-mail",
+            "\n".join([
+                "Bienvenue sur IA-Niches.",
+                "",
+                "Pour lancer des analyses, confirmez que cette adresse est bien la vôtre :",
+                lien,
+                "",
+                "Ce lien est valable 48 heures et ne sert qu'une fois.",
+                "Si vous n'avez pas créé de compte, ignorez ce message : rien ne sera activé.",
+                "",
+                "IA-Niches"]))
+
+
+def corps_reinitialisation(lien: str) -> tuple[str, str]:
+    """(sujet, corps) du lien de réinitialisation. Une heure, une seule fois : il donne la main
+    sur le compte, et un message traîne dans une boîte, un historique, un relais."""
+    return ("IA-Niches : réinitialiser votre mot de passe",
+            "\n".join([
+                "Vous avez demandé à réinitialiser votre mot de passe IA-Niches.",
+                "",
+                "Choisissez-en un nouveau avec ce lien :",
+                lien,
+                "",
+                "Ce lien est valable 1 heure et ne sert qu'une fois.",
+                "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : "
+                "votre mot de passe actuel reste valable.",
+                "",
+                "IA-Niches"]))
+
+
 class Notificateur:
     """Instance par appel, jamais à l'import (§5.20) : la configuration est relue à chaque
-    envoi, et aucun socket n'est ouvert tant que rien n'est envoyé."""
+    envoi, et aucun socket n'est ouvert tant que rien n'est envoyé.
 
-    def __init__(self, smtp_factory=None, journal=None, config: ConfigSMTP | None = None):
+    `transactionnel=True` : courriel de COMPTE, qui ne demande pas l'opt-in des notifications."""
+
+    def __init__(self, smtp_factory=None, journal=None, config: ConfigSMTP | None = None,
+                 transactionnel: bool = False):
         self._factory = smtp_factory
         self._journal = journal or (lambda _m: None)
         self._config = config
+        self._transactionnel = transactionnel
 
     def _assainir(self, texte: str) -> str:
         """Retire le mot de passe de toute ligne journalisée. Une exception de
@@ -137,7 +178,7 @@ class Notificateur:
         destinataire = (destinataire or "").strip()
         if not destinataire:
             return False
-        self._config = self._config or config_smtp()
+        self._config = self._config or config_smtp(notifications=not self._transactionnel)
         c = self._config
         if c is None:
             return False

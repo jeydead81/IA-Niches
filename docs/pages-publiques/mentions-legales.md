@@ -119,7 +119,7 @@ L'interface affiche des **liens sortants vers les fiches produit d'Amazon.fr** (
 
 [[A COMPLETER : indiquer si ces liens sont ou seront des liens d'affiliation Amazon. Dans l'état actuel du code, les liens sont construits à partir du seul identifiant ASIN, sans identifiant d'affiliation ; si un tag d'affiliation est ajouté un jour, la mention d'affiliation devient obligatoire ici et dans l'interface.]]
 
-**Ressource externe chargée par la page.** L'interface charge une feuille de style de polices de caractères depuis le service **Google Fonts** (`fonts.googleapis.com`). C'est la seule ressource externe appelée par la page. Ce chargement implique que l'adresse IP du visiteur est transmise à ce service ; les conséquences en matière de données personnelles sont traitées dans la politique de confidentialité. En l'absence d'accès à ce service, l'interface reste fonctionnelle et retombe sur les polices du système.
+**Aucune ressource externe chargée par la page.** Les polices de caractères de l'interface sont hébergées par le service lui-même et servies avec la page : le navigateur du visiteur n'adresse aucune requête à un tiers pour les afficher.
 
 **Aucun traceur, aucune régie publicitaire, aucune mesure d'audience tierce** n'est présente dans l'interface.
 
@@ -222,9 +222,9 @@ ABSENCE DE TRACEUR ET DE MESURE D'AUDIENCE
     « gtag | analytics | matomo | <script src | googletagmanager | facebook | pixel | plausible »
     : AUCUNE occurrence.
 
-UNIQUE RESSOURCE EXTERNE CHARGEE PAR LA PAGE
-  web/index.html:8 — @import url('https://fonts.googleapis.com/css2?family=Fira+Code...
-                     &family=Fira+Sans...'). Seule URL externe du fichier.
+AUCUNE RESSOURCE EXTERNE CHARGEE PAR LA PAGE
+  web/index.html — trois @font-face vers /fonts/*.woff2 (web/fonts/, route GET /fonts/{nom}) ;
+                   plus aucun @import ni URL externe hors liens amazon.fr/dp/ (tests/test_polices.py).
 
 LIENS SORTANTS VERS AMAZON.FR AFFICHES DANS L'INTERFACE
   web/index.html:879       — <a href="' + esc(b.url) + '" target="_blank" rel="noopener">

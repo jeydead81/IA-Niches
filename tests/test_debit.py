@@ -6,7 +6,7 @@ complètent une analyse déjà comptée, et c'est juste. Mais la conséquence es
 ne bronche. Ils exigent une marge sous le plafond sans jamais la consommer.
 
 CE LIMITEUR EST UN GARDE-FOU, PAS UNE GRILLE TARIFAIRE. C'est la même posture que
-`PLAFOND_ANALYSES_MENSUEL`, dont le docstring dit déjà « garde-fou contre l'utilisateur à
+`PLAFOND_NICHES_MENSUEL` (anciennement PLAFOND_ANALYSES_MENSUEL), dont le docstring dit déjà « garde-fou contre l'utilisateur à
 500 analyses, pas une grille tarifaire ». Il n'engage aucune décision commerciale : quand
 le modèle d'abonnement existera, il le remplacera ou le laissera comme filet.
 

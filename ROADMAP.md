@@ -24,13 +24,11 @@ inline, zéro build), servi par `GET /`. **49 fichiers `.py`** dans `01-scripts/
 port se règlent par `HOST` / `PORT` (défauts inchangés : `127.0.0.1:8000`), lus uniquement sous
 `if __name__ == "__main__"`.
 
-**Une seule dépendance réseau tierce, toujours à corriger avant vente** : `index.html:8` importe
-deux polices depuis Google Fonts
-(`@import url('https://fonts.googleapis.com/css2?family=Fira+Code…')`). Hors ligne, derrière un
-pare-feu ou sur un serveur sans sortie Internet, `--mono` / `--sans` retombent sur les fallbacks
-système ; et chaque visite déclenche une requête vers un tiers. Vérifié le 2026-08-03 : le fichier
-ne contient que **deux** `https://`, celui-ci et le lien `amazon.fr/dp/` des ASIN. Embarquer les
-polices en base64, ou assumer les polices système, est un correctif de quelques minutes.
+**Dépendance réseau tierce : CORRIGÉE le 2026-10-15.** La page importait ses polices depuis Google
+Fonts (`@import`) : chaque visite envoyait l'adresse IP du visiteur à un tiers. Newsreader, DM Sans et
+JetBrains Mono (WOFF2 latin, SIL OFL 1.1) sont désormais dans `web/fonts/` et servies par
+`GET /fonts/{nom}` (`CLAUDE.md` §2.20 point 7). Le fichier ne contient plus que le lien `amazon.fr/dp/`
+des ASIN, qui est un clic et non un chargement ; `tests/test_polices.py` le verrouille.
 
 **Trois** moteurs indépendants :
 
@@ -327,6 +325,18 @@ et les **exécute** avec node.
 ---
 
 ## 2. Ce qui reste avant commercialisation
+
+> **Mise à jour 2026-10-06** (la source de vérité reste le code et `CLAUDE.md` §2.20) : livrés depuis
+> la rédaction de ce fichier — la **vérification d'adresse** et le **mot de passe oublié** (§2.1,
+> points 1 à 3), le **compteur en niches** avec règlement à la fin du run (l'incohérence §2.4.6 est
+> tranchée : un échec sans dépense ne consomme rien), le **plafond mensuel des appels à la pièce**,
+> le **devis recalé** (`MAX_NICHES_FICTION` 9) et la **session de tests isolée** des vraies bases.
+> Restent : le paiement (§2.3, écarté pour l'instant : l'essai envisagé est de 2 ou 3 recherches
+> offertes plutôt que 7 jours), l'administration des comptes, l'hébergement réel, les pages légales
+> servies, et la calibration. Les passages ci-dessous qui disent le contraire sont antérieurs.
+>
+> **Mise à jour 2026-10-15** : alerte de solde DataForSEO (§2.20 point 6) et **polices servies par le
+> service** (plus aucun appel à Google, §1.1).
 
 Classé par ordre de blocage. **Par quoi commencer, en une phrase : §2.2, la calibration du scoring
 low-content — c'est le seul chantier qui n'attend que Baptiste, et il tient en une demi-heure de

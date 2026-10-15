@@ -58,9 +58,12 @@ def _safe(s) -> str:
 # fausserait la tarification construite dessus.
 COUTS = [
     ("Scout non-fiction (BSR local, scrape)", "0,030 $", "0,021 $", "mesuré"),
-    ("Scout non-fiction (BSR serveur, payant)", "0,084 $", "0,048 $", "calculé"),
-    ("Scout fiction, 3 trios", "0,153 $", "0,113 $", "mesuré"),
-    ("Scout fiction, 8 trios", "0,409 $", "0,299 $", "extrapolé"),
+    # Recalé le 2026-10-06 : Sonnet est au tarif STANDARD (3/15 $) depuis le 2026-08-31, le LLM
+    # coûte 1,5 fois plus qu'aux mesures de juillet. Source : jobs.db, runs des 2026-10-03/05.
+    ("Scout non-fiction (BSR serveur, payant)", "0,110 $", "0,074 $", "calculé, LLM mesuré"),
+    ("Scout fiction, 5 trios, 12 fiches", "0,330 $", "0,244 $", "mesuré 2026-10-05"),
+    ("Scout fiction, 5 trios, 10 fiches (réglage actuel)", "0,28 $", "0,21 $", "calculé"),
+    ("Scout fiction, 9 trios (maximum du formulaire)", "0,56 $", "0,42 $", "extrapolé"),
     ("Analyse éditoriale (1 niche, à la demande)", "0,028 $", "0,028 $", "mesuré"),
     ("Sonde autocomplete", "0 $", "0 $", "gratuit"),
     ("PDF de positionnement", "0 $", "0 $", "local"),
@@ -79,8 +82,14 @@ ENV_VARS = [
                    "DÉPLOIEMENT : 'scrape' ne fonctionne pas depuis un serveur."),
     ("DATAFORSEO_PRIORITY", "2 = file rapide (défaut, 1-4 min). 1 = file standard, "
                             "moitié prix mais jusqu'à ~45 min."),
-    ("PLAFOND_ANALYSES_MENSUEL", "Plafond glissant par utilisateur. Vide = illimité "
-                                 "(mais l'usage reste journalisé)."),
+    ("ALERTE_SOLDE_EMAIL / ALERTE_SOLDE_USD", "Adresse prévenue (une fois par 24 h) quand le solde "
+                                              "DataForSEO passe sous le seuil (défaut 5 $). Sans "
+                                              "adresse, rien ne part et le journal le dit."),
+    ("PLAFOND_NICHES_MENSUEL", "Plafond glissant de NICHES par utilisateur (ancien nom : "
+                               "PLAFOND_ANALYSES_MENSUEL, qui comptait des runs ; l'ancien nom "
+                               "fait refuser le démarrage en production). Vide = illimité "
+                               "(mais l'usage reste journalisé). Les verdicts et mots-clés "
+                               "ont leur propre plafond : deux appels par niche autorisée."),
     ("IDEATOR_MODEL / VERDICT_MODEL", "Défaut claude-sonnet-5. Un identifiant sans le "
                                       "préfixe 'claude-' est absent de la grille de "
                                       "cost_tracker et donc facturé 0,00 $ : le coût "
@@ -130,8 +139,12 @@ ENV_VARS = [
 ]
 
 ENDPOINTS = [
-    ("GET  /", "L'interface web (page unique). SEUL endpoint servi sans session — sinon "
+    ("GET  /", "L'interface web (page unique). Servie sans session — sinon "
                "le formulaire de connexion serait inatteignable."),
+    ("GET  /fonts/{nom}", "Les trois polices de l'interface (WOFF2, licence SIL OFL), servies "
+                          "par le service lui-meme : aucune requete vers un tiers. Sans session "
+                          "(l'ecran de connexion en a besoin) ; seuls les noms [a-z0-9-]+.woff2 "
+                          "qui existent dans web/fonts/ sont servis."),
     ("POST /api/auth/inscription", "Cree un compte (e-mail + mot de passe) et ouvre une "
                                    "session. Le PREMIER compte cree reprend les donnees "
                                    "accumulees sous user_id='local' avant l'authentification."),
@@ -145,6 +158,22 @@ ENDPOINTS = [
                                     "volee ne doit pas verrouiller le proprietaire hors de "
                                     "son compte -- et referme les AUTRES sessions, la "
                                     "courante exceptee."),
+    ("POST /api/auth/verification", "Consomme le lien envoye par e-mail a l'inscription et "
+                                    "marque l'adresse verifiee. Sans session (on clique "
+                                    "depuis sa boite). 400 « invalide ou expire » sans dire "
+                                    "lequel."),
+    ("POST /api/auth/verification/renvoyer", "Renvoie le lien de verification (session "
+                                             "requise, 3 demandes par fenetre de 15 minutes). "
+                                             "Sans effet si l'adresse est deja verifiee."),
+    ("POST /api/auth/mot-de-passe-oublie", "Envoie un lien de reinitialisation. Reponse "
+                                           "IDENTIQUE que l'adresse existe ou non, demandes "
+                                           "comptees par adresse (connue ou non) et par poste : "
+                                           "sinon la page serait un oracle d'enumeration."),
+    ("POST /api/auth/mot-de-passe-reinitialiser", "Pose un nouveau mot de passe avec le lien "
+                                                  "(une heure, une seule fois). Ferme TOUTES les "
+                                                  "sessions et verifie l'adresse. Un mot de "
+                                                  "passe refuse par la politique ne consomme "
+                                                  "pas le lien."),
     ("POST /api/auth/compte/suppression", "Cloture le compte et efface ce qu'il a produit "
                                           "(travaux, consommation, historique). Exige le mot "
                                           "de passe : seule action irreversible du produit. "

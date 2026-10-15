@@ -22,7 +22,7 @@ def _client(monkeypatch, tmp_path, plafond=None):
     import server
     isoler_bases(monkeypatch, server, tmp_path)
     if plafond is not None:
-        monkeypatch.setenv("PLAFOND_ANALYSES_MENSUEL", str(plafond))
+        monkeypatch.setenv("PLAFOND_NICHES_MENSUEL", str(plafond))
     client = TestClient(server.app)
     uid = ouvrir_session(client)
     return client, server, uid
@@ -66,14 +66,14 @@ def test_un_run_impute_sa_consommation(tmp_path, monkeypatch):
     être atteint puisque rien ne montait."""
     client, server, uid = _client(monkeypatch, tmp_path)
     _sans_moteur(monkeypatch, server)
-    assert client.get("/api/usage").json()["n_analyses"] == 0
+    assert client.get("/api/usage").json()["n_niches"] == 0
     jid = client.post("/api/jobs", json={"type": "scout"}).json()["id"]
     fin = time.time() + 10
     while time.time() < fin:
         if client.get(f"/api/jobs/{jid}").json()["statut"] in ("termine", "echec"):
             break
         time.sleep(0.02)
-    assert client.get("/api/usage").json()["n_analyses"] == 1
+    assert client.get("/api/usage").json()["n_niches"] == 1
 
 
 # ── 2. Les paramètres de volume sont bornés ─────────────────────────────────────────
