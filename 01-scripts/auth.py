@@ -40,6 +40,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+import essai
+
 LONGUEUR_MIN_MOT_DE_PASSE = 12
 # Plafond de longueur. Sans lui, un mot de passe de plusieurs mégaoctets fait tourner
 # scrypt très longtemps, et quelques requêtes parallèles figent le serveur — sans
@@ -124,6 +126,8 @@ class Compte(BaseModel):
     cree_le: float = 0.0
     # Défaut PESSIMISTE : une adresse n'est vérifiée que lorsqu'un lien envoyé à elle a servi.
     email_verifie: bool = False
+    # Défaut PESSIMISTE aussi : un compte dont on ignore le plan est un essai, jamais un illimité.
+    plan: str = essai.PLAN_ESSAI
 
 
 def valider_mot_de_passe(mot_de_passe) -> str:
@@ -170,7 +174,11 @@ class UserStore:
                 " empreinte BLOB NOT NULL,"
                 " params TEXT NOT NULL,"          # durcir scrypt plus tard sans tout casser
                 " cree_le REAL NOT NULL,"
-                " email_verifie INTEGER NOT NULL DEFAULT 0"
+                " email_verifie INTEGER NOT NULL DEFAULT 0,"
+                # Le plan : `essai` (défaut — côté sûr), `abonne`, `illimite`. Voir essai.py.
+                " plan TEXT NOT NULL DEFAULT 'essai',"
+                " essai_recherches INTEGER NOT NULL DEFAULT 0,"   # recherches d'essai prises
+                " essai_id INTEGER"                              # ligne de `essais` (NULL = pas démarré)
                 ")"
             )
             # Base créée avant la colonne : ses comptes sont LOCAUX (aucune instance n'a jamais été
@@ -181,6 +189,24 @@ class UserStore:
             if "email_verifie" not in colonnes:
                 cx.execute("ALTER TABLE comptes ADD COLUMN email_verifie "
                            "INTEGER NOT NULL DEFAULT 1")
+            if "plan" not in colonnes:
+                self._migrer_plan(cx)
+            cx.execute(
+                "CREATE TABLE IF NOT EXISTS essais ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                # Empreintes HMAC (jamais l'adresse, le domaine ni le réseau en clair), SANS lien vers le
+                # compte : supprimer un compte ne doit pas rendre l'essai qu'il a consommé.
+                " identite TEXT NOT NULL,"
+                " domaine TEXT NOT NULL,"
+                " reseau TEXT,"                     # NULL : l'adresse du client ne prouvait rien
+                " demarre_le REAL NOT NULL"
+                ")"
+            )
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_essais_identite ON essais (identite)")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_essais_reseau ON essais (reseau, demarre_le)")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_essais_domaine ON essais (domaine, demarre_le)")
+            cx.execute("CREATE INDEX IF NOT EXISTS idx_essais_date ON essais (demarre_le)")
+            cx.execute("CREATE TABLE IF NOT EXISTS meta (cle TEXT PRIMARY KEY, valeur BLOB NOT NULL)")
             cx.execute(
                 "CREATE TABLE IF NOT EXISTS jetons_courriel ("
                 " empreinte TEXT PRIMARY KEY,"       # SHA-256, jamais le jeton en clair
@@ -217,6 +243,29 @@ class UserStore:
         cx.execute("PRAGMA journal_mode=WAL")
         return cx
 
+    @staticmethod
+    def _migrer_plan(cx) -> None:
+        """Base créée avant la colonne `plan` : ses comptes sont LOCAUX (aucune instance n'a jamais été
+        exposée), les passer en essai verrouillerait leur propriétaire dehors de son propre outil. Ils
+        deviennent `illimite` ; tout compte créé ensuite est `essai` (DEFAULT de la colonne).
+
+        ALTER et UPDATE dans UNE transaction, colonnes relues DEDANS : deux processus qui ouvrent la base
+        en même temps ne doivent pas faire repasser en illimité un compte d'essai créé entre-temps."""
+        cx.execute("BEGIN IMMEDIATE")
+        try:
+            colonnes = {r[1] for r in cx.execute("PRAGMA table_info(comptes)")}
+            if "plan" not in colonnes:
+                cx.execute("ALTER TABLE comptes ADD COLUMN plan TEXT NOT NULL DEFAULT 'essai'")
+                cx.execute("UPDATE comptes SET plan='illimite'")
+            if "essai_recherches" not in colonnes:
+                cx.execute("ALTER TABLE comptes ADD COLUMN essai_recherches INTEGER NOT NULL DEFAULT 0")
+            if "essai_id" not in colonnes:
+                cx.execute("ALTER TABLE comptes ADD COLUMN essai_id INTEGER")
+            cx.execute("COMMIT")
+        except Exception:
+            cx.execute("ROLLBACK")
+            raise
+
     # ── Mots de passe ───────────────────────────────────────────────────────────────
 
     def _deriver(self, mot_de_passe: str, sel: bytes,
@@ -230,7 +279,11 @@ class UserStore:
 
     # ── Comptes ─────────────────────────────────────────────────────────────────────
 
-    def creer_compte(self, email: str, mot_de_passe: str) -> Compte:
+    def creer_compte(self, email: str, mot_de_passe: str, plan: str = essai.PLAN_ESSAI) -> Compte:
+        """`plan` vaut `essai` sauf demande : c'est l'APPELANT qui décide qu'un compte est illimité (le
+        premier compte, par amorçage), jamais un défaut de ce magasin."""
+        if plan not in essai.PLANS:
+            raise ValueError(f"plan inconnu : « {plan} » (attendu : {', '.join(essai.PLANS)})")
         propre = normaliser_email(email)
         if not _EMAIL.match(propre):
             raise EmailInvalide("adresse e-mail invalide")
@@ -238,13 +291,13 @@ class UserStore:
 
         sel = secrets.token_bytes(16)          # sel PAR COMPTE : une table pré-calculée ne
         empreinte = self._deriver(mot_de_passe, sel)   # casse alors qu'un seul compte
-        compte = Compte(user_id=uuid.uuid4().hex, email=propre, cree_le=self.now())
+        compte = Compte(user_id=uuid.uuid4().hex, email=propre, cree_le=self.now(), plan=plan)
         params = f"scrypt:{SCRYPT_N}:{SCRYPT_R}:{SCRYPT_P}"
         try:
             with self._conn() as cx:
                 cx.execute("INSERT INTO comptes (user_id, email, sel, empreinte, params, "
-                           "cree_le, email_verifie) VALUES (?, ?, ?, ?, ?, ?, 0)",
-                           (compte.user_id, propre, sel, empreinte, params, compte.cree_le))
+                           "cree_le, email_verifie, plan) VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
+                           (compte.user_id, propre, sel, empreinte, params, compte.cree_le, plan))
         except sqlite3.IntegrityError as e:
             raise EmailDejaPris(f"un compte existe déjà pour « {propre} »") from e
         return compte
@@ -305,7 +358,7 @@ class UserStore:
                 "trop de tentatives de connexion — réessayez dans quelques minutes")
         with self._conn() as cx:
             ligne = cx.execute(
-                "SELECT user_id, sel, empreinte, params, cree_le, email_verifie "
+                "SELECT user_id, sel, empreinte, params, cree_le, email_verifie, plan "
                 "FROM comptes WHERE email=?", (propre,)).fetchone()
 
         if ligne is None:
@@ -316,7 +369,7 @@ class UserStore:
             self._noter_tentative(self._cle_connexion(propre))
             return None
 
-        user_id, sel, empreinte, params, cree_le, verifie = ligne
+        user_id, sel, empreinte, params, cree_le, verifie, plan = ligne
         n, r, p = _lire_params(params)
         candidat = self._deriver(mot_de_passe or "", sel, n=n, r=r, p=p)
         # compare_digest et non « == » : une comparaison qui s'arrête au premier octet
@@ -325,14 +378,29 @@ class UserStore:
             self._noter_tentative(self._cle_connexion(propre))
             return None
         self._oublier_tentatives(self._cle_connexion(propre))
-        return Compte(user_id=user_id, email=propre, cree_le=cree_le, email_verifie=bool(verifie))
+        return Compte(user_id=user_id, email=propre, cree_le=cree_le, email_verifie=bool(verifie),
+                      plan=plan)
 
     def compte(self, user_id: str) -> Compte | None:
         with self._conn() as cx:
-            ligne = cx.execute("SELECT user_id, email, cree_le, email_verifie FROM comptes "
+            ligne = cx.execute("SELECT user_id, email, cree_le, email_verifie, plan FROM comptes "
                                "WHERE user_id=?", (user_id,)).fetchone()
         return (Compte(user_id=ligne[0], email=ligne[1], cree_le=ligne[2],
-                       email_verifie=bool(ligne[3])) if ligne else None)
+                       email_verifie=bool(ligne[3]), plan=ligne[4]) if ligne else None)
+
+    def plan_de(self, user_id: str) -> str | None:
+        """Le plan d'un compte, ou None s'il n'existe pas."""
+        with self._conn() as cx:
+            ligne = cx.execute("SELECT plan FROM comptes WHERE user_id=?", (user_id,)).fetchone()
+        return ligne[0] if ligne else None
+
+    def definir_plan(self, user_id: str, plan: str) -> None:
+        """Change le plan d'un compte. C'est le point d'entrée du futur paiement (un webhook posera
+        `abonne`), et de l'administration à la main. Ne touche pas aux compteurs d'essai."""
+        if plan not in essai.PLANS:
+            raise ValueError(f"plan inconnu : « {plan} » (attendu : {', '.join(essai.PLANS)})")
+        with self._conn() as cx:
+            cx.execute("UPDATE comptes SET plan=? WHERE user_id=?", (plan, user_id))
 
     def compte_par_email(self, email) -> Compte | None:
         """Le compte d'une adresse (casse et espaces ignorés), ou None. Sert à la demande de
@@ -396,6 +464,146 @@ class UserStore:
             cx.execute("DELETE FROM comptes WHERE user_id=?", (compte.user_id,))
             cx.execute("DELETE FROM tentatives WHERE email=?", (self._cle_connexion(compte.email),))
         return compte.user_id
+
+    # ── Essai gratuit (règles : essai.py) ───────────────────────────────────────────
+
+    def _cle_empreinte(self) -> bytes:
+        """La clé des empreintes d'essai, tirée au hasard UNE fois et rangée dans la base. Un SHA-256 nu
+        d'une adresse se retrouve en testant une liste d'adresses : avec une clé que la base seule ne livre
+        pas à qui lit ailleurs une copie, il faut aussi la clé. (Quiconque lit CETTE base lit les deux : ce
+        n'est pas un coffre, c'est de la pseudonymisation — l'adresse ne traîne pas en clair, c'est tout.)"""
+        with self._conn() as cx:
+            cx.execute("INSERT OR IGNORE INTO meta (cle, valeur) VALUES ('empreinte', ?)",
+                       (secrets.token_bytes(32),))
+            return bytes(cx.execute("SELECT valeur FROM meta WHERE cle='empreinte'").fetchone()[0])
+
+    def _empreinte(self, nature: str, valeur: str, cle: bytes | None = None) -> str:
+        """HMAC-SHA256 de `valeur`, séparé par `nature` : la même chaîne n'a pas la même empreinte comme
+        identité, domaine ou réseau."""
+        cle = cle or self._cle_empreinte()
+        return hmac.new(cle, f"{nature}\x00{valeur}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+    def reserver_recherche_essai(self, user_id: str, client: str | None = None,
+                                 par_jour_max: int | None = None):
+        """Prend UNE des deux recherches d'essai, ATOMIQUEMENT. Rend None pour un compte qui n'est pas en
+        essai (rien à compter ni à refuser).
+
+        La première recherche DÉMARRE l'essai : c'est là, et seulement là, qu'on juge l'identité, le domaine, le
+        réseau et le plafond global du jour. Un compte créé et jamais utilisé ne pèse sur personne.
+
+        `BEGIN IMMEDIATE` prend le verrou d'écriture AVANT de compter, comme `UsageMeter.reserver_analyse` : sans
+        lui, vingt comptes qui démarrent ensemble lisent tous « 2 essais aujourd'hui » et passent tous. Les
+        empreintes (qui lisent la base) sont calculées AVANT, hors transaction.
+
+        Lève `EssaiEpuise`, `EssaiRefuse` ou `QuotaJournalier` ; rien n'est alors consommé."""
+        if par_jour_max is None:
+            par_jour_max = essai.essais_par_jour_max()
+        with self._conn() as cx:
+            ligne = cx.execute("SELECT email, plan FROM comptes WHERE user_id=?", (user_id,)).fetchone()
+        if ligne is None or ligne[1] != essai.PLAN_ESSAI:
+            return None
+        email = ligne[0]
+        identite_claire, dom = essai.identite_courriel(email), essai.domaine(email)
+        reseau = essai.empreinte_reseau(client)
+        cle = self._cle_empreinte()
+        h_identite = self._empreinte("identite", identite_claire, cle)
+        # Le domaine qu'on ACHÈTE, pas l'hôte : `x1.mondomaine.fr`, `x2.mondomaine.fr`… sont un seul domaine.
+        h_domaine = self._empreinte("domaine", essai.domaine_enregistrable(dom), cle)
+        h_reseau = self._empreinte("reseau", reseau, cle) if reseau else None
+        maintenant = self.now()
+
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                ligne = cx.execute("SELECT plan, essai_recherches, essai_id FROM comptes "
+                                   "WHERE user_id=?", (user_id,)).fetchone()
+                if ligne is None or ligne[0] != essai.PLAN_ESSAI:
+                    cx.execute("ROLLBACK")
+                    return None
+                _, prises, essai_id = ligne
+                if prises >= essai.ESSAI_RECHERCHES:
+                    raise essai.EssaiEpuise("les recherches d'essai sont toutes utilisées")
+                demarre_ici = False
+                if essai_id is None:
+                    cx.execute("DELETE FROM essais WHERE demarre_le<?",
+                               (maintenant - essai.CONSERVATION_IDENTITE_S,))
+                    depuis = maintenant - essai.FENETRE_ESSAI_S
+                    # Minimisation : le réseau et le domaine ne servent qu'à la fenêtre de 30 jours, l'identité
+                    # seule est gardée un an. Purge opportuniste (comme `tentatives`) : elle a lieu à chaque départ.
+                    cx.execute("UPDATE essais SET domaine='', reseau=NULL WHERE demarre_le<? "
+                               "AND (domaine<>'' OR reseau IS NOT NULL)", (depuis,))
+                    if (not identite_claire or essai.est_jetable(dom)
+                            or cx.execute("SELECT 1 FROM essais WHERE identite=?",
+                                          (h_identite,)).fetchone()
+                            or (h_reseau is not None and cx.execute(
+                                "SELECT COUNT(*) FROM essais WHERE reseau=? AND demarre_le>=?",
+                                (h_reseau, depuis)).fetchone()[0] >= essai.ESSAI_PAR_RESEAU)
+                            or (not essai.est_courant(dom) and cx.execute(
+                                "SELECT COUNT(*) FROM essais WHERE domaine=? AND demarre_le>=?",
+                                (h_domaine, depuis)).fetchone()[0] >= essai.ESSAI_PAR_DOMAINE)):
+                        raise essai.EssaiRefuse("pas d'essai pour cette adresse ou ce réseau")
+                    # Le plafond du jour vient APRÈS : « revenez demain » à quelqu'un qui n'aura jamais
+                    # droit à l'essai serait un mensonge qui le ferait revenir.
+                    if cx.execute("SELECT COUNT(*) FROM essais WHERE demarre_le>=?",
+                                  (maintenant - essai.FENETRE_JOUR_S,)).fetchone()[0] >= par_jour_max:
+                        raise essai.QuotaJournalier("plafond de nouveaux essais atteint pour aujourd'hui")
+                    cur = cx.execute("INSERT INTO essais (identite, domaine, reseau, demarre_le) "
+                                     "VALUES (?, ?, ?, ?)", (h_identite, h_domaine, h_reseau, maintenant))
+                    cx.execute("UPDATE comptes SET essai_id=? WHERE user_id=?",
+                               (cur.lastrowid, user_id))
+                    demarre_ici = True
+                cx.execute("UPDATE comptes SET essai_recherches=essai_recherches+1 WHERE user_id=?",
+                           (user_id,))
+                cx.execute("COMMIT")
+                return essai.ReservationEssai(demarre_ici=demarre_ici)
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
+
+    def rendre_recherche_essai(self, user_id: str, annuler_demarrage: bool = False) -> None:
+        """Redonne UNE recherche : le lancement a échoué avant de livrer quoi que ce soit (même règle que
+        les niches : ce qui n'a rien coûté ni rien rendu ne se décompte pas). Sans effet hors essai, jamais
+        sous zéro.
+
+        `annuler_demarrage` : le lancement a échoué avant qu'AUCUNE analyse ne parte, et c'est ce même appel
+        qui avait démarré l'essai — on défait aussi le démarrage, pour qu'un refus ne pèse ni sur le plafond
+        du jour ni sur l'identité. Après une analyse partie, l'identité reste consommée."""
+        with self._conn() as cx:
+            cx.isolation_level = None
+            cx.execute("BEGIN IMMEDIATE")
+            try:
+                ligne = cx.execute("SELECT plan, essai_recherches, essai_id FROM comptes "
+                                   "WHERE user_id=?", (user_id,)).fetchone()
+                if ligne is None or ligne[0] != essai.PLAN_ESSAI:
+                    cx.execute("ROLLBACK")
+                    return
+                _, prises, essai_id = ligne
+                prises = max(0, prises - 1)
+                if annuler_demarrage and essai_id is not None and prises == 0:
+                    cx.execute("DELETE FROM essais WHERE id=?", (essai_id,))
+                    cx.execute("UPDATE comptes SET essai_id=NULL, essai_recherches=0 WHERE user_id=?",
+                               (user_id,))
+                else:
+                    cx.execute("UPDATE comptes SET essai_recherches=? WHERE user_id=?",
+                               (prises, user_id))
+                cx.execute("COMMIT")
+            except Exception:
+                cx.execute("ROLLBACK")
+                raise
+
+    def situation_essai(self, user_id: str) -> dict | None:
+        """Ce qu'il reste d'un essai, pour l'afficher. None hors essai."""
+        with self._conn() as cx:
+            ligne = cx.execute("SELECT plan, essai_recherches, essai_id FROM comptes "
+                               "WHERE user_id=?", (user_id,)).fetchone()
+        if ligne is None or ligne[0] != essai.PLAN_ESSAI:
+            return None
+        return {"recherches_restantes": max(0, essai.ESSAI_RECHERCHES - ligne[1]),
+                "recherches_max": essai.ESSAI_RECHERCHES,
+                "niches_par_recherche": essai.ESSAI_NICHES_PAR_RECHERCHE,
+                "analyses_detaillees_max": essai.ESSAI_APPELS_A_LA_PIECE,
+                "demarre": ligne[2] is not None}
 
     # ── Jetons envoyés par e-mail ───────────────────────────────────────────────────
 

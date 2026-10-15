@@ -7,8 +7,8 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-15** (2 059 tests sur 144 fichiers, 53 modules, 37
-> noms d'env lus, 27 endpoints, `server.py` 1 914 lignes). Références de ligne revérifiées le **2026-08-22**
+> Comptages revérifiés le **2026-10-15** (2 205 tests sur 149 fichiers, 54 modules, 38
+> noms d'env lus, 27 endpoints, `server.py` 2 082 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
@@ -65,7 +65,7 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 ## 2. ARCHITECTURE RÉELLE
 
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
-mais rien n'est déployé) : FastAPI (`web/server.py`, **1 914 lignes,
+mais rien n'est déployé) : FastAPI (`web/server.py`, **2 082 lignes,
 27 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-15) + un unique
 `web/index.html` de **308 405 octets** (CSS et JS inline, zéro build). **La page ne charge plus
 aucune ressource tierce** (2026-10-15) : les trois polices (Newsreader, DM Sans, JetBrains Mono,
@@ -76,7 +76,7 @@ l'utilisateur, pas un chargement.
 
 **Cinq** bases SQLite : `df-cache.db`, `jobs.db`, `usage.db`, `history.db`, **`comptes.db`**.
 Elles vivent dans `99-logs/` par défaut, et dans **`DATA_DIR`** dès qu'elle est définie —
-`storage.py` en est la source unique (§2.17). **53 fichiers `.py`** dans `01-scripts/`.
+`storage.py` en est la source unique (§2.17). **54 fichiers `.py`** dans `01-scripts/`.
 
 **TROIS** moteurs indépendants coexistent désormais : le **scout non-fiction**, le **scout
 fiction** et le **scout low-content** (§2.11, livré les 2026-08-18/19). Les trois ne se
@@ -122,6 +122,10 @@ réinitialisation, 48 h pour la vérification, **un seul usage**, un nouveau jet
 précédents non utilisés. Les clés de la table `tentatives` portent un préfixe par usage (`login:`,
 `ip:`, `reinit:`, `reinit-ip:`, `verif:`) : l'« e-mail » d'une connexion est un texte libre, noté
 tel quel il remplissait le compteur d'un autre usage.
+
+**Plan du compte (2026-10-15, §2.21).** `comptes.plan` vaut `essai` (défaut — le côté sûr), `abonne` ou
+`illimite`. Le premier compte et ceux d'une base antérieure sont `illimite` ; tout autre est un ESSAI de 2
+recherches. Ouvrir les inscriptions n'ouvre donc plus « un plafond neuf par compte » mais deux recherches.
 
 **LE point de sécurité, à ne jamais défaire** : le `user_id` vient **exclusivement du cookie de
 session** (`utilisateur_courant`, `web/server.py:425-438`). Avant `7ccb4f8`, quatre endpoints
@@ -428,7 +432,7 @@ sans compte).
 | POST | `/api/auth/inscription` | non | 201 + session. `INSCRIPTIONS_OUVERTES` fermé par défaut ; **le premier compte passe toujours** (amorçage). Inscriptions fermées → **403 avec un message identique quelle que soit l'adresse** (un 409 « déjà pris » sur une adresse connue aurait fait de l'inscription un oracle d'énumération). Inscriptions ouvertes → limitation **par IP**. `reprendre_donnees_locales` (booléen, facultatif) déclenche §2.1. `origine_sure` |
 | POST | `/api/auth/connexion` | non | 200 + session. **Un seul message** pour e-mail inconnu et mot de passe faux (401) ; quota épuisé → 429. `origine_sure` |
 | POST | `/api/auth/deconnexion` | cookie | 204. Ferme la session **côté serveur** ET retire le cookie : effacer le seul cookie laisserait le jeton valide pour quiconque en a copie |
-| GET | `/api/auth/moi` | oui | `{user_id, email, email_verifie, verification_requise}` de la session en cours. `verification_requise` vaut vrai dès `APP_ENV=prod` (§2.20) |
+| GET | `/api/auth/moi` | oui | `{user_id, email, email_verifie, plan, verification_requise}` de la session en cours. `verification_requise` vaut vrai dès `APP_ENV=prod` (§2.20) |
 | POST | `/api/auth/verification` | non | Consomme le lien reçu à l'inscription et marque l'adresse vérifiée. 204 ; **400 « lien invalide ou expiré »** sans dire lequel (inconnu, expiré, déjà servi, autre usage). `origine_sure` |
 | POST | `/api/auth/verification/renvoyer` | oui | Renvoie le lien. 204 ; sans effet si l'adresse est déjà vérifiée ; **503** si l'instance ne peut pas envoyer de courriel ; 429 au-delà de 3 demandes par fenêtre de 15 min. `origine_sure` |
 | POST | `/api/auth/mot-de-passe-oublie` | non | **202 IDENTIQUE que l'adresse existe ou non** ; le travail qui dépend du compte (recherche, jeton, envoi) part en ARRIÈRE-PLAN. Demandes comptées par adresse (connue ou non) et par poste. **503** si l'instance ne peut pas envoyer de courriel (fait de configuration, pas d'énumération). `origine_sure` |
@@ -437,16 +441,16 @@ sans compte).
 | POST | `/api/dossier` | oui | **Dossier de niche en 3 pages** (marché + concurrents, angle et spec, mots-clés et catégories). Accepte `ScoredNiche` ou `LowContentScored` via `type`. Les CATÉGORIES sont incluses par défaut (0 $, déduites des BSR déjà payés) ; les MOTS-CLÉS non (0,006 $) — le défaut ne dépense pas à l'insu de l'utilisateur. **Quand `inclure_mots_cles` est demandé, c'est un QUATRIÈME chemin payant** : gardé par `_verifier_plafond` **et** `_reserver_appel` (`web/server.py:1076-1077`), il impute `n_analyses=0` — il exige une marge sous le plafond sans la consommer. En low-content c'est `scored.niche` (`LowContentNiche`, qui porte requête, catégorie et satellites) qui part au générateur : le `LowContentScored` entier levait AVANT l'appel, l'exception était avalée, et le dossier sortait sans mots-clés, créneau consommé (corrigé le 2026-09-14). Un dossier sans mots-clés ne dépense rien et n'est pas gardé. `/api/pdf` est conservé comme ALIAS et sert le même document |
 | GET | `/api/fiction/sous-genres` | oui | `[{cle, label}]` triés, lus depuis `data/fiction_taxonomy_fr_v1.json`. Source de vérité unique du sélecteur : jamais de liste dupliquée en dur côté JS |
 | GET | `/api/fiction/taxonomie/{sous_genre}` | oui | `{sous_genre, tropes, decors}` — alimente les menus du compositeur. Sous-genre inconnu → 400 |
-| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). **Solde du fournisseur** (`_verifier_solde`, §2.19) : **503** avant la réservation si le compte ne couvre pas les recherches du run. **Adresse vérifiée** (`_exiger_email_verifie`, 403, production seulement) avant tout ; **réserve les NICHES demandées** (`reserver_analyse`, 429 « il vous en reste N, cette analyse en demande M ») **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; règle le décompte à la fin (`_regler_niches`, §2.20) ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
+| POST | `/api/jobs` | oui | **SEUL chemin de lancement des TROIS scouts.** 202 + `{id}` immédiat. Body `{type: "scout"\|"fiction"\|"lowcontent", + params}` (`_JOB_RUNNERS`, `web/server.py:752`) ; type inconnu → 400. **Devis préalable** (`verifier_devis`, `:783`, 400 si le pire cas dépasse `PLAFOND_USD_PAR_RUN`). **Solde du fournisseur** (`_verifier_solde`, §2.19) : **503** avant la réservation si le compte ne couvre pas les recherches du run. **Adresse vérifiée** (`_exiger_email_verifie`, 403, production seulement) avant tout ; **compte en ESSAI** (§2.21) : plus de 5 niches → 400, puis (après le solde) `_reserver_essai` → 403 / 429 ; **réserve les NICHES demandées** (`reserver_analyse`, 429 « il vous en reste N, cette analyse en demande M ») **avant** de dépenser ; **valide sous-genre, contraintes et bornes de volume AVANT de créer le job** (400 immédiate, jamais un 202 suivi d'un job en échec) ; règle le décompte à la fin (`_regler_niches`, §2.20) ; consigne dans `history.db`. Thread détaché : fermer l'onglet ne tue pas le run. En cas d'exception, le coût déjà engagé est quand même imputé. `origine_sure` |
 | GET | `/api/jobs/{id}` | oui | État complet : statut, progression, résultat, coût, erreur, dates. **404 — et non 403 — quand le job appartient à quelqu'un d'autre** : distinguer les deux confirmerait que l'identifiant existe |
 | GET | `/api/jobs` | oui | Liste de l'utilisateur de la session, plus récents d'abord. `limit` (20). **Aucun paramètre `user_id`** |
 | POST | `/api/jobs/{id}/annuler` | oui | **Arrête UNE analyse** de la session (2026-10-03 : elle bug ou tourne dans le vide). IMMÉDIAT côté données (statut `annule`), COOPÉRATIF côté thread : on ne tue pas un thread, `annulation.verifier()` lève `Annulation` — une **`BaseException`**, jamais une `Exception` (les `except Exception` « un échec ne coule jamais le run » l'avaleraient ; les moteurs relèvent déjà les `BaseException` en imputant le pire cas) — à chaque message de progression, avant une phase payante (`CostTracker.verifier`) et à chaque cycle d'attente du fournisseur (`search_providers`). Contrôle propre à chaque FIL (`threading.local`), lu en base au plus une fois par demi-seconde. **L'argent déjà engagé reste imputé et l'unité de plafond reste PRISE** : arrêter ne rembourse rien, sinon « lancer puis arrêter » serait gratuit (même règle qu'un échec). Aucune notification. `finish`/`fail`/`start` ne font JAMAIS revenir un travail `annule` à un autre état (le thread peut finir après). 404 — jamais 403 — pour le travail d'un autre compte ; 409 si déjà finie ; `origine_sure`. Marche aussi en `JOBS_MODE=worker` |
 | DELETE | `/api/jobs/{id}` | oui | **Supprime UNE analyse** de la session (« Mes analyses », 2026-10-03). **404** — jamais 403 — pour le travail d'un autre compte ; **409** pour une analyse pas finie (son thread écrirait dans le vide) ; 204 sinon ; `origine_sure`. Supprime le travail (étapes, résultat, verdicts et mots-clés rangés dedans) et **RIEN d'autre** : ni `usage.db` (supprimer de l'écran ne rembourse rien et ne libère aucune unité de plafond, sinon « supprimer puis relancer » contournerait le plafond mensuel), ni l'historique d'évolution des niches (`history.db`, série partagée par toutes les analyses d'une même niche) |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
-| GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_niches, plafond_niches, cout_usd}` (plus de `n_analyses`). Le backend rend toujours le coût ; **l'UI n'affiche que les niches : restantes sur le plafond s'il y en a un, sinon analysées** (§5.27) |
-| POST | `/api/verdict` | oui | **Gardes (2026-10-06)** : adresse vérifiée (production) ; puis **RAPPEL gratuit** si `?job=&cle=` désigne une niche qui porte déjà le résultat (`_deja_fait` : ni réservation, ni plafond, ni modèle) ; puis plafond MENSUEL d'appels (`_verifier_plafond`). Un échec à 0 $ libère sa place (`_solder_appel`). Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Compte dans le plafond MENSUEL d'appels** (`_verifier_plafond`) sans consommer de niche (`n_analyses=0`) : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
+| GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_niches, plafond_niches, cout_usd, plan, essai}` (plus de `n_analyses`) ; `essai` (null hors essai) porte `recherches_restantes`, `recherches_max`, `niches_par_recherche`, `analyses_detaillees_max`, `analyses_detaillees_restantes`, `demarre` (§2.21). Le backend rend toujours le coût ; **l'UI n'affiche que les niches : restantes sur le plafond s'il y en a un, sinon analysées** (§5.27) |
+| POST | `/api/verdict` | oui | **Compte en ESSAI** : un essai DÉMARRÉ est exigé (403 sinon) et 4 appels à la pièce à vie (§2.21). Corps limité à 256 Ko (413). **Gardes (2026-10-06)** : adresse vérifiée (production) ; puis **RAPPEL gratuit** si `?job=&cle=` désigne une niche qui porte déjà le résultat (`_deja_fait` : ni réservation, ni plafond, ni modèle) ; puis plafond MENSUEL d'appels (`_verifier_plafond`). Un échec à 0 $ libère sa place (`_solder_appel`). Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Compte dans le plafond MENSUEL d'appels** (`_verifier_plafond`) sans consommer de niche (`n_analyses=0`) : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
-| POST | `/api/kdp-keywords` | oui | **Mêmes gardes que `/api/verdict`** (adresse vérifiée, rappel gratuit sous `mots_cles`, plafond mensuel d'appels, place libérée à 0 $). Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18 : le titre et le pitch de l'analyse passent dans `analyse`). Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
+| POST | `/api/kdp-keywords` | oui | **Mêmes gardes que `/api/verdict`, essai compris** (adresse vérifiée, rappel gratuit sous `mots_cles`, plafond mensuel d'appels, place libérée à 0 $). Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18 : le titre et le pitch de l'analyse passent dans `analyse`). Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
 
 ### 2.7 Gardes de sécurité (revue adversariale, commits `d443ba8` + `8d37ab8`)
@@ -472,7 +476,7 @@ sans compte).
 **Orchestration** — `scout_master.py` (non-fiction) · `fiction_master.py` (fiction, batch ASIN
 unique par run).
 
-**Comptes** — `auth.py` (§2.1).
+**Comptes** — `auth.py` (§2.1) · `essai.py` (essai gratuit, §2.21).
 
 **Modèles et scoring** — `models.py` (326 lignes, tous les types pydantic partagés ; porte aussi
 de la logique métier subtile : `est_serie`, `est_payant_dans`, extras/echo avec dépouillement des
@@ -614,7 +618,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**2059 tests** sur **144 fichiers** `tests/test_*.py`, **2059 passés, 0 ignoré, 0 échec,
+**2205 tests** sur **149 fichiers** `tests/test_*.py`, **2205 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-15,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1330,6 +1334,96 @@ passes complètes (`test_liste_jobs_de_lutilisateur` : un travail de test resté
 un vrai blocage. La part de niches « non concluantes » en fiction (seuil de 3 livres, HYPOTHÈSE)
 décide désormais de ce qui est décompté : à surveiller sur des runs réels.
 
+### 2.21 Essai gratuit (2026-10-15)
+
+Décision de Baptiste, sans carte bancaire et sans attendre Stripe : tout compte créé APRÈS le premier a le
+plan **`essai`** — **2 recherches** (lancements d'analyse) à vie, **5 niches au plus** par recherche (donc 10),
+**4 analyses détaillées** à vie (verdicts, mots-clés, dossier avec mots-clés). Le premier compte (amorçage) et
+les comptes d'une base antérieure à la colonne sont **`illimite`** ; **`abonne`** existe et se comporte comme
+`illimite` : le futur paiement n'aura qu'à appeler `UserStore.definir_plan`. **Aucun prix et aucun paiement ne
+sont codés** ; le défaut de la colonne est `essai` (un chemin d'insertion qui oublie le plan ne fabrique pas un
+compte illimité). Règles pures : `essai.py` ; application atomique : `UserStore.reserver_recherche_essai`.
+
+**Le problème de fond, dit une fois.** Sans carte ni téléphone, l'identité d'un visiteur est une adresse e-mail,
+et une adresse se fabrique : un proxy, un partage de connexion et dix boîtes rejouent l'essai à l'infini. **On ne
+ferme pas cette porte, on en élève le prix et on en BORNE la facture.** Les gardes, de la plus faible à la seule
+qui ne se contourne pas :
+
+| Garde | Où | Ce qu'elle ferme |
+|---|---|---|
+| Une boîte = un essai, un an (`identite_courriel` : `+suffixe`, points de Gmail, `googlemail`, point final) | `essais.identite`, mémoire qui **survit à la clôture du compte** | alias `+n`, « fermer puis rouvrir avec la même adresse » |
+| Adresses à usage unique refusées (`data/domaines_jetables.txt`, sous-domaines compris) | `essai.est_jetable` | départ sans essai |
+| 3 essais par mois et par **domaine enregistrable** s'il n'est pas grand public (`data/domaines_courants.txt`, `data/suffixes_deux_niveaux.txt`) | `essai.domaine_enregistrable` | acheter un domaine avec un MX joker : `x1.d.fr`, `x2.d.fr`… comptent pour un |
+| 3 essais par mois et par réseau (IPv4 ; IPv6 repliée au /64) | `essai.empreinte_reseau` | partage de connexion, proxy d'entrée de gamme |
+| **Plafond GLOBAL de nouveaux essais par 24 h** (`ESSAIS_PAR_JOUR_MAX`, 20 ; **0 ferme le robinet** ; illisible → 20, jamais « illimité ») | `reserver_recherche_essai`, fenêtre glissante | **la seule garde qui ne se contourne pas** : la perte d'une journée a un maximum connu |
+
+**Aucune dépense d'un compte d'essai avant que son essai ait DÉMARRÉ — et il ne démarre que par une recherche.**
+C'est le défaut que la revue adversariale du 2026-10-15 (41 agents, 17 constats confirmés) a trouvé en premier :
+la première version laissait les 4 analyses détaillées hors de ces gardes, et une seule boîte Gmail avec ses
+alias `+n` faisait **120 verdicts payés** (reproduit), fermer le compte rendait le compteur. `_verifier_plafond`
+refuse désormais (403) tout appel à la pièce d'un essai non démarré. Les analyses détaillées partent d'une carte,
+donc d'une recherche : un visiteur honnête ne rencontre jamais ce refus.
+
+**Mécanique.** L'essai **démarre à la première recherche** : c'est là, et seulement là, qu'on juge identité,
+jetable, réseau, domaine, puis plafond du jour (dans cet ordre : « revenez demain » à quelqu'un qui n'aura jamais
+droit à l'essai serait un mensonge). Créer un compte ne brûle le quota de personne. `BEGIN IMMEDIATE`, comme
+`reserver_analyse` : vingt départs simultanés ne dépassent pas le plafond du jour (test à 20 fils). Dans
+`POST /api/jobs` : `_exiger_essai_volume` (400 si plus de 5 niches — refuser, jamais rogner) → solde (503) →
+`_reserver_essai` (403 `MSG_ESSAI_REFUSE`, 429 « essai terminé » ou « **Quota gratuit journalier du serveur
+dépassé** ») → niches. **Un 400 ou un 503 ne brûle pas une recherche.** La recherche se **rend** quand l'analyse
+n'a rien livré et rien coûté (échec ou arrêt à coût nul : `_regler_niches`, point unique du serveur, du worker et
+des orphelins) ; elle reste prise après une dépense ou un run terminé, **même sans niche mesurée** (règle voulue,
+testée : le run a coûté). Un lancement qui n'aboutit pas (`JobStore.create` qui lève) rend TOUT une fois
+(`_annuler_reservations`) — rendre par `_regler_niches` PUIS par `_rendre_essai` aurait rendu la recherche deux
+fois, avec un déclencheur contrôlé par l'utilisateur (un substitut Unicode isolé dans un texte). En mode worker,
+`annuler_job` décide du remboursement sur le statut que l'annulation a REMPLACÉ (`JobStore.annuler_avec_statut`,
+lu dans sa transaction) : un statut lu avant était périmé si le worker prenait le travail entre les deux.
+
+**Données.** Table `essais` : empreintes **HMAC-SHA256** (clé aléatoire rangée dans `meta`, de la pseudonymisation
+et non un coffre) de l'identité, du domaine enregistrable et du préfixe réseau, **sans lien vers le compte**.
+Identité gardée **un an** ; domaine et réseau **effacés au bout de 30 jours** (purge opportuniste, à chaque
+départ). L'adresse IP n'est jamais stockée en clair pour l'essai (le limiteur d'inscription, lui, garde la
+sienne 15 minutes, §2.1).
+
+**Bornes de coût trouvées par la même revue** (antérieures à l'essai, qui les rend visibles) : corps JSON limité à
+`MAX_CORPS_JSON` = 256 Ko (413 ; la plus grande carte réelle mesurée fait 50 Ko) — une niche de 1 Mo faisait un
+prompt de 2 Mo, 0,49 $ pour 4 verdicts au lieu de 0,146 $ ; `rayon` fiction validé (`RAYONS_FICTION`) ; `tropes`
+dédoublonnés ; limiteurs « par poste » (inscription, mot de passe oublié) repliés comme l'essai (`_cle_reseau`).
+
+**Coût d'un essai (CALCULÉ, jamais mesuré tel quel).** Non-fiction : 2 × 0,110 $ + 4 × ~0,03 $ ≈ **0,35 $** ;
+fiction : 2 × ~0,33 $ (mesuré à 0,3295 $ pour 5 trios, §2.19) + 4 × ~0,03 $ ≈ **0,8 $** au pire. Au plafond de
+20 essais par jour : ~7 à ~16 $ par jour.
+
+**Ce qui reste ouvert — à dire à qui vend.**
+- **Proxys résidentiels rotatifs + une boîte par domaine grand public** (Gmail, Outlook…) : aucune garde de ce
+  module ne l'arrête ; ce qui le borne, c'est le plafond du jour, et le coût de création des boîtes chez ces
+  fournisseurs. SMS et captcha ne sont PAS codés : de la friction pour tous, à ajouter si l'abus est observé.
+- **Le plafond du jour peut être saturé par un attaquant** : les visiteurs honnêtes lisent alors « quota gratuit
+  journalier du serveur dépassé ». Contrepartie assumée d'un plafond qui borne la perte.
+- **Un réseau mobile partagé (CGNAT) peut refuser des visiteurs légitimes** après 3 essais par mois sur la même
+  adresse publique. **Les seuils 3 / 3 / 20 sont des HYPOTHÈSES posées de notre propre chef, confrontées à aucun
+  jeu réel** (§4.2) : à relire sur les premiers comptes. Le message ne détaille pas la cause (détailler laisserait
+  régler le contournement) ; un refus par réseau n'a aucune issue côté écran aujourd'hui.
+- **Derrière un proxy d'hébergeur**, `request.client.host` est l'adresse du proxy tant que `FORWARDED_ALLOW_IPS`
+  n'est pas réglé : le plafond par réseau s'éteint alors tout seul (une adresse non publique ne produit aucune
+  empreinte), avec UN avertissement dans le journal en production — pas un blocage de tous les visiteurs.
+  **Avec `FORWARDED_ALLOW_IPS=*`, le client peut choisir son adresse si le proxy n'écrase pas
+  `X-Forwarded-For` : à vérifier chez Railway AVANT de la poser** (non vérifié).
+- **Listes de domaines** (jetables, grand public, suffixes à deux niveaux) : écrites à la main, non exhaustives.
+  Un fournisseur grand public oublié est limité à 3 essais par mois pour tout son domaine ; un domaine jetable
+  oublié passe.
+- **Mode thread** : annuler un travail dont le fil est mort (redémarrage) puis relancer perd la recherche d'essai
+  (et les niches) — le travail passe `annule` et n'est plus un orphelin. Rare ; le correctif sûr est un registre
+  des fils vivants en mémoire, pas fait.
+- Les analyses détaillées d'un essai ne se renouvellent pas : fenêtre de dix ans (`FENETRE_APPELS_ESSAI_S`).
+
+**Tests** : `test_essai.py` (règles pures), `test_auth_essai.py` (magasin, migration, course à 20 fils),
+`test_server_essai.py` (offre de bout en bout), `test_ux_essai.py`, `test_essai_revue.py` (un test par constat de
+la revue, seuils épinglés en littéraux : les tests qui bouclaient sur les constantes laissaient survivre 7
+mutations, dont un plafond du jour réduit à 60 s). Vérifié à l'écran le 2026-10-15 sur un serveur isolé : compteur,
+plafond de 5 dans les trois onglets, refus 400, échec à 0 $ rendu, échec avec dépense gardé, alias refusé, plafond
+du jour.
+
 ---
 
 ## 3. SOURCES DE DONNÉES ET COÛTS
@@ -1357,7 +1451,7 @@ le PC de Baptiste, **bloqué depuis un datacenter**. En production il faut
 
 ### Variables d'environnement (`.env` uniquement)
 
-**Trente-sept** noms sont lus par `os.getenv` dans `01-scripts/` et `web/` (dont l'ANCIEN `PLAFOND_ANALYSES_MENSUEL`, lu pour REFUSER le démarrage en production, §2.20, et les deux de l'alerte de solde)
+**Trente-huit** noms sont lus par `os.getenv` dans `01-scripts/` et `web/` (dont l'ANCIEN `PLAFOND_ANALYSES_MENSUEL`, lu pour REFUSER le démarrage en production, §2.20, et les deux de l'alerte de solde)
 (recensement exhaustif sur ces deux dossiers, aucun autre `.py` du dépôt n'en lit, revérifié
 le 2026-09-07 — la trente-quatrième est `DATA_DIR`, §2.17). **`.env.example` les documente
 désormais TOUTES**, `HOST`, `PORT` et les deux `LOWCONTENT_*_MODEL` compris : le trou de
@@ -1401,6 +1495,7 @@ sont désormais : `DATA_DIR`, `APP_ENV`, `HOST`/`PORT`, `JOBS_MODE`).
 | `WORKER_REPOS_S` | `2.0` (`worker.py:58`). Attente entre deux tentatives de `claim_next` quand la file est vide | non |
 | `NOTIFICATIONS_EMAIL` | non défini = **ÉTEINT**. Et il ne suffit pas : sans `SMTP_HOST`, rien ne part (§2.16) | non |
 | `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` / `_TLS` | port `587`, TLS actif. `SMTP_FROM` retombe sur `SMTP_USER`. Port non entier → repli sur 587. **`SMTP_HOST` est EXIGÉ dès `APP_ENV=prod`** (courriels de compte : le serveur refuse de démarrer sans lui) ; il suffit à ces courriels, sans `NOTIFICATIONS_EMAIL` | non (oui en prod) |
+| `ESSAIS_PAR_JOUR_MAX` | `20` (`essai.ESSAIS_PAR_JOUR_DEFAUT`). Plafond GLOBAL de nouveaux essais gratuits par 24 h glissantes. **`0` ferme le robinet** ; une valeur illisible ou négative retombe sur 20, jamais sur « illimité ». §2.21 | non |
 | `ALERTE_SOLDE_EMAIL` / `ALERTE_SOLDE_USD` | non définis = aucune alerte (le journal le dit ; avertissement au démarrage en production) / seuil `5` $. Voir §2.20 point 6 | non |
 | `BASE_URL` | racine publique du service : lien du message de fin ET liens de vérification / réinitialisation. Non définie → le message de fin part **sans lien** et aucun courriel de compte n'est envoyé. **EXIGÉE en `https://` dès `APP_ENV=prod`** (le lien de réinitialisation donne la main sur le compte) | non (oui en prod) |
 
@@ -1807,7 +1902,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 2059 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 2205 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer
@@ -1856,7 +1951,8 @@ Section critique. Chacun a coûté un bug réel.
   intégré.** L'usage et le coût sont mesurés et stockés (`usage.db`), ce qui donne la base d'une
   facturation future, mais aucun montant n'est présenté à l'utilisateur et aucun encaissement
   n'existe. **En revanche l'authentification, les comptes et le multi-utilisateur EXISTENT
-  désormais** (§2.1) — ne plus les lister ici.
+  désormais** (§2.1) — ne plus les lister ici. **Un champ `plan` (`essai` / `abonne` / `illimite`) existe depuis le
+  2026-10-15 (§2.21)** : le paiement n'aura qu'à le poser ; rien ne le pose aujourd'hui.
 - **Changement d'e-mail, rôles ou administration** : aucun de ces chemins n'est codé.
   `INSCRIPTIONS_OUVERTES` se règle par `.env`, pas par une interface. **Nuance depuis le
   2026-10-02** : le CHANGEMENT de mot de passe par un utilisateur connecté

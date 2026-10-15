@@ -1,0 +1,71 @@
+# Suffixes publics À DEUX NIVEAUX : sous `co.uk`, un domaine acheté a trois labels (`maboite.co.uk`), pas deux.
+# Sert à retrouver le domaine qu'on ACHÈTE derrière une adresse (essai.domaine_enregistrable) : le plafond
+# « 3 essais par mois et par domaine » compte ce domaine-là, sinon un seul domaine avec un MX joker fabrique
+# autant de « domaines » que de sous-domaines. Un domaine absent d'ici est lu avec ses deux derniers labels :
+# on refuse alors un peu trop (tous les `x.y.suffixe-oublie` partagent un compteur), jamais trop peu.
+#
+# LISTE DE DÉPART, ÉCRITE À LA MAIN, NON EXHAUSTIVE (la Public Suffix List compte des milliers d'entrées et la
+# bibliothèque standard ne l'a pas) : pays francophones, anglophones et gros marchés. À étendre ici quand un
+# client légitime est refusé sous un suffixe oublié — sans toucher au code. Un suffixe par ligne, en minuscules.
+co.uk
+org.uk
+ac.uk
+gov.uk
+me.uk
+ltd.uk
+plc.uk
+net.uk
+com.au
+net.au
+org.au
+edu.au
+gov.au
+co.nz
+org.nz
+net.nz
+co.za
+org.za
+co.in
+net.in
+org.in
+ac.in
+co.jp
+ne.jp
+or.jp
+ac.jp
+co.kr
+or.kr
+com.cn
+net.cn
+org.cn
+com.hk
+com.sg
+com.tw
+com.tr
+co.il
+com.br
+net.br
+org.br
+com.mx
+com.ar
+com.co
+com.ua
+com.pl
+com.pt
+com.es
+nom.es
+org.es
+gob.es
+com.fr
+asso.fr
+gouv.fr
+nom.fr
+prd.fr
+tm.fr
+presse.fr
+avocat.fr
+pharmacien.fr
+medecin.fr
+notaires.fr
+veterinaire.fr
+cci.fr

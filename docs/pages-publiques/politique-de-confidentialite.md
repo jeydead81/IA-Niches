@@ -189,6 +189,10 @@ Le code applique deux mécanismes très différents, qu'il serait malhonnête de
 | Cache des suggestions d'autocomplétion | **15 jours** | |
 | Cache des classifications de quatrièmes de couverture | **30 jours** | |
 | Fenêtre de consommation (`usage.db`) | **30 jours glissants** | C'est une fenêtre de **lecture** pour le calcul du plafond. |
+| Empreinte de l'identité de la boîte e-mail (essai gratuit) | **1 an**, effacée à l'occasion du départ d'un essai suivant (purge opportuniste) | Empreinte HMAC irréversible de l'adresse normalisée (alias et points ignorés) ; **aucun lien avec le compte, et elle survit à sa clôture** : c'est son rôle, empêcher de rouvrir un compte pour obtenir un nouvel essai. |
+| Empreintes du domaine et du réseau (essai gratuit) | **30 jours**, effacées à l'occasion du départ d'un essai suivant | Plafonnent le nombre d'essais par domaine et par réseau. L'adresse IP n'est jamais conservée en clair pour cet usage. |
+
+[[A COMPLETER : base légale de la conservation des empreintes de l'essai gratuit (intérêt légitime : prévention de la fraude à l'essai), information des personnes concernées au moment de l'inscription, et validation par un conseil de la durée d'un an de l'empreinte d'identité]]
 
 ### 5.2 Ce qui n'est jamais supprimé automatiquement
 

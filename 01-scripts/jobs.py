@@ -281,7 +281,19 @@ class JobStore:
     MESSAGE_ANNULE = "Arrêtée à votre demande."
 
     def annuler(self, job_id: str, user_id: str) -> str:
-        """Arrete UNE analyse de l'utilisateur : « annule », « deja_fini » ou « introuvable ».
+        """Arrete UNE analyse de l'utilisateur : « annule », « deja_fini » ou « introuvable »."""
+        return self.annuler_avec_statut(job_id, user_id)[0]
+
+    def annuler_avec_statut(self, job_id: str, user_id: str) -> tuple[str, str | None]:
+        """Comme `annuler`, et dit QUEL statut l'annulation a remplacé : `(issue, statut_remplace)`.
+
+        « en_attente » : personne n'avait pris le travail, et personne ne le prendra (`claim_next` ne prend que
+        les `en_attente`) — c'est à l'appelant de rendre ce qui avait été réservé. « en_cours » : un worker le
+        tient et le règlera LUI-MÊME en voyant l'annulation. Décidé DANS la transaction : un statut lu avant
+        l'annulation était périmé si le worker passait entre les deux, et serveur ET worker remboursaient
+        (niches et recherche d'essai en trop, revue du 2026-10-15). `statut_remplace` vaut None hors « annule ».
+
+        Arrete UNE analyse de l'utilisateur : « annule », « deja_fini » ou « introuvable ».
 
         IMMEDIAT cote donnees : le statut passe a « annule » tout de suite, l'utilisateur voit son
         analyse arretee et peut la supprimer ou en relancer une. Le thread, lui, s'arrete a son
@@ -298,14 +310,14 @@ class JobStore:
                 row = cx.execute("SELECT user_id, statut FROM jobs WHERE id=?", (job_id,)).fetchone()
                 if row is None or row[0] != user_id:
                     cx.execute("ROLLBACK")
-                    return "introuvable"
+                    return "introuvable", None
                 if row[1] not in ("en_attente", "en_cours"):
                     cx.execute("ROLLBACK")
-                    return "deja_fini"
+                    return "deja_fini", None
                 cx.execute("UPDATE jobs SET statut='annule', erreur=?, fini_le=?, maj_le=? WHERE id=?",
                            (self.MESSAGE_ANNULE, self.now(), self.now(), job_id))
                 cx.execute("COMMIT")
-                return "annule"
+                return "annule", row[1]
             except Exception:
                 cx.execute("ROLLBACK")
                 raise

@@ -124,6 +124,7 @@ def test_le_type_d_une_niche_se_lit_sur_sa_forme(niche, attendu):
 # ── Le clic, EXÉCUTÉ ────────────────────────────────────────────────────────────
 
 _DECOR = """
+function chargerUsage(){}      // le compteur est rafraîchi après une analyse : sans objet ici
 const VUE_FIC = {jobId: 'job-9'}, VUE_NF = {jobId: 'job-n'}, VUE_LC = {jobId: 'job-l'};
 const appels = [];
 const slot = {innerHTML: '', querySelectorAll(){ return []; }};

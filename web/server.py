@@ -52,6 +52,7 @@ import storage  # noqa: E402
 from cost_tracker import CostTracker  # noqa: E402
 from cache import Cache  # noqa: E402
 import alerte_solde as _alerte  # noqa: E402
+import essai  # noqa: E402
 import search_providers as _sp  # noqa: E402
 from devis import PLAFOND_DEPASSE, ventilation_max_estimee, verifier_devis  # noqa: E402
 from notification import (Notificateur, config_smtp, corps_reinitialisation,  # noqa: E402
@@ -209,6 +210,7 @@ MAX_LONGUEUR_GRAINE = 80
 # decortiquees d'affilee, c'est 40 appels. Au-dela dans la MEME heure, ce n'est plus
 # quelqu'un qui lit des resultats.
 TYPES_A_LA_PIECE = ("verdict", "kdp", "kdp_keywords", "dossier")
+RAYONS_FICTION = ("kindle", "papier")           # les deux rayons de la taxonomie fiction
 DEBIT_FENETRE_S = 3600
 DEBIT_APPELS_MAX_DEFAUT = 2 * MAX_RECHERCHES
 
@@ -349,7 +351,8 @@ def _contraintes_fiction(sous_genre: str, tropes, decor, libre) -> ContraintesTr
     appliquée."""
     if isinstance(tropes, str):
         tropes = tropes.split(",")
-    liste = [t.strip() for t in (tropes or []) if isinstance(t, str) and t.strip()]
+    # Dédoublonnés : 60 000 fois la même clé valide passaient la validation et gonflaient le prompt (revue).
+    liste = list(dict.fromkeys(t.strip() for t in (tropes or []) if isinstance(t, str) and t.strip()))
     c = ContraintesTrio(tropes=liste, decor=(decor or None), libre=(libre or ""))
     tropes_ok, decors_ok = valid_keys(sous_genre)
     inconnus = [t for t in c.tropes if t not in tropes_ok]
@@ -636,10 +639,32 @@ def _verifier_plafond(user_id: str) -> None:
     """Plafond MENSUEL des appels à la pièce (verdict, mots-clés, dossier avec mots-clés),
     vérifié AVANT de dépenser. `POST /api/jobs` a le sien : la réservation de niches.
 
+    Un compte en ESSAI n'a pas de mois : il a `essai.ESSAI_APPELS_A_LA_PIECE` appels EN TOUT (fenêtre
+    de dix ans). Une fenêtre glissante de 30 jours renouvellerait l'essai tous les mois.
+
     Ces appels n'ont longtemps eu pour garde qu'un débit de 40 par heure, soit 28 800 appels
     par mois : 957 € de LLM possibles pour un abonné à quelques euros. Le plafond vaut deux
     appels par niche autorisée (`_appels_a_la_piece_max`). Toute nouvelle dépense à la pièce
     doit passer par ici."""
+    if _plan(user_id) == essai.PLAN_ESSAI:
+        # AUCUNE dépense d'un compte d'essai avant que son essai ait DÉMARRÉ : seul `reserver_recherche_essai`
+        # juge l'identité, le domaine, le réseau et le plafond du jour, et il ne s'appelle que par une
+        # recherche. Sans cette garde (revue du 2026-10-15), une boîte Gmail et ses alias `+n` faisaient 120
+        # verdicts payés, et fermer puis rouvrir le compte remettait le compteur à zéro. Les analyses détaillées
+        # partent d'une carte, donc d'une recherche : un visiteur honnête ne la rencontre jamais.
+        situation = UserStore(_USERS_DB).situation_essai(user_id)
+        if not (situation and situation["demarre"]):
+            raise HTTPException(
+                status_code=403,
+                detail="Essai gratuit : lancez d'abord une recherche — les analyses détaillées (verdicts, "
+                       "mots-clés) s'appliquent à ses niches. Rien n'a été dépensé.")
+        if UsageMeter(_USAGE_DB).compter(user_id, TYPES_A_LA_PIECE,
+                                         essai.FENETRE_APPELS_ESSAI_S) >= essai.ESSAI_APPELS_A_LA_PIECE:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Essai gratuit : {essai.ESSAI_APPELS_A_LA_PIECE} analyses détaillées (verdicts et "
+                       f"mots-clés) au maximum. Rien n'a été dépensé.")
+        return
     maxi = _appels_a_la_piece_max()
     if UsageMeter(_USAGE_DB).compter(user_id, TYPES_A_LA_PIECE, FENETRE_GLISSANTE_S) >= maxi:
         raise HTTPException(
@@ -652,6 +677,87 @@ def _imputer(user_id: str, type_: str, cout_usd: float, n_analyses: int) -> None
     """Impute une dépense DÉJÀ faite. Appelé même en cas d'échec du run : l'argent est
     parti, le compteur doit le dire."""
     UsageMeter(_USAGE_DB).enregistrer(user_id, type_, cout_usd, n_analyses=n_analyses)
+
+
+# ── Essai gratuit (règles : essai.py ; magasin : auth.UserStore) ────────────────────────────────
+MSG_ESSAI_EPUISE = ("Votre essai gratuit est terminé : vos %d recherches ont été utilisées. "
+                    "Rien n'a été lancé." % essai.ESSAI_RECHERCHES)
+MSG_ESSAI_REFUSE = ("L'essai gratuit n'est pas disponible pour cette adresse ou depuis ce réseau. "
+                    "Rien n'a été lancé.")
+MSG_ESSAI_QUOTA_JOUR = ("Quota gratuit journalier du serveur dépassé : trop d'essais ont déjà été ouverts "
+                        "aujourd'hui. Réessayez dans quelques heures. Rien n'a été lancé.")
+
+
+def _plan(user_id: str) -> str | None:
+    return UserStore(_USERS_DB).plan_de(user_id)
+
+
+def _exiger_essai_volume(user_id: str, type_: str, params: dict) -> None:
+    """400 AVANT toute réservation : en essai, une recherche porte sur 5 niches au plus. REFUSER plutôt que
+    rogner (comme `_borner`) : demander 6 niches et en recevoir 5 sans un mot se lirait comme un défaut. Passe
+    avant le contrôle du solde et avant la réservation, donc ne consomme rien."""
+    if _plan(user_id) != essai.PLAN_ESSAI:
+        return
+    demandees = _niches_demandees(type_, params)
+    if demandees > essai.ESSAI_NICHES_PAR_RECHERCHE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"En essai gratuit, une recherche porte sur {essai.ESSAI_NICHES_PAR_RECHERCHE} niches "
+                   f"au maximum (vous en demandez {demandees}). Rien n'a été lancé.")
+
+
+_RESEAU_ESSAI_AVERTI = [False]
+
+
+def _reseau_pour_essai(request: Request) -> str:
+    """L'adresse du client, telle que `essai.empreinte_reseau` la jugera. En production, une adresse qui ne
+    prouve rien (privée, boucle locale) veut dire que le proxy de l'hébergeur n'est pas déclaré : le plafond
+    par réseau est alors SILENCIEUSEMENT coupé. On le dit une fois dans le journal plutôt que jamais."""
+    client = _client_distant(request)
+    if (_verification_obligatoire() and essai.empreinte_reseau(client) is None
+            and not _RESEAU_ESSAI_AVERTI[0]):
+        _RESEAU_ESSAI_AVERTI[0] = True
+        _LOG.warning("L'adresse du client (%r) n'est pas une adresse publique : le plafond d'essais par "
+                     "réseau est INACTIF. Derrière un proxy d'hébergeur, déclarez-le (FORWARDED_ALLOW_IPS) "
+                     "pour qu'uvicorn lise X-Forwarded-For.", client)
+    return client
+
+
+def _reserver_essai(request: Request, user_id: str):
+    """Prend une des deux recherches d'essai, atomiquement, AVANT la réservation de niches. None hors essai.
+    Chaque cause de refus a SON message : « terminé », « indisponible ici », « quota du jour »."""
+    try:
+        return UserStore(_USERS_DB).reserver_recherche_essai(user_id, client=_reseau_pour_essai(request))
+    except essai.EssaiEpuise:
+        raise HTTPException(status_code=429, detail=MSG_ESSAI_EPUISE)
+    except essai.QuotaJournalier:
+        raise HTTPException(status_code=429, detail=MSG_ESSAI_QUOTA_JOUR)
+    except essai.EssaiRefuse:
+        raise HTTPException(status_code=403, detail=MSG_ESSAI_REFUSE)
+
+
+def _rendre_essai(user_id: str, annuler_demarrage: bool = False) -> None:
+    """Redonne la recherche d'essai prise. `annuler_demarrage` : c'est le lancement lui-même qui échoue, avant
+    qu'AUCUNE analyse ne parte, et c'est lui qui avait démarré l'essai — on défait alors aussi le démarrage.
+    Sans effet hors essai. Ne lève JAMAIS : appelée en nettoyage, une exception ici masquerait la cause."""
+    try:
+        UserStore(_USERS_DB).rendre_recherche_essai(user_id, annuler_demarrage=annuler_demarrage)
+    except Exception as e:  # noqa: BLE001
+        _LOG.warning("recherche d'essai non rendue : %s", type(e).__name__)
+
+
+def _annuler_reservations(user_id: str, type_: str, params: dict, ligne_usage: int,
+                          reservation_essai) -> None:
+    """Défait un lancement que rien n'a suivi : réservation soldée à 0, niches rendues, recherche d'essai rendue
+    (et son démarrage si c'est ce lancement qui l'avait fait). Ne lève JAMAIS : appelée dans un `except`, elle
+    ne doit pas masquer la cause."""
+    try:
+        UsageMeter(_USAGE_DB).solder(ligne_usage, 0.0)
+        _imputer(user_id, type_, 0.0, -_niches_demandees(type_, params))
+        if reservation_essai is not None:
+            _rendre_essai(user_id, annuler_demarrage=reservation_essai.demarre_ici)
+    except Exception as e:  # noqa: BLE001
+        _LOG.warning("réservations non rendues : %s", type(e).__name__)
 
 
 # ── Compteur de NICHES ──────────────────────────────────────────────────────────────────────────
@@ -715,16 +821,37 @@ def _regler_niches(user_id: str, type_: str, params: dict, statut: str, cout_usd
             return
         if a_garder < reservees:
             (imputer or _imputer)(user_id, type_, 0.0, -(reservees - a_garder))
+        if a_garder == 0:
+            # Rien n'a coûté, rien n'a été livré : la recherche d'ESSAI aussi se rend (sans effet hors
+            # essai). Ce point unique est celui de TOUS les exécuteurs — thread, worker, orphelins.
+            _rendre_essai(user_id)
     except Exception as e:  # noqa: BLE001 — un run payé ne doit pas échouer sur sa comptabilité
         _LOG.warning("décompte de niches non ajusté : %s", type(e).__name__)
 
 
+# La plus grande carte réelle mesurée (fiction, 10 livres) fait 50 Ko ; 256 Ko en laissent plus de cinq fois. Sans
+# borne, une niche de 1 Mo envoyée à /api/verdict faisait un prompt de 2 Mo (×700) : le coût « borné » d'un essai ne
+# l'était pas (revue du 2026-10-15).
+MAX_CORPS_JSON = 256 * 1024
+
+
 async def _corps_json(request: Request) -> dict:
-    """Corps JSON, ou 400. Sans ce garde, un corps non-JSON ou un objet mal typé remonte
-    en 500 : une trace exposée, et le signal donné à l'attaquant qu'il a trouvé un chemin
+    """Corps JSON, ou 400 (413 s'il dépasse `MAX_CORPS_JSON`). Sans ce garde, un corps non-JSON ou un objet mal
+    typé remonte en 500 : une trace exposée, et le signal donné à l'attaquant qu'il a trouvé un chemin
     non prévu."""
     try:
-        body = await request.json()
+        annonce = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        annonce = 0
+    if annonce > MAX_CORPS_JSON:                   # refus AVANT de lire : un corps annoncé énorme n'est pas chargé
+        raise HTTPException(status_code=413, detail="corps de requête trop volumineux")
+    try:
+        brut = await request.body()
+        if len(brut) > MAX_CORPS_JSON:             # corps sans Content-Length (transfert par morceaux)
+            raise HTTPException(status_code=413, detail="corps de requête trop volumineux")
+        body = json.loads(brut)
+    except HTTPException:
+        raise
     except Exception:  # noqa: BLE001 — JSON illisible
         raise HTTPException(status_code=400, detail="corps de requête JSON attendu")
     if not isinstance(body, dict):
@@ -745,6 +872,14 @@ def _inscriptions_ouvertes() -> bool:
 
 def _client_distant(request: Request) -> str:
     return (request.client.host if request.client else "") or "inconnu"
+
+
+def _cle_reseau(request: Request) -> str:
+    """La clé des limiteurs « par poste » (inscription, mot de passe oublié) : l'adresse publique repliée comme
+    pour l'essai (IPv6 → /64), sinon l'adresse brute. Un abonné IPv6 reçoit un /64 ENTIER : sans repli, 40
+    adresses d'un même /64 ouvraient 40 comptes quand l'IPv4 en refusait 4 sur 14."""
+    client = _client_distant(request)
+    return essai.empreinte_reseau(client) or client
 
 
 def _identifiants(body: dict) -> tuple[str, str]:
@@ -813,7 +948,7 @@ async def api_inscription(request: Request, response: Response):
         # à l'utilisateur légitime. On empêche alors l'énumération EN MASSE — la limitation
         # porte sur le client, car sonder mille adresses distinctes ne déclencherait aucun
         # compteur par adresse.
-        cle = f"ip:{_client_distant(request)}"
+        cle = f"ip:{_cle_reseau(request)}"
         if store.tentatives_recentes(cle) >= MAX_INSCRIPTIONS_PAR_CLIENT:
             raise HTTPException(status_code=429,
                                 detail="trop d'inscriptions depuis ce poste — réessayez plus tard")
@@ -824,7 +959,10 @@ async def api_inscription(request: Request, response: Response):
     demande_reprise = bool(body.get("reprendre_donnees_locales"))
     email, mdp = _identifiants(body)
     try:
-        compte = store.creer_compte(email, mdp)
+        # Le PREMIER compte est l'amorçage : illimité. Tous les suivants sont des essais — c'est ce qui rend
+        # l'ouverture des inscriptions sûre (un compte de plus n'est plus un plafond neuf, mais deux recherches).
+        compte = store.creer_compte(email, mdp,
+                                    plan=essai.PLAN_ILLIMITE if premier else essai.PLAN_ESSAI)
     except EmailDejaPris as e:
         raise HTTPException(status_code=409, detail=str(e))
     except (EmailInvalide, MotDePasseFaible) as e:
@@ -998,7 +1136,7 @@ async def api_mot_de_passe_oublie(request: Request):
     if not propre:
         return reponse
     store = UserStore(_USERS_DB)
-    par_adresse, par_poste = f"reinit:{propre}", f"reinit-ip:{_client_distant(request)}"
+    par_adresse, par_poste = f"reinit:{propre}", f"reinit-ip:{_cle_reseau(request)}"
     if (store.tentatives_recentes(par_adresse) >= MAX_COURRIELS_PAR_ADRESSE
             or store.tentatives_recentes(par_poste) >= MAX_DEMANDES_OUBLI_PAR_CLIENT):
         raise HTTPException(status_code=429,
@@ -1041,7 +1179,7 @@ def api_moi(user_id: str = Depends(utilisateur_courant)):
     if compte is None:
         raise HTTPException(status_code=401, detail="authentification requise")
     return {"user_id": compte.user_id, "email": compte.email,
-            "email_verifie": compte.email_verifie,
+            "email_verifie": compte.email_verifie, "plan": compte.plan,
             "verification_requise": _verification_obligatoire()}
 
 
@@ -1261,6 +1399,11 @@ def _valider_volumes(type_: str, params: dict) -> None:
     elif type_ == "fiction":
         _borner_texte("libre", params.get("libre"))
         _borner("n_niches", params.get("n_niches", 8), MAX_NICHES_FICTION)
+        # Le rayon part tel quel dans le prompt de l'idéation : un texte de 1 Mo y gonflait le coût d'un run.
+        if params.get("rayon", "kindle") not in RAYONS_FICTION:
+            raise HTTPException(
+                status_code=400,
+                detail=f"rayon inconnu : « {str(params.get('rayon'))[:40]} » (dispo : {', '.join(RAYONS_FICTION)})")
         # Le sous-genre est validé ICI, pas seulement dans le runner. Le flux direct
         # rendait une 400 immédiate ; en ne gardant que le chemin asynchrone, laisser la
         # validation au thread détaché donnerait un 202 suivi d'un job en échec —
@@ -1327,6 +1470,7 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     # Bornes validées AVANT de créer le job : levée depuis le thread détaché, la 400
     # arriverait après un 202 déjà rendu, donc invisible pour le client.
     _valider_volumes(type_, params)
+    _exiger_essai_volume(user_id, type_, params)         # 400 : une 400 ne brûle pas une recherche d'essai
     # Solde du fournisseur : APRES les refus de saisie (une 400 n'est pas un diagnostic de service),
     # AVANT la réservation de l'unité de plafond et avant tout appel payant.
     await _verifier_solde(type_, params)
@@ -1339,15 +1483,31 @@ async def post_job(request: Request, user_id: str = Depends(utilisateur_courant)
     # Placee APRES la validation des volumes et le devis : une saisie fautive ou un run
     # trop gros est refuse sans consommer d'unite de plafond -- sinon l'utilisateur
     # paierait ses erreurs de frappe.
+    # L'ESSAI se prend juste avant, et se rend si la réservation de niches échoue : un refus ne coûte pas une
+    # recherche. Placé APRÈS le solde (503) pour la même raison.
+    reservation_essai = _reserver_essai(request, user_id)
     try:
         ligne_usage = UsageMeter(
             _USAGE_DB, plafond_analyses=_plafond_niches_mensuel()
         ).reserver_analyse(user_id, type_, n_analyses=_niches_demandees(type_, params))
     except PlafondAtteint as e:
+        if reservation_essai is not None:
+            _rendre_essai(user_id, annuler_demarrage=reservation_essai.demarre_ici)
         raise HTTPException(status_code=429, detail=str(e))
+    except Exception:
+        if reservation_essai is not None:
+            _rendre_essai(user_id, annuler_demarrage=reservation_essai.demarre_ici)
+        raise
 
-    store = JobStore(_JOBS_DB)
-    job_id = store.create(type_, params, user_id=user_id)
+    try:
+        store = JobStore(_JOBS_DB)
+        job_id = store.create(type_, params, user_id=user_id)
+    except Exception:
+        # Rien n'est parti : la recherche d'essai, son démarrage et les niches réservées étaient pris sans qu'aucun
+        # travail n'existe (déclenchable par un texte contenant un substitut Unicode isolé). On rend chacun UNE
+        # fois — pas `_regler_niches` en plus de `_rendre_essai`, qui rendrait la recherche deux fois.
+        _annuler_reservations(user_id, type_, params, ligne_usage, reservation_essai)
+        raise
 
     def worker() -> None:
         # Connexion/instance par appel (même pattern que cache.py) : sûr en concurrence,
@@ -1474,18 +1634,20 @@ def annuler_job(job_id: str, request: Request, user_id: str = Depends(utilisateu
     `origine_sure` comme tout ce qui modifie des donnees."""
     origine_sure(request)
     store = JobStore(_JOBS_DB)
-    avant = store.get(job_id)
-    issue = store.annuler(job_id, user_id)
+    # Le statut REMPLACÉ vient de l'annulation elle-même, lu dans sa transaction : un statut lu avant était
+    # périmé si le worker prenait le travail entre les deux, et serveur ET worker remboursaient (revue).
+    issue, remplace = store.annuler_avec_statut(job_id, user_id)
     if issue == "introuvable":
         raise HTTPException(status_code=404, detail="job inconnu")
     if issue == "deja_fini":
         raise HTTPException(status_code=409, detail="Cette analyse est déjà terminée.")
-    if (_mode_jobs() == "worker" and avant is not None and avant.user_id == user_id
-            and avant.statut == "en_attente"):
+    if _mode_jobs() == "worker" and remplace == "en_attente":
         # Personne ne reprendra ce travail (`claim_next` ne prend que les `en_attente`) : rien n'a
-        # tourné, rien n'est dépensé, on rend ses niches. En mode thread c'est le fil du travail qui
-        # le fait quand il voit `est_annule` — ne jamais régler deux fois.
-        _regler_niches(user_id, avant.type, avant.params, "annule", 0.0)
+        # tourné, rien n'est dépensé, on rend ses niches. S'il était `en_cours`, un worker le tient et le règle
+        # LUI-MÊME ; en mode thread c'est le fil du travail — ne jamais régler deux fois.
+        job = store.get(job_id)
+        if job is not None and job.user_id == user_id:
+            _regler_niches(user_id, job.type, job.params, "annule", 0.0)
     return Response(status_code=204)
 
 
@@ -1518,8 +1680,14 @@ def usage(user_id: str = Depends(utilisateur_courant)):
     """Consommation du mois glissant. Un plafond qui bloque sans que l'utilisateur ait pu
     voir où il en était serait vécu comme une panne, pas comme une limite."""
     r = UsageMeter(_USAGE_DB).resume(user_id)
+    magasin = UserStore(_USERS_DB)
+    situation = magasin.situation_essai(user_id)
+    if situation is not None:
+        # Les analyses détaillées ne sont qu'à elles seules l'objet d'un refus au 5e appel : l'écran les dit AVANT.
+        prises = UsageMeter(_USAGE_DB).compter(user_id, TYPES_A_LA_PIECE, essai.FENETRE_APPELS_ESSAI_S)
+        situation["analyses_detaillees_restantes"] = max(0, essai.ESSAI_APPELS_A_LA_PIECE - prises)
     return {"n_niches": r.n_analyses, "plafond_niches": _plafond_niches_mensuel(),
-            "cout_usd": r.cout_usd}
+            "cout_usd": r.cout_usd, "plan": magasin.plan_de(user_id), "essai": situation}
 
 
 @app.get("/api/jobs/{job_id}/stream")

@@ -2501,6 +2501,7 @@ async function loadVerdict(r, det, btn){
         : 'Analyse indisponible.'));
     }
     const v = await rep.json();
+    chargerUsage();                   // l'essai compte ses analyses détaillées
     const conserve = v._conserve;
     delete v._cout; delete v._conserve; delete v._deja_fait;
     r.verdict = v;
@@ -2586,6 +2587,7 @@ async function loadKdp(niche, slot, btn, vue){
       throw new Error(d.detail || ('HTTP ' + r.status));
     }
     const mots = await r.json();
+    chargerUsage();                   // idem : une analyse détaillée de moins
     const conserve = mots._conserve;
     delete mots._cout; delete mots._conserve; delete mots._deja_fait;
     niche.mots_cles = mots;
@@ -3073,6 +3075,11 @@ form.addEventListener('submit',e=>{
 // Ces valeurs sont bornees cote serveur par MAX_RECHERCHES / MAX_NICHES_FICTION. Un preset
 // au-dessus rendrait une 400 au clic, sur un choix propose par l'interface elle-meme :
 // tests/test_ux_presets.py tient les deux fichiers ensemble.
+// Plafond de niches par recherche EN ESSAI (null sinon), posé par `appliquerPlafondVolume` dès que le serveur
+// a dit le plan. Déclaré AVANT `brancherPresets`, qui s'exécute à la ligne suivante : un `let` lu avant sa
+// déclaration lève une ReferenceError.
+let PLAFOND_VOLUME = null;
+
 const PRESETS = {
   "scout":   {"rapide":     {"n": 3,  "duree": "~2 min"},
               "standard":   {"n": 6,  "duree": "~4 min"},
@@ -3092,11 +3099,11 @@ function brancherPresets(nomRadio, cleScout, champ){
   const input = document.querySelector(champ);
   document.querySelectorAll('input[name="' + nomRadio + '"]').forEach(radio => {
     radio.addEventListener('change', () => {
-      if(radio.checked && input) input.value = PRESETS[cleScout][radio.value].n;
+      if(radio.checked && input) input.value = volumeAutorise(PRESETS[cleScout][radio.value].n, PLAFOND_VOLUME);
     });
   });
   const coche = document.querySelector('input[name="' + nomRadio + '"]:checked');
-  if(coche && input) input.value = PRESETS[cleScout][coche.value].n;
+  if(coche && input) input.value = volumeAutorise(PRESETS[cleScout][coche.value].n, PLAFOND_VOLUME);
 }
 
 brancherPresets('preset-nf', 'scout', '#search');
@@ -3403,6 +3410,7 @@ async function loadVerdictLc(r, carte, btn){
         : 'Analyse indisponible.'));
     }
     const v = await rep.json();
+    chargerUsage();                   // l'essai compte ses analyses détaillées
     const conserve = v._conserve;
     delete v._cout; delete v._conserve; delete v._deja_fait;
     r.verdict = v;
@@ -3448,6 +3456,7 @@ async function loadVerdictFic(r, carte, btn){
         : 'Analyse indisponible.'));
     }
     const v = await rep.json();
+    chargerUsage();                   // l'essai compte ses analyses détaillées
     const conserve = v._conserve;
     delete v._cout; delete v._conserve; delete v._deja_fait;
     r.analyse = v;
@@ -4300,26 +4309,77 @@ window.addEventListener('resize', ()=>{ if(!glossTip.hidden && glossOpenBtn) pos
 // Le compteur compte des NICHES depuis le 2026-10-06 (plus des runs) : avec un plafond on dit ce qu'il
 // RESTE, sans plafond ce qui a été analysé. Fonction pure, appelée par les tests avec node.
 function libelleUsage(u){
+  // ESSAI GRATUIT (2026-10-15) : le compte n'a pas de plafond mensuel, il a deux recherches. Un compteur de
+  // niches par mois lui mentirait sur ce qu'il peut faire.
+  const e = u && u.essai;
+  if(e){
+    const max = Number(e.recherches_max) || 0;
+    const reste = Math.max(0, Number(e.recherches_restantes) || 0);
+    const niches = Number(e.niches_par_recherche) || 0;
+    if(!(max > 0)) return {titre: 'Essai gratuit', barre: 'Essai gratuit', pied: '<strong>—</strong><span>recherches</span>'};
+    // Les analyses détaillées (verdicts, mots-clés) sont limitées aussi : le dire AVANT le refus du 5e appel.
+    const d = e.analyses_detaillees_restantes;
+    const detail = (d !== undefined && d !== null && isFinite(Number(d)))
+      ? ` · <strong>${Math.max(0, Number(d))}</strong> analyse(s) détaillée(s) restante(s)` : '';
+    if(reste === 0){
+      return {titre: 'Essai gratuit', barre: `Essai gratuit terminé : vos ${max} recherches ont été utilisées${detail}`,
+              pied: `<strong>0</strong><span>recherche restante</span>`};
+    }
+    const limite = niches > 0 ? ` — ${niches} niches au maximum par recherche` : '';
+    return {titre: 'Essai gratuit',
+            barre: `Essai gratuit : <strong>${reste}</strong> recherche(s) restante(s) sur ${max}${limite}${detail}`,
+            pied: `<strong>${reste}</strong><span>recherche(s) restante(s)</span>`};
+  }
   const n = Number(u.n_niches) || 0;
   const cap = (u.plafond_niches === null || u.plafond_niches === undefined) ? null : Number(u.plafond_niches);
   if(cap === null){
-    return {barre: `Ce mois-ci : <strong>${n}</strong> niche(s) analysée(s)`,
+    return {titre: 'Ce mois-ci', barre: `Ce mois-ci : <strong>${n}</strong> niche(s) analysée(s)`,
             pied: `<strong>${n}</strong><span>niche(s) analysée(s)</span>`};
   }
   const reste = Math.max(0, cap - n);
-  return {barre: `Niches restantes ce mois-ci : <strong>${reste}</strong> sur ${cap}`,
+  return {titre: 'Ce mois-ci', barre: `Niches restantes ce mois-ci : <strong>${reste}</strong> sur ${cap}`,
           pied: `<strong>${reste}</strong><span>niche(s) restante(s)</span>`};
+}
+
+// Plafond de niches par recherche en essai : le serveur refuse au-delà (400), donc le formulaire ne le propose
+// pas. Fonctions pures, appelées avec node par les tests.
+function plafondVolumeEssai(u){
+  const n = Number(u && u.essai && u.essai.niches_par_recherche);
+  return (n > 0 && isFinite(n)) ? n : null;
+}
+function volumeAutorise(n, plafond){
+  const v = Number(n);
+  return (plafond === null || plafond === undefined || !(plafond > 0)) ? v : Math.min(v, plafond);
+}
+
+// Applique le plafond aux trois champs « niches » : leur `max` (la validation native refuse alors une saisie
+// plus haute, sans rogner en silence) et leur valeur courante. Hors essai, le `max` d'origine est rétabli —
+// on peut se reconnecter avec un autre compte sans recharger la page.
+function appliquerPlafondVolume(u){
+  PLAFOND_VOLUME = plafondVolumeEssai(u);
+  ['#search', '#fic-n', '#lc-search'].forEach(sel => {
+    const input = document.querySelector(sel);
+    if(!input) return;
+    if(input.dataset.maxOrigine === undefined) input.dataset.maxOrigine = input.max;
+    const origine = Number(input.dataset.maxOrigine) || PLAFOND_VOLUME || 0;
+    input.max = String(PLAFOND_VOLUME === null ? origine : Math.min(origine, PLAFOND_VOLUME));
+    if(PLAFOND_VOLUME !== null && Number(input.value) > PLAFOND_VOLUME) input.value = PLAFOND_VOLUME;
+  });
 }
 
 function chargerUsage(){
   fetch('/api/usage').then(r=>r.ok?r.json():null).then(u=>{
+    if(!u) return;
+    appliquerPlafondVolume(u);
     const el = $('#usage-bar');
-    if(!el || !u) return;
+    if(!el) return;
     const l = libelleUsage(u);
     el.hidden = false;
     el.innerHTML = l.barre;
     const pied = $('#nav-usage');
     if(pied) pied.innerHTML = l.pied;
+    const titre = document.querySelector('.nav-pied-titre');       // « Ce mois-ci » ne vaut pas pour un essai
+    if(titre && l.titre) titre.textContent = l.titre;
   }).catch(()=>{});
 }
 

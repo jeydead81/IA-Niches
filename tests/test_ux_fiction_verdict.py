@@ -169,6 +169,7 @@ def _jouer(corps_js: str) -> dict:
 
 
 _DECOR = """
+function chargerUsage(){}      // le compteur est rafraîchi après un verdict : sans objet ici
 const VUE_FIC = {jobId: 'job-42'};
 const appels = [];
 const slot = {innerHTML: ''};

@@ -165,7 +165,10 @@ def test_le_travail_d_un_autre_compte_n_est_jamais_ecrit(monkeypatch, tmp_path):
     jid = _job(server, uid, [_NICHE_NF])
     intrus = TestClient(server.app, raise_server_exceptions=False)
     monkeypatch.setenv("INSCRIPTIONS_OUVERTES", "1")
-    ouvrir_session(intrus, "intrus@example.com")
+    uid_intrus = ouvrir_session(intrus, "intrus@example.com")
+    # Un compte d'ESSAI qui n'a lancé aucune recherche n'obtient plus aucun verdict (§2.21) ; ce test porte sur le
+    # cloisonnement des travaux, pas sur l'offre : l'intrus est donc un compte illimité.
+    server.UserStore(server._USERS_DB).definir_plan(uid_intrus, "illimite")
     r = intrus.post(f"/api/verdict?job={jid}&cle=tarot", json=_NICHE_NF)
     assert r.status_code == 200
     assert "verdict" not in c.get(f"/api/jobs/{jid}").json()["resultat"][0]

@@ -1,0 +1,77 @@
+# Fournisseurs d'e-mail GRAND PUBLIC : des millions de personnes distinctes y ont une adresse, donc
+# le plafond « 3 essais par mois et par domaine » ne s'y applique pas (il refuserait des inconnus).
+# Tout autre domaine — un nom de domaine acheté pour l'occasion, une petite entreprise — y est soumis.
+#
+# Ces fournisseurs sont protégés autrement : ouvrir une boîte y demande au fraudeur un effort que
+# Google, Microsoft ou Orange imposent eux-mêmes, et le plafond global par jour borne le reste.
+#
+# LISTE DE DÉPART, ORIENTÉE FRANCOPHONE, NON EXHAUSTIVE. Un fournisseur oublié ici n'est pas bloqué : ses
+# utilisateurs sont seulement limités à 3 essais par mois pour tout le domaine, ce qui se voit vite. À
+# étendre dès qu'un client légitime est refusé, sans toucher au code.
+#
+# Ne jamais y mettre un service d'adresses jetables : voir domaines_jetables.txt.
+gmail.com
+googlemail.com
+outlook.com
+outlook.fr
+outlook.be
+hotmail.com
+hotmail.fr
+hotmail.be
+hotmail.ca
+hotmail.it
+hotmail.es
+live.com
+live.fr
+live.be
+live.ca
+msn.com
+yahoo.com
+yahoo.fr
+yahoo.ca
+yahoo.es
+yahoo.it
+ymail.com
+rocketmail.com
+icloud.com
+me.com
+mac.com
+aol.com
+aol.fr
+orange.fr
+wanadoo.fr
+free.fr
+laposte.net
+sfr.fr
+neuf.fr
+club-internet.fr
+bbox.fr
+numericable.fr
+aliceadsl.fr
+voila.fr
+gmx.com
+gmx.fr
+gmx.net
+gmx.de
+web.de
+t-online.de
+proton.me
+protonmail.com
+pm.me
+tutanota.com
+tuta.com
+tutamail.com
+zoho.com
+mail.com
+yandex.com
+yandex.ru
+mail.ru
+skynet.be
+telenet.be
+bluewin.ch
+sympatico.ca
+videotron.ca
+bell.net
+libero.it
+qq.com
+163.com
