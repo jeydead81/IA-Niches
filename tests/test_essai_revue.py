@@ -69,7 +69,7 @@ def test_fermer_son_compte_ne_redonne_pas_les_analyses_detaillees(tmp_path, monk
 
 
 def test_un_abonne_n_est_pas_limite_comme_un_essai(tmp_path, monkeypatch):
-    """Le plan « abonne » (posé plus tard par le paiement) n'est ni limité à 5 niches ni à 4 appels."""
+    """Le plan « abonne » (posé plus tard par le paiement) n'est ni limité à 5 niches ni à 5 appels."""
     from usage import UsageMeter
     client, server = _instance(monkeypatch, tmp_path)
     _proprietaire(client)
@@ -318,16 +318,16 @@ def test_usage_compte_les_analyses_detaillees_restantes(tmp_path, monkeypatch):
     client, server = _instance(monkeypatch, tmp_path)
     _proprietaire(client)
     uid = _essai(client, monkeypatch)
-    assert client.get("/api/usage").json()["essai"]["analyses_detaillees_restantes"] == 4
+    assert client.get("/api/usage").json()["essai"]["analyses_detaillees_restantes"] == 5
     UsageMeter(server._USAGE_DB).reserver(uid, "verdict")
     UsageMeter(server._USAGE_DB).reserver(uid, "kdp_keywords")
-    assert client.get("/api/usage").json()["essai"]["analyses_detaillees_restantes"] == 2
+    assert client.get("/api/usage").json()["essai"]["analyses_detaillees_restantes"] == 3
 
 
 def test_l_ecran_affiche_les_analyses_detaillees_restantes():
     from tests.js_harness import appeler_json
     base = {"recherches_restantes": 2, "recherches_max": 2, "niches_par_recherche": 5,
-            "analyses_detaillees_max": 4, "demarre": True}
+            "analyses_detaillees_max": 5, "demarre": True}
     l = appeler_json("libelleUsage", {"plan": "essai", "essai": {**base, "analyses_detaillees_restantes": 3}})
     assert "<strong>3</strong>" in l["barre"] and "détaillée" in l["barre"]
     l = appeler_json("libelleUsage", {"plan": "essai", "essai": {**base, "analyses_detaillees_restantes": 0}})
@@ -352,19 +352,22 @@ def test_le_compteur_est_rafraichi_apres_chaque_analyse_detaillee():
 def test_les_seuils_de_l_offre_sont_epingles_en_litteraux():
     """Les tests de boucle (`range(essai.ESSAI_PAR_DOMAINE)`) suivent la constante mutée : 7 mutations
     survivaient, dont le plafond du jour réduit à 60 s."""
-    assert essai.ESSAI_PAR_RESEAU == 3 and essai.ESSAI_PAR_DOMAINE == 3
+    assert essai.ESSAI_PAR_RESEAU == 5 and essai.ESSAI_PAR_DOMAINE == 3
     assert essai.FENETRE_ESSAI_S == 30 * 24 * 3600
     assert essai.FENETRE_JOUR_S == 24 * 3600
     assert essai.CONSERVATION_IDENTITE_S == 365 * 24 * 3600
-    assert essai.ESSAIS_PAR_JOUR_DEFAUT == 20
+    assert essai.ESSAIS_PAR_JOUR_DEFAUT == 10
     assert essai.FENETRE_APPELS_ESSAI_S >= 5 * 365 * 24 * 3600
 
 
 def test_les_fenetres_se_ferment_a_la_bonne_date(tmp_path):
     s, h = magasin(tmp_path)
     # réseau et domaine : encore refusé à +29 j, accepté à +31 j
-    pris = [ouvrir(s, f"a{i}@mon-site.fr") for i in range(essai.ESSAI_PAR_DOMAINE)]
-    for c in pris:
+    for i in range(essai.ESSAI_PAR_DOMAINE):
+        c = ouvrir(s, f"a{i}@mon-site.fr")
+        s.reserver_recherche_essai(c.user_id, client=None, par_jour_max=50)
+    for i in range(essai.ESSAI_PAR_RESEAU):
+        c = ouvrir(s, f"r{i}@gmail.com")
         s.reserver_recherche_essai(c.user_id, client="8.8.8.8", par_jour_max=50)
     h[0] += 29 * JOUR
     x = ouvrir(s, "x@mon-site.fr")

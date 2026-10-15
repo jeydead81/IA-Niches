@@ -533,16 +533,25 @@ class UserStore:
                     # seule est gardée un an. Purge opportuniste (comme `tentatives`) : elle a lieu à chaque départ.
                     cx.execute("UPDATE essais SET domaine='', reseau=NULL WHERE demarre_le<? "
                                "AND (domaine<>'' OR reseau IS NOT NULL)", (depuis,))
-                    if (not identite_claire or essai.est_jetable(dom)
-                            or cx.execute("SELECT 1 FROM essais WHERE identite=?",
-                                          (h_identite,)).fetchone()
-                            or (h_reseau is not None and cx.execute(
-                                "SELECT COUNT(*) FROM essais WHERE reseau=? AND demarre_le>=?",
-                                (h_reseau, depuis)).fetchone()[0] >= essai.ESSAI_PAR_RESEAU)
-                            or (not essai.est_courant(dom) and cx.execute(
-                                "SELECT COUNT(*) FROM essais WHERE domaine=? AND demarre_le>=?",
-                                (h_domaine, depuis)).fetchone()[0] >= essai.ESSAI_PAR_DOMAINE)):
-                        raise essai.EssaiRefuse("pas d'essai pour cette adresse ou ce réseau")
+                    # Dans cet ordre, et la CAUSE est gardée : le visiteur lit un message unique, l'opérateur
+                    # lit `essai refusé : cause=…` dans le journal pour calibrer les seuils.
+                    cause = None
+                    if not identite_claire:
+                        cause = "adresse"
+                    elif essai.est_jetable(dom):
+                        cause = "jetable"
+                    elif cx.execute("SELECT 1 FROM essais WHERE identite=?", (h_identite,)).fetchone():
+                        cause = "identite"
+                    elif h_reseau is not None and cx.execute(
+                            "SELECT COUNT(*) FROM essais WHERE reseau=? AND demarre_le>=?",
+                            (h_reseau, depuis)).fetchone()[0] >= essai.ESSAI_PAR_RESEAU:
+                        cause = "reseau"
+                    elif not essai.est_courant(dom) and cx.execute(
+                            "SELECT COUNT(*) FROM essais WHERE domaine=? AND demarre_le>=?",
+                            (h_domaine, depuis)).fetchone()[0] >= essai.ESSAI_PAR_DOMAINE:
+                        cause = "domaine"
+                    if cause is not None:
+                        raise essai.EssaiRefuse("pas d'essai pour cette adresse ou ce réseau", cause=cause)
                     # Le plafond du jour vient APRÈS : « revenez demain » à quelqu'un qui n'aura jamais
                     # droit à l'essai serait un mensonge qui le ferait revenir.
                     if cx.execute("SELECT COUNT(*) FROM essais WHERE demarre_le>=?",

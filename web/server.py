@@ -723,16 +723,27 @@ def _reseau_pour_essai(request: Request) -> str:
     return client
 
 
+def _journaliser_refus_essai(e) -> None:
+    """UNE ligne par refus, la CAUSE seule (`essai refusé : cause=identite|jetable|reseau|domaine|quota_jour|epuise`).
+    Sans elle on ne peut pas calibrer les seuils : le visiteur lit un message unique, et rien ne dit si c'est le
+    réseau, le domaine ou le quota du jour qui refuse des clients légitimes. JAMAIS l'adresse e-mail, le domaine,
+    l'adresse IP ni un identifiant de compte : le journal d'un hébergeur est un canal en clair. Un essai ÉPUISÉ est
+    une information (niveau INFO, invisible par défaut) ; les autres sont des signaux (AVERTISSEMENT, visibles)."""
+    niveau = logging.INFO if isinstance(e, essai.EssaiEpuise) else logging.WARNING
+    _LOG.log(niveau, "essai refusé : cause=%s", getattr(e, "cause", "indisponible"))
+
+
 def _reserver_essai(request: Request, user_id: str):
     """Prend une des deux recherches d'essai, atomiquement, AVANT la réservation de niches. None hors essai.
     Chaque cause de refus a SON message : « terminé », « indisponible ici », « quota du jour »."""
     try:
         return UserStore(_USERS_DB).reserver_recherche_essai(user_id, client=_reseau_pour_essai(request))
-    except essai.EssaiEpuise:
-        raise HTTPException(status_code=429, detail=MSG_ESSAI_EPUISE)
-    except essai.QuotaJournalier:
-        raise HTTPException(status_code=429, detail=MSG_ESSAI_QUOTA_JOUR)
-    except essai.EssaiRefuse:
+    except essai.EssaiIndisponible as e:
+        _journaliser_refus_essai(e)
+        if isinstance(e, essai.EssaiEpuise):
+            raise HTTPException(status_code=429, detail=MSG_ESSAI_EPUISE)
+        if isinstance(e, essai.QuotaJournalier):
+            raise HTTPException(status_code=429, detail=MSG_ESSAI_QUOTA_JOUR)
         raise HTTPException(status_code=403, detail=MSG_ESSAI_REFUSE)
 
 

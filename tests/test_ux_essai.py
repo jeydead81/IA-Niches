@@ -19,7 +19,7 @@ from tests.js_harness import appeler_json
 HTML = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
 
 ESSAI = {"recherches_restantes": 2, "recherches_max": 2, "niches_par_recherche": 5,
-         "analyses_detaillees_max": 4, "demarre": False}
+         "analyses_detaillees_max": 5, "demarre": False}
 
 
 def _u(**essai):

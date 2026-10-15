@@ -87,7 +87,7 @@ def test_usage_dit_ou_en_est_l_essai(tmp_path, monkeypatch):
     u = client.get("/api/usage").json()
     assert u["plan"] == "essai"
     assert u["essai"] == {"recherches_restantes": 2, "recherches_max": 2, "niches_par_recherche": 5,
-                          "analyses_detaillees_max": 4, "analyses_detaillees_restantes": 4,
+                          "analyses_detaillees_max": 5, "analyses_detaillees_restantes": 5,
                           "demarre": False}
 
 
@@ -130,8 +130,8 @@ def test_plus_de_cinq_niches_est_refuse_sans_rien_consommer(tmp_path, monkeypatc
     assert r.status_code == 400, r.text
     assert "5 niches" in r.json()["detail"] and "essai gratuit" in r.json()["detail"]
     assert _situation(client) == {"recherches_restantes": 2, "recherches_max": 2,
-                                  "niches_par_recherche": 5, "analyses_detaillees_max": 4,
-                                  "analyses_detaillees_restantes": 4, "demarre": False}
+                                  "niches_par_recherche": 5, "analyses_detaillees_max": 5,
+                                  "analyses_detaillees_restantes": 5, "demarre": False}
     assert client.get("/api/usage").json()["n_niches"] == 0
 
 
@@ -271,7 +271,7 @@ def test_une_adresse_jetable_n_ouvre_pas_d_essai(tmp_path, monkeypatch):
 
 # ── Analyses détaillées ─────────────────────────────────────────────────────────────────
 
-def test_quatre_analyses_detaillees_a_vie_pendant_l_essai(tmp_path, monkeypatch):
+def test_cinq_analyses_detaillees_a_vie_pendant_l_essai(tmp_path, monkeypatch):
     from fastapi import HTTPException
     from usage import UsageMeter
     client, server = _instance(monkeypatch, tmp_path)
@@ -281,12 +281,12 @@ def test_quatre_analyses_detaillees_a_vie_pendant_l_essai(tmp_path, monkeypatch)
     meter = UsageMeter(server._USAGE_DB)
     for _ in range(essai.ESSAI_APPELS_A_LA_PIECE - 1):
         meter.reserver(uid, "verdict")
-    server._verifier_plafond(uid)                                            # le 4e passe
+    server._verifier_plafond(uid)                                            # le 5e passe
     meter.reserver(uid, "kdp_keywords")
     with pytest.raises(HTTPException) as e:
-        server._verifier_plafond(uid)                                        # le 5e non
+        server._verifier_plafond(uid)                                        # le 6e non
     assert e.value.status_code == 429
-    assert "essai gratuit" in e.value.detail.lower() and "4" in e.value.detail
+    assert "essai gratuit" in e.value.detail.lower() and "5 analyses" in e.value.detail
 
 
 def test_les_analyses_detaillees_du_proprietaire_gardent_leur_plafond_mensuel(tmp_path, monkeypatch):

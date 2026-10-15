@@ -1,7 +1,7 @@
 """essai.py — l'essai gratuit : l'offre, et les règles PURES qui la protègent (2026-10-15).
 
 Décision de Baptiste : un nouveau compte reçoit **2 recherches d'essai** (5 niches au plus chacune, donc
-10 niches), **4 analyses détaillées** (verdicts, mots-clés) et rien de plus — sans carte bancaire.
+10 niches), **5 analyses détaillées** (verdicts, mots-clés) et rien de plus — sans carte bancaire.
 
 Le problème de fond, dit une fois : sans carte ni téléphone, l'identité d'un visiteur est une adresse
 e-mail, et une adresse se fabrique. Un proxy, un partage de connexion et dix boîtes suffisent à rejouer
@@ -10,12 +10,14 @@ l'essai à l'infini. **On ne ferme pas cette porte, on en élève le prix et on 
 1. une même boîte ne donne qu'un essai (les alias `+x` et les points de Gmail sont la même boîte) ;
 2. les adresses à usage unique n'en ouvrent aucun ;
 3. un domaine qui n'est pas un fournisseur grand public (le moyen le moins cher de recevoir des adresses
-   sans limite : acheter un domaine) est plafonné à 3 essais par mois ;
-4. un même réseau est plafonné à 3 essais par mois — quand l'adresse du client prouve quelque chose ;
+   sans limite : acheter un domaine) est plafonné à 3 essais par mois, sous-domaines compris ;
+4. un même réseau est plafonné à 5 essais par mois — quand l'adresse du client prouve quelque chose (5 et non 3
+   le 2026-10-15 : un réseau mobile partage une adresse publique entre beaucoup d'abonnés, et la règle ne retient
+   de toute façon que le fraudeur paresseux — un proxy qui change d'adresse la contourne) ;
 5. surtout, **un plafond GLOBAL de nouveaux essais par 24 h** (`ESSAIS_PAR_JOUR_MAX`) : quoi que fassent
    les fraudeurs, la perte quotidienne a un maximum connu. C'est la seule garde qui ne se contourne pas —
    À CONDITION qu'AUCUNE dépense d'un compte d'essai n'ait lieu avant que son essai ait DÉMARRÉ. La première
-   version laissait les 4 analyses détaillées hors de ces gardes (revue du 2026-10-15 : 120 verdicts payés
+   version laissait les analyses détaillées hors de ces gardes (revue du 2026-10-15 : 120 verdicts payés
    avec une seule boîte Gmail et ses alias) ; elles exigent désormais un essai démarré, et il ne démarre que
    par une recherche (`UserStore.reserver_recherche_essai`, seul endroit qui juge).
 
@@ -43,15 +45,17 @@ PLANS = (PLAN_ESSAI, PLAN_ABONNE, PLAN_ILLIMITE)
 
 ESSAI_RECHERCHES = 2                    # lancements d'analyse, à vie
 ESSAI_NICHES_PAR_RECHERCHE = 5          # donc 10 niches au total
-ESSAI_APPELS_A_LA_PIECE = 4             # verdicts + mots-clés, à vie
+ESSAI_APPELS_A_LA_PIECE = 5             # verdicts + mots-clés, à vie (une par niche d'une recherche)
 
 # ── Ce qui borne la fraude ──────────────────────────────────────────────────────────────
-ESSAI_PAR_RESEAU = 3                    # essais démarrés par réseau, sur FENETRE_ESSAI_S
+ESSAI_PAR_RESEAU = 5                    # essais démarrés par réseau, sur FENETRE_ESSAI_S
 ESSAI_PAR_DOMAINE = 3                   # idem par domaine qui n'est pas un fournisseur grand public
 FENETRE_ESSAI_S = 30 * 24 * 3600
 CONSERVATION_IDENTITE_S = 365 * 24 * 3600   # « un essai par boîte et par an »
 FENETRE_JOUR_S = 24 * 3600              # glissante : un seau qui se vide à heure fixe se contourne en attendant
-ESSAIS_PAR_JOUR_DEFAUT = 20
+# Prudent au démarrage (aucune donnée réelle) : à monter les jours de promotion, sans toucher au code. Au plafond,
+# la perte d'une journée est d'environ 3,5 à 8 $ (CALCULÉ, CLAUDE.md §2.21).
+ESSAIS_PAR_JOUR_DEFAUT = 10
 FENETRE_APPELS_ESSAI_S = 10 * 365 * 24 * 3600   # « à vie » pour le compteur d'appels à la pièce
 
 _DATA = Path(__file__).resolve().parent.parent / "data"
@@ -69,20 +73,30 @@ class ReservationEssai(NamedTuple):
 
 class EssaiIndisponible(Exception):
     """L'essai ne peut pas être servi. Trois causes, trois sous-classes : le client lit un message
-    différent pour chacune, et seule la dernière dit « revenez plus tard »."""
+    différent pour chacune, et seule la dernière dit « revenez plus tard ».
+
+    `cause` est le mot que l'OPÉRATEUR lit dans le journal (`essai refusé : cause=…`) pour calibrer les seuils : le
+    client, lui, ne la lit jamais — détailler laisserait régler le contournement. Jamais une donnée personnelle."""
+    cause = "indisponible"
 
 
 class EssaiEpuise(EssaiIndisponible):
     """Les deux recherches ont été utilisées."""
+    cause = "epuise"
 
 
 class EssaiRefuse(EssaiIndisponible):
-    """Pas d'essai pour cette identité, ce domaine ou ce réseau. Un seul message pour les quatre causes :
-    détailler laisserait régler le contournement."""
+    """Pas d'essai pour cette identité, ce domaine ou ce réseau. Un seul message CLIENT pour les causes :
+    `cause` vaut `adresse` (illisible), `jetable`, `identite`, `reseau` ou `domaine`."""
+
+    def __init__(self, message: str = "", cause: str = "refuse"):
+        super().__init__(message)
+        self.cause = cause
 
 
 class QuotaJournalier(EssaiIndisponible):
     """Le plafond global de nouveaux essais du jour est atteint — ça, et seulement ça, se règle en attendant."""
+    cause = "quota_jour"
 
 
 # ── Réglage ─────────────────────────────────────────────────────────────────────────────

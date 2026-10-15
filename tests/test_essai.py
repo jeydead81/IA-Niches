@@ -140,18 +140,22 @@ def test_une_adresse_qui_ne_prouve_rien_ne_donne_aucun_signal(brut):
 # ── Réglages ────────────────────────────────────────────────────────────────────────────
 
 def test_les_constantes_de_l_offre():
-    """Décision de Baptiste du 2026-10-15 : 2 recherches différentes, 5 niches au plus chacune."""
+    """Décision de Baptiste du 2026-10-15 : 2 recherches différentes, 5 niches au plus chacune, puis 5 analyses
+    détaillées (une par niche d'une recherche) — il avait d'abord envisagé 1 recherche, écartée : un seul run
+    peut sortir « non mesuré » et gâcher tout l'essai."""
     assert essai.ESSAI_RECHERCHES == 2
     assert essai.ESSAI_NICHES_PAR_RECHERCHE == 5
-    assert essai.ESSAI_APPELS_A_LA_PIECE == 4
+    assert essai.ESSAI_APPELS_A_LA_PIECE == 5
     assert essai.ESSAI_RECHERCHES * essai.ESSAI_NICHES_PAR_RECHERCHE == 10
 
 
 def test_essais_par_jour_max_defaut_et_lecture_de_l_environnement(monkeypatch):
     monkeypatch.delenv("ESSAIS_PAR_JOUR_MAX", raising=False)
-    assert essai.essais_par_jour_max() == 20
+    assert essai.essais_par_jour_max() == 10          # prudent au démarrage ; à monter les jours de promotion
     monkeypatch.setenv("ESSAIS_PAR_JOUR_MAX", "5")
     assert essai.essais_par_jour_max() == 5
+    monkeypatch.setenv("ESSAIS_PAR_JOUR_MAX", "100")
+    assert essai.essais_par_jour_max() == 100
     monkeypatch.setenv("ESSAIS_PAR_JOUR_MAX", "0")           # 0 = robinet fermé, pas « illimité »
     assert essai.essais_par_jour_max() == 0
 
@@ -159,4 +163,4 @@ def test_essais_par_jour_max_defaut_et_lecture_de_l_environnement(monkeypatch):
 @pytest.mark.parametrize("valeur", ["beaucoup", "-3", "2.5", " "])
 def test_une_valeur_illisible_retombe_sur_le_defaut_jamais_sur_illimite(monkeypatch, valeur):
     monkeypatch.setenv("ESSAIS_PAR_JOUR_MAX", valeur)
-    assert essai.essais_par_jour_max() == 20
+    assert essai.essais_par_jour_max() == 10

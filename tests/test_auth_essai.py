@@ -111,7 +111,7 @@ def test_la_situation_dit_ce_qui_reste(tmp_path):
     c = ouvrir(s, "a@gmail.com")
     assert s.situation_essai(c.user_id) == {
         "recherches_restantes": 2, "recherches_max": 2, "niches_par_recherche": 5,
-        "analyses_detaillees_max": 4, "demarre": False}
+        "analyses_detaillees_max": 5, "demarre": False}
     s.reserver_recherche_essai(c.user_id, client=None, par_jour_max=20)
     sit = s.situation_essai(c.user_id)
     assert sit["recherches_restantes"] == 1 and sit["demarre"] is True
@@ -260,7 +260,7 @@ def test_un_fournisseur_grand_public_n_est_pas_plafonne_par_domaine(tmp_path):
         assert s.reserver_recherche_essai(c.user_id, client=None, par_jour_max=50).demarre_ici
 
 
-def test_un_meme_reseau_est_plafonne_a_trois_essais_par_mois(tmp_path):
+def test_un_meme_reseau_est_plafonne_par_mois(tmp_path):
     s, h = magasin(tmp_path)
     for i in range(essai.ESSAI_PAR_RESEAU):
         c = ouvrir(s, f"p{i}@gmail.com")

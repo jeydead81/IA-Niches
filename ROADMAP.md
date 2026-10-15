@@ -337,7 +337,7 @@ et les **exécute** avec node.
 >
 > **Mise à jour 2026-10-15** : alerte de solde DataForSEO (§2.20 point 6), **polices servies par le
 > service** (plus aucun appel à Google, §1.1) et **essai gratuit sans carte bancaire** (`CLAUDE.md` §2.21) :
-> 2 recherches de 5 niches au plus, 4 analyses détaillées, plafond global de nouveaux essais par jour,
+> 2 recherches de 5 niches au plus, 5 analyses détaillées, plafond global de nouveaux essais par jour,
 > plan du compte (`essai` / `abonne` / `illimite`) que le paiement posera. Reste : le paiement lui-même.
 
 Classé par ordre de blocage. **Par quoi commencer, en une phrase : §2.2, la calibration du scoring

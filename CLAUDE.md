@@ -7,8 +7,8 @@
 > Quand ce fichier et le code divergent, le code a raison et ce fichier doit être corrigé.
 > Les docstrings du dépôt portent les pièges métier mesurés en live : ce sont elles la vraie doc.
 >
-> Comptages revérifiés le **2026-10-15** (2 205 tests sur 149 fichiers, 54 modules, 38
-> noms d'env lus, 27 endpoints, `server.py` 2 082 lignes). Références de ligne revérifiées le **2026-08-22**
+> Comptages revérifiés le **2026-10-15** (2 213 tests sur 150 fichiers, 54 modules, 38
+> noms d'env lus, 27 endpoints, `server.py` 2 093 lignes). Références de ligne revérifiées le **2026-08-22**
 > (audit adversarial doc/code), après les commits
 > `7ccb4f8` → `5257323` (authentification, revue de sécurité, fourchette de prix, compositeur
 > de trio, lecture des suggestions, retrait de tout affichage de coût, chemin de lancement
@@ -65,7 +65,7 @@ l'être. Signaler explicitement les zones d'incertitude et les mesures manquante
 ## 2. ARCHITECTURE RÉELLE
 
 Application web mono-page, **jusqu'ici purement locale et désormais déployable** (§2.17,
-mais rien n'est déployé) : FastAPI (`web/server.py`, **2 082 lignes,
+mais rien n'est déployé) : FastAPI (`web/server.py`, **2 093 lignes,
 27 endpoints** — `wc -l` + décorateurs `@app`, vérifié le 2026-10-15) + un unique
 `web/index.html` de **308 405 octets** (CSS et JS inline, zéro build). **La page ne charge plus
 aucune ressource tierce** (2026-10-15) : les trois polices (Newsreader, DM Sans, JetBrains Mono,
@@ -448,7 +448,7 @@ sans compte).
 | DELETE | `/api/jobs/{id}` | oui | **Supprime UNE analyse** de la session (« Mes analyses », 2026-10-03). **404** — jamais 403 — pour le travail d'un autre compte ; **409** pour une analyse pas finie (son thread écrirait dans le vide) ; 204 sinon ; `origine_sure`. Supprime le travail (étapes, résultat, verdicts et mots-clés rangés dedans) et **RIEN d'autre** : ni `usage.db` (supprimer de l'écran ne rembourse rien et ne libère aucune unité de plafond, sinon « supprimer puis relancer » contournerait le plafond mensuel), ni l'historique d'évolution des niches (`history.db`, série partagée par toutes les analyses d'une même niche) |
 | GET | `/api/jobs/{id}/stream` | oui | SSE **reconnectable** branché sur `jobs.db` (poll 0,3 s). Rejoue la progression depuis le début à chaque reconnexion, puis `result` + `cost` + `done`. Le job d'un autre compte est traité comme **inexistant**, pas comme refusé |
 | GET | `/api/usage` | oui | Consommation du mois **glissant** (fenêtre 30 j, ni calendaire ni cumulative à vie) : `{n_niches, plafond_niches, cout_usd, plan, essai}` (plus de `n_analyses`) ; `essai` (null hors essai) porte `recherches_restantes`, `recherches_max`, `niches_par_recherche`, `analyses_detaillees_max`, `analyses_detaillees_restantes`, `demarre` (§2.21). Le backend rend toujours le coût ; **l'UI n'affiche que les niches : restantes sur le plafond s'il y en a un, sinon analysées** (§5.27) |
-| POST | `/api/verdict` | oui | **Compte en ESSAI** : un essai DÉMARRÉ est exigé (403 sinon) et 4 appels à la pièce à vie (§2.21). Corps limité à 256 Ko (413). **Gardes (2026-10-06)** : adresse vérifiée (production) ; puis **RAPPEL gratuit** si `?job=&cle=` désigne une niche qui porte déjà le résultat (`_deja_fait` : ni réservation, ni plafond, ni modèle) ; puis plafond MENSUEL d'appels (`_verifier_plafond`). Un échec à 0 $ libère sa place (`_solder_appel`). Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Compte dans le plafond MENSUEL d'appels** (`_verifier_plafond`) sans consommer de niche (`n_analyses=0`) : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
+| POST | `/api/verdict` | oui | **Compte en ESSAI** : un essai DÉMARRÉ est exigé (403 sinon) et 5 appels à la pièce à vie (§2.21). Corps limité à 256 Ko (413). **Gardes (2026-10-06)** : adresse vérifiée (production) ; puis **RAPPEL gratuit** si `?job=&cle=` désigne une niche qui porte déjà le résultat (`_deja_fait` : ni réservation, ni plafond, ni modèle) ; puis plafond MENSUEL d'appels (`_verifier_plafond`). Un échec à 0 $ libère sa place (`_solder_appel`). Analyse éditoriale d'UNE niche, **sans état** par défaut (la `ScoredNiche` entière dans le body ; body invalide → 400). **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18) — UN endpoint pour les trois, jamais un second qui ferait diverger les gardes. Mesuré à **0,0283 $** pièce. **Compte dans le plafond MENSUEL d'appels** (`_verifier_plafond`) sans consommer de niche (`n_analyses=0`) : il complète une analyse déjà payée. Une réponse du modèle illisible APRÈS l'appel → **502**, et le coût est soldé dans un `finally` : la réservation restait à 0 $ alors que les jetons étaient facturés (§5.29, `tests/test_solde_apres_exception.py`) **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `verdict` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. **En fiction le champ est `analyse`, jamais `verdict`** : un résultat fiction porte déjà un `verdict`, le TEXTE du moteur et ses réserves. |
 | GET | `/api/history` | oui | `{niche, passages[], delta}`. Une niche vue une seule fois rend `delta: null` avec un **200** : « pas encore de recul » est une réponse, pas un échec |
 | POST | `/api/kdp-keywords` | oui | **Mêmes gardes que `/api/verdict`, essai compris** (adresse vérifiée, rappel gratuit sous `mots_cles`, plafond mensuel d'appels, place libérée à 0 $). Les 7 mots-clés backend KDP, sans état, **~0,006 $ (ESTIMÉ** — docstring `web/server.py:666` et ligne « estime » de `tutoriel_pdf.COUTS` ; aucune mesure datée). Le LLM propose ~22 candidats, le code applique les règles KDP, l'autocomplete confirme **gratuitement**. **`type` : `scout` (défaut), `lowcontent` ou `fiction`** (§2.18 : le titre et le pitch de l'analyse passent dans `analyse`). Même garde de plafond, `n_analyses=0`, même 502 soldé dans un `finally` **Conservation (2026-10-03)** : avec `?job=<id>&cle=<niche>` le SERVEUR range ce qu'il vient de produire sous `mots_cles` dans la niche du résultat de ce travail (`JobStore.annoter_resultat`, liste fermée de champs, travail de la session seulement — `user_id` du cookie, règle 4). La réponse porte `_conserve` (true/false) ; un échec d'écriture ne fait JAMAIS échouer la réponse, déjà payée. Sans `job`, strictement sans état. Avant ce correctif, rouvrir une analyse ou recharger faisait disparaître un appel payant et proposait de le repayer. |
 | POST | `/api/pdf` | oui | **ALIAS historique de `/api/dossier`** : sert le MÊME dossier en 3 pages (`build_dossier_pdf`, `web/server.py:1112`), **pas** le one-pager de `positioning_pdf.py` — deux générateurs divergeraient, et ce dépôt sait ce que ça coûte. Sans état, gratuit, aucune persistance serveur, **pas de vérification de plafond** (rien n'est dépensé) |
@@ -618,7 +618,7 @@ après qu'un test a déclenché un vrai appel Anthropic (§6.1).
 
 ### 2.10 Tests
 
-**2205 tests** sur **149 fichiers** `tests/test_*.py`, **2205 passés, 0 ignoré, 0 échec,
+**2213 tests** sur **150 fichiers** `tests/test_*.py`, **2213 passés, 0 ignoré, 0 échec,
 0 erreur**, code de sortie 0 (`python -m pytest -p no:warnings`, relancé le 2026-10-15,
 compteurs lus dans le rapport `--junit-xml` et non dans la sortie console ; la suite avait
 connu des échecs INTERMITTENTS, cf. §5.33).
@@ -1338,7 +1338,7 @@ décide désormais de ce qui est décompté : à surveiller sur des runs réels.
 
 Décision de Baptiste, sans carte bancaire et sans attendre Stripe : tout compte créé APRÈS le premier a le
 plan **`essai`** — **2 recherches** (lancements d'analyse) à vie, **5 niches au plus** par recherche (donc 10),
-**4 analyses détaillées** à vie (verdicts, mots-clés, dossier avec mots-clés). Le premier compte (amorçage) et
+**5 analyses détaillées** à vie (verdicts, mots-clés, dossier avec mots-clés). Le premier compte (amorçage) et
 les comptes d'une base antérieure à la colonne sont **`illimite`** ; **`abonne`** existe et se comporte comme
 `illimite` : le futur paiement n'aura qu'à appeler `UserStore.definir_plan`. **Aucun prix et aucun paiement ne
 sont codés** ; le défaut de la colonne est `essai` (un chemin d'insertion qui oublie le plan ne fabrique pas un
@@ -1354,12 +1354,12 @@ qui ne se contourne pas :
 | Une boîte = un essai, un an (`identite_courriel` : `+suffixe`, points de Gmail, `googlemail`, point final) | `essais.identite`, mémoire qui **survit à la clôture du compte** | alias `+n`, « fermer puis rouvrir avec la même adresse » |
 | Adresses à usage unique refusées (`data/domaines_jetables.txt`, sous-domaines compris) | `essai.est_jetable` | départ sans essai |
 | 3 essais par mois et par **domaine enregistrable** s'il n'est pas grand public (`data/domaines_courants.txt`, `data/suffixes_deux_niveaux.txt`) | `essai.domaine_enregistrable` | acheter un domaine avec un MX joker : `x1.d.fr`, `x2.d.fr`… comptent pour un |
-| 3 essais par mois et par réseau (IPv4 ; IPv6 repliée au /64) | `essai.empreinte_reseau` | partage de connexion, proxy d'entrée de gamme |
-| **Plafond GLOBAL de nouveaux essais par 24 h** (`ESSAIS_PAR_JOUR_MAX`, 20 ; **0 ferme le robinet** ; illisible → 20, jamais « illimité ») | `reserver_recherche_essai`, fenêtre glissante | **la seule garde qui ne se contourne pas** : la perte d'une journée a un maximum connu |
+| 5 essais par mois et par réseau (IPv4 ; IPv6 repliée au /64) | `essai.empreinte_reseau` | partage de connexion, proxy d'entrée de gamme (5 et non 3 : un réseau mobile partage une adresse publique entre beaucoup d'abonnés, et la règle ne retient que le fraudeur paresseux) |
+| **Plafond GLOBAL de nouveaux essais par 24 h** (`ESSAIS_PAR_JOUR_MAX`, **10** au démarrage, à monter les jours de promotion ; **0 ferme le robinet** ; illisible → 10, jamais « illimité ») | `reserver_recherche_essai`, fenêtre glissante | **la seule garde qui ne se contourne pas** : la perte d'une journée a un maximum connu |
 
 **Aucune dépense d'un compte d'essai avant que son essai ait DÉMARRÉ — et il ne démarre que par une recherche.**
 C'est le défaut que la revue adversariale du 2026-10-15 (41 agents, 17 constats confirmés) a trouvé en premier :
-la première version laissait les 4 analyses détaillées hors de ces gardes, et une seule boîte Gmail avec ses
+la première version laissait les analyses détaillées hors de ces gardes, et une seule boîte Gmail avec ses
 alias `+n` faisait **120 verdicts payés** (reproduit), fermer le compte rendait le compteur. `_verifier_plafond`
 refuse désormais (403) tout appel à la pièce d'un essai non démarré. Les analyses détaillées partent d'une carte,
 donc d'une recherche : un visiteur honnête ne rencontre jamais ce refus.
@@ -1390,9 +1390,13 @@ sienne 15 minutes, §2.1).
 prompt de 2 Mo, 0,49 $ pour 4 verdicts au lieu de 0,146 $ ; `rayon` fiction validé (`RAYONS_FICTION`) ; `tropes`
 dédoublonnés ; limiteurs « par poste » (inscription, mot de passe oublié) repliés comme l'essai (`_cle_reseau`).
 
-**Coût d'un essai (CALCULÉ, jamais mesuré tel quel).** Non-fiction : 2 × 0,110 $ + 4 × ~0,03 $ ≈ **0,35 $** ;
-fiction : 2 × ~0,33 $ (mesuré à 0,3295 $ pour 5 trios, §2.19) + 4 × ~0,03 $ ≈ **0,8 $** au pire. Au plafond de
-20 essais par jour : ~7 à ~16 $ par jour.
+**Coût d'un essai (CALCULÉ, jamais mesuré tel quel, à plein usage).** Non-fiction : 2 × 0,110 $ + 5 × 0,0365 $
+(verdict mesuré) ≈ **0,40 $** ; fiction : 2 × ~0,33 $ (mesuré à 0,3295 $ pour 5 trios, §2.19) + 5 × 0,0365 $ ≈
+**0,85 $** au pire. Au plafond de 10 essais par jour : ~4 à ~8,5 $ par jour. **Une seule recherche** (+ 5
+analyses) a été envisagée puis écartée le 2026-10-15 : elle ne ferait économiser que ~1,6 à ~6 $ par jour
+à 20 essais quotidiens, et un seul run peut sortir « non mesuré » (7 livres exploitables sur 47 payés sur les runs fiction
+enregistrés) et gâcher tout l'essai ; rembourser une recherche qui n'a rien mesuré ouvrirait des appels LLM
+gratuits en boucle avec une graine absurde.
 
 **Ce qui reste ouvert — à dire à qui vend.**
 - **Proxys résidentiels rotatifs + une boîte par domaine grand public** (Gmail, Outlook…) : aucune garde de ce
@@ -1400,9 +1404,13 @@ fiction : 2 × ~0,33 $ (mesuré à 0,3295 $ pour 5 trios, §2.19) + 4 × ~0,03 $
   fournisseurs. SMS et captcha ne sont PAS codés : de la friction pour tous, à ajouter si l'abus est observé.
 - **Le plafond du jour peut être saturé par un attaquant** : les visiteurs honnêtes lisent alors « quota gratuit
   journalier du serveur dépassé ». Contrepartie assumée d'un plafond qui borne la perte.
-- **Un réseau mobile partagé (CGNAT) peut refuser des visiteurs légitimes** après 3 essais par mois sur la même
-  adresse publique. **Les seuils 3 / 3 / 20 sont des HYPOTHÈSES posées de notre propre chef, confrontées à aucun
-  jeu réel** (§4.2) : à relire sur les premiers comptes. Le message ne détaille pas la cause (détailler laisserait
+- **Un réseau mobile partagé (CGNAT) peut refuser des visiteurs légitimes** après 5 essais par mois sur la même
+  adresse publique. **Les seuils réseau 5 / domaine 3 / jour 10 sont des HYPOTHÈSES posées de notre propre chef,
+  confrontées à aucun jeu réel** (§4.2) : à relire sur les premiers comptes, **avec le journal** — chaque refus
+  écrit UNE ligne `essai refusé : cause=identite|jetable|reseau|domaine|quota_jour|adresse` (AVERTISSEMENT ;
+  `cause=epuise`, un essai fini qui insiste, reste en INFO), cause seule, jamais adresse, domaine, IP ni compte.
+  Calibrer = compter ces lignes par cause (`reseau` et `domaine` qui montent = seuil trop bas ou fraude à
+  regarder ; `quota_jour` = plafond à relever avant une promotion). Le message ne détaille pas la cause (détailler laisserait
   régler le contournement) ; un refus par réseau n'a aucune issue côté écran aujourd'hui.
 - **Derrière un proxy d'hébergeur**, `request.client.host` est l'adresse du proxy tant que `FORWARDED_ALLOW_IPS`
   n'est pas réglé : le plafond par réseau s'éteint alors tout seul (une adresse non publique ne produit aucune
@@ -1418,7 +1426,7 @@ fiction : 2 × ~0,33 $ (mesuré à 0,3295 $ pour 5 trios, §2.19) + 4 × ~0,03 $
 - Les analyses détaillées d'un essai ne se renouvellent pas : fenêtre de dix ans (`FENETRE_APPELS_ESSAI_S`).
 
 **Tests** : `test_essai.py` (règles pures), `test_auth_essai.py` (magasin, migration, course à 20 fils),
-`test_server_essai.py` (offre de bout en bout), `test_ux_essai.py`, `test_essai_revue.py` (un test par constat de
+`test_server_essai.py` (offre de bout en bout), `test_ux_essai.py`, `test_essai_refus.py` (cause de chaque refus et ligne de journal), `test_essai_revue.py` (un test par constat de
 la revue, seuils épinglés en littéraux : les tests qui bouclaient sur les constantes laissaient survivre 7
 mutations, dont un plafond du jour réduit à 60 s). Vérifié à l'écran le 2026-10-15 sur un serveur isolé : compteur,
 plafond de 5 dans les trois onglets, refus 400, échec à 0 $ rendu, échec avec dépense gardé, alias refusé, plafond
@@ -1495,7 +1503,7 @@ sont désormais : `DATA_DIR`, `APP_ENV`, `HOST`/`PORT`, `JOBS_MODE`).
 | `WORKER_REPOS_S` | `2.0` (`worker.py:58`). Attente entre deux tentatives de `claim_next` quand la file est vide | non |
 | `NOTIFICATIONS_EMAIL` | non défini = **ÉTEINT**. Et il ne suffit pas : sans `SMTP_HOST`, rien ne part (§2.16) | non |
 | `SMTP_HOST` / `_PORT` / `_USER` / `_PASSWORD` / `_FROM` / `_TLS` | port `587`, TLS actif. `SMTP_FROM` retombe sur `SMTP_USER`. Port non entier → repli sur 587. **`SMTP_HOST` est EXIGÉ dès `APP_ENV=prod`** (courriels de compte : le serveur refuse de démarrer sans lui) ; il suffit à ces courriels, sans `NOTIFICATIONS_EMAIL` | non (oui en prod) |
-| `ESSAIS_PAR_JOUR_MAX` | `20` (`essai.ESSAIS_PAR_JOUR_DEFAUT`). Plafond GLOBAL de nouveaux essais gratuits par 24 h glissantes. **`0` ferme le robinet** ; une valeur illisible ou négative retombe sur 20, jamais sur « illimité ». §2.21 | non |
+| `ESSAIS_PAR_JOUR_MAX` | `10` (`essai.ESSAIS_PAR_JOUR_DEFAUT` ; 20 avant le 2026-10-15). Plafond GLOBAL de nouveaux essais gratuits par 24 h glissantes. **`0` ferme le robinet** ; une valeur illisible ou négative retombe sur 10, jamais sur « illimité ». §2.21 | non |
 | `ALERTE_SOLDE_EMAIL` / `ALERTE_SOLDE_USD` | non définis = aucune alerte (le journal le dit ; avertissement au démarrage en production) / seuil `5` $. Voir §2.20 point 6 | non |
 | `BASE_URL` | racine publique du service : lien du message de fin ET liens de vérification / réinitialisation. Non définie → le message de fin part **sans lien** et aucun courriel de compte n'est envoyé. **EXIGÉE en `https://` dès `APP_ENV=prod`** (le lien de réinitialisation donne la main sur le compte) | non (oui en prod) |
 
@@ -1902,7 +1910,7 @@ Section critique. Chacun a coûté un bug réel.
 1. **TDD non négociable.** Les tests d'abord, **en rouge**, avant toute ligne d'implémentation.
    On vérifie que le test échoue pour la bonne raison, puis on écrit le minimum qui le fait
    passer. Aucune fonctionnalité ne rentre sans test hors-ligne, dépendance lourde injectée par
-   paramètre — c'est ce qui tient les 2205 tests sans réseau. Données réelles d'abord ; une
+   paramètre — c'est ce qui tient les 2213 tests sans réseau. Données réelles d'abord ; une
    fixture inventée est déclarée comme telle (§5.37).
 2. **Transparence sur les échecs et les coûts.** Toujours dire quelle source a échoué, combien
    d'ASIN n'ont pas pu être enrichis, combien de sponsorisés ont été écartés. Ne jamais masquer

@@ -82,8 +82,8 @@ ENV_VARS = [
                    "DÉPLOIEMENT : 'scrape' ne fonctionne pas depuis un serveur."),
     ("DATAFORSEO_PRIORITY", "2 = file rapide (défaut, 1-4 min). 1 = file standard, "
                             "moitié prix mais jusqu'à ~45 min."),
-    ("ESSAIS_PAR_JOUR_MAX", "Plafond GLOBAL de nouveaux essais gratuits par 24 h (defaut 20 ; 0 ferme "
-                            "le robinet ; une valeur illisible retombe sur 20, jamais sur illimite). "
+    ("ESSAIS_PAR_JOUR_MAX", "Plafond GLOBAL de nouveaux essais gratuits par 24 h (defaut 10 ; 0 ferme "
+                            "le robinet ; une valeur illisible retombe sur 10, jamais sur illimite). "
                             "Chaque compte cree apres le premier a 2 recherches d'essai de 5 niches."),
     ("ALERTE_SOLDE_EMAIL / ALERTE_SOLDE_USD", "Adresse prévenue (une fois par 24 h) quand le solde "
                                               "DataForSEO passe sous le seuil (défaut 5 $). Sans "
